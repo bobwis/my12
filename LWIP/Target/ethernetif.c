@@ -230,6 +230,9 @@ static void low_level_init(struct netif *netif)
   heth.Init.MediaInterface = ETH_MEDIA_INTERFACE_RMII;
 
   /* USER CODE BEGIN MACADDRESS */
+#define STM32_UUID ((uint32_t *)0x1FF0F420)			// 96 bit UUID
+heth.Init.MACAddr[5] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF;
+heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 >> 8;		// fiddle mac address; eventually use EEPROM stored value? TODO
 
   /* USER CODE END MACADDRESS */
 
