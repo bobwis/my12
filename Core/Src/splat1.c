@@ -219,23 +219,23 @@ HAL_StatusTypeDef getpressure115(void) {
 
 	p = (a0 + ((b1 + (c12 * t)) * p)) + (b2 * t);
 
-	printf("Comp: Press = %f\n", p);
+//	printf("Comp: Press = %f\n", p);
 
 	p = (p * ((115.0 - 50.0) / 1023.0)) + 50.0;
-	printf("kPA Press = %f\n", p);
+//	printf("kPA Press = %f\n", p);
 
 	ffrac = modf(p, &n);
 	pressure = (uint32_t) n;
 	pressfrac = (uint32_t) (ffrac * 100);  // eg frac 101.03 = frac 3, 101.52 = 52
 
-	printf("\npressure = %d.%02d  ", pressure, pressfrac);
+//	printf("\npressure = %d.%02d  ", pressure, pressfrac);
 
 	t = tr * -0.1706 + 112.27; //C
 	temperature = t;
 	tempfrac = (t - temperature) * 100;
 
-	printf("\ntemperature1 = %d.%d  ", temperature, tempfrac);
-	printf("\ntemperature2 = %f  ", t);
+//	printf("\ntemperature1 = %d.%d  ", temperature, tempfrac);
+//	printf("\ntemperature2 = %f  ", t);
 	tempfrac = tempfrac * 100;	// now 10,000
 #if 0
 			{

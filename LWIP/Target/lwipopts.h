@@ -30,7 +30,7 @@
 
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
-
+#include "version.h"
 /* USER CODE END 0 */
 
 #ifdef __cplusplus
@@ -52,7 +52,7 @@
 /*----- Default Value for LWIP_DNS: 0 ---*/
 #define LWIP_DNS 1
 /*----- Default Value for MEMP_NUM_TCP_PCB: 5 ---*/
-#define MEMP_NUM_TCP_PCB 32
+#define MEMP_NUM_TCP_PCB 64
 /*----- Default Value for LWIP_TCPIP_CORE_LOCKING: 0 ---*/
 #define LWIP_TCPIP_CORE_LOCKING 1
 /*----- Default Value for SYS_LIGHTWEIGHT_PROT: 1 ---*/
@@ -85,6 +85,8 @@
 #define LWIP_ETHERNET 1
 /*----- Default Value for LWIP_RAW: 0 ---*/
 #define LWIP_RAW 1
+/*----- Default Value for LWIP_DHCP_CHECK_LINK_UP: 0 ---*/
+#define LWIP_DHCP_CHECK_LINK_UP 1
 /*----- Value in opt.h for LWIP_DNS_SECURE: (LWIP_DNS_SECURE_RAND_XID | LWIP_DNS_SECURE_NO_MULTIPLE_OUTSTANDING | LWIP_DNS_SECURE_RAND_SRC_PORT) -*/
 #define LWIP_DNS_SECURE 7
 /*----- Value in opt.h for TCP_SND_QUEUELEN: (4*TCP_SND_BUF + (TCP_MSS - 1))/TCP_MSS -----*/
@@ -159,7 +161,13 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
-
+#ifdef TESTING
+#define LWIP_DEBUG
+#define LWIP_PLATFORM_DIAG(x) do {printf x;} while(0)
+#define LWIP_DBG_TYPES_ON LWIP_DBG_ON
+#define LWIP_DEBUG
+#define LWIP_STATS_DISPLAY 1
+#endif
 /* USER CODE END 1 */
 
 #ifdef __cplusplus

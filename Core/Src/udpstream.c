@@ -40,8 +40,11 @@ void myreboot(char *msg) {
 
 	err = udp_sendto(pcb, ps, &udpdestip, UDP_PORT_NO);
 	if (err != ERR_OK) {
+#ifdef TESTING
+	    stats_display() ; // this needs stats in LwIP enabling to do anything
+#endif
 		printf("sendudp: err %i\n", err);
-		vTaskDelay(1999); //some delay!
+		vTaskDelay(100); //some delay!
 		if (err == ERR_MEM) {
 			myreboot("sendudp: out of mem");
 		}

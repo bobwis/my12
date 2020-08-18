@@ -13,7 +13,7 @@
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
-#if		0
+#if	0
 #define TESTING
 #if 0
 #define configGENERATE_RUN_TIME_STATS 1
@@ -44,3 +44,8 @@
 #if 1
 #define LOCALTIME
 #endif
+
+/*
+#define LWIP_DEBUG
+#define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);
+*/
