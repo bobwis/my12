@@ -10,6 +10,7 @@
 
 extern void initsplat(void);
 extern uint16_t getpgagain(void);
+extern int bumppga(int);
 
 extern void setpgagain(int gain);
 extern uint32_t pressure, pressfrac, temperature, tempfrac;
@@ -30,5 +31,7 @@ extern uint16_t pgagain;
 extern uint16_t agc;
 
 extern int psensor;		// pressure sensor type
+
+extern const int pgamult[];		// maps from 0..7 gain control to the PGA
 
 #endif /* SPLAT1_H_ */

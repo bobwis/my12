@@ -80,7 +80,8 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabber & 0xff) << 8) | batchid);
 
-	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF) | ((pgagain & 7) << 12);
+//	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);
+	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh | ((pgagain & 7)<<12);
 
 	while (ps->ref != 1) { // old packet not finished with yet
 		printf("******* timed status1: ps->ref = %d *******\n", ps->ref);
@@ -104,7 +105,7 @@ void sendtimedstatus(struct pbuf *ps, struct udp_pcb *pcb, uint8_t batchid) {
 	static uint32_t talive = 0;
 
 #ifdef TESTING
-	if ((t1sec != talive) && (t1sec % 120 == 0)) { // this is a temporary mech to send timed status pkts...
+	if ((t1sec != talive) && (t1sec % 1 == 0)) { // this is a temporary mech to send timed status pkts...
 		talive = t1sec;
 
 #else

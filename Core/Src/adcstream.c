@@ -37,6 +37,8 @@ uint8_t sendendstatus = 0; 	// flag to send end of capture status
 int jabber = 0;			// timeout for spamming trigger
 uint32_t ledhang = 0;
 int16_t meanwindiff = 0;	// sliding mean of window differences
+uint16_t lastmeanwindiff = 0;
+uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
 
 /* Stores the handle of the task that will be notified when the
  transmission is complete. */
@@ -310,7 +312,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 	static int16_t winmean = 0;	// sliding window mean
 	static int32_t wdacc = 0;	// window difference accumulator
 	static int32_t wmeanacc = 0;	// window mean accumulator
-	volatile static uint16_t lastmeanwindiff = 0;
 
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	timestamp = TIM2->CNT;			// real time
@@ -333,6 +334,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		statuspkt.adcudpover++;		// debug adc overrun udp
 		sigsend = 0;		// cancel previous signal
 		return;
+
 	}
 
 	for (i = 0; i < (ADCBUFSIZE / 2); i++) {	// 2 // scan the buffer content
@@ -353,10 +355,27 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
 		windiff[j] = meanwindiff;	// store latest window mean of differences
 
-		trigthresh = (logampmode > 0) ? 37 : 10;	// SPLAT Logamp in operation?
-		if (abs(meanwindiff) > (abs(lastmeanwindiff) + trigthresh)) { // if new mean diff > last mean diff +1
+//		trigthresh = (logampmode > 0) ? 37 : 10;	// SPLAT Logamp in operation?  now in idle task
+		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + trigthresh)) { // if new mean diff > last mean diff +1
+			sigsend = 1;	// the real trigger
+		}
+		// more sensitive pretrigger, used to set the trigger level in LPTask 100ms loop
+		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + (trigthresh-6))) { // provide margin of 6 over 'continuous' trigger level
+			pretrigcnt++;
+		}
+#if 0
+		{ int neww, oldw;
+		neww = meanwindiff*meanwindiff;
+		oldw = lastmeanwindiff*lastmeanwindiff;
+		if (neww > oldw + trigthresh)
+			sigsend = 1;
+		}
+#endif
+#if 0
+		if ((meanwindiff*meanwindiff) > ((lastmeanwindiff*lastmeanwindiff) + trigthresh)) { // if new mean diff > last mean diff +1
 			sigsend = 1;	// trigger greater than running mean
 		}
+#endif
 	} // end for i
 
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers
@@ -394,7 +413,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		adcbgbaseacc = 0;
 		samplecnt = 0;
 	}
-
+	globaladcnoise = meanwindiff;
 	statuspkt.adcnoise = (globaladcnoise & 0xfff);	// agc
 	statuspkt.adcbase = (globaladcavg & 0xfff);	// agc
 

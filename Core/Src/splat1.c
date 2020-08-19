@@ -54,6 +54,9 @@ uint16_t pgagain = 0x4001;  // initial gain set
 uint8_t muxdat[] = { 0x81 };		// sw1A (AMPout -> ADC) sw2D (DAC->Spker)
 uint32_t logampmode = 0;	// log amp mode flag
 
+// Programmable gain amplifier
+extern const int pgamult[] = {1,2,4,5,8,10,16,32};		// maps from 0..7 gain control to the PGA
+
 //////////////////////////////////////////////
 //
 // Initialise and test the LEDS by cycling them
@@ -155,6 +158,21 @@ int initpga() {
 	setpgagain(1);			// 1 == gain of 2x
 	return (0);
 }
+
+
+// bump the pga by one step
+int bumppga(int i) {
+	volatile int gain;
+
+	gain = pgagain & 0x7;
+	if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
+		gain = gain + i;
+		setpgagain(gain);
+		return(gain);
+	}
+return(0);
+}
+
 
 //////////////////////////////////////////////
 //

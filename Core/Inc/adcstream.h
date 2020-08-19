@@ -15,7 +15,7 @@
 #define ADCBUFHEAD 16
 #define ADCBUFSIZE (UDPBUFSIZE-ADCBUFHEAD)
 
-#define TRIG_THRES 1000			// adc trigger level above avg noise (is calculated when running, not fixed)
+#define TRIG_THRES 1000		// adc trigger level above avg noise (is calculated when running, not fixed)
 
 typedef uint32_t adcbuffer[ADCBUFSIZE / 2];
 typedef uint16_t adc16buffer[ADCBUFSIZE];
@@ -56,5 +56,9 @@ extern int jabber;			// jabber timeout for spamming detections
 extern uint8_t sendendstatus;	// flag from adc to udp to send status
 
 extern uint32_t globaladcnoise;
+extern int16_t meanwindiff;	// sliding mean of window differences
+extern uint16_t lastmeanwindiff;
+
+extern uint32_t pretrigcnt;	// counter of pretrigger detections
 
 #endif /* ADCSTREAM_H_ */
