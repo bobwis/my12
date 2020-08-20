@@ -25,7 +25,7 @@
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu.1826639777" name="Floating-point unit" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu" useByScannerDiscovery="false" value="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu.value.fpv5-d16" valueType="enumerated"/>
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi.915950465" name="Floating-point ABI" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi" useByScannerDiscovery="false" value="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi.value.hard" valueType="enumerated"/>
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_board.289107810" name="Board" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_board" useByScannerDiscovery="false" value="NUCLEO-F767ZI" valueType="string"/>
-							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults.290606359" name="Defaults" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults" useByScannerDiscovery="false" value="com.st.stm32cube.ide.common.services.build.inputs.revA.1.0.3 || Debug || true || Executable || com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.base.gnu-tools-for-stm32 || NUCLEO-F767ZI || 0 || 0 || arm-none-eabi- || ${gnu_tools_for_stm32_compiler_path} || ../Middlewares/Third_Party/LwIP/src/include/netif/ppp | ../Middlewares/Third_Party/LwIP/src/apps/httpd | ../Middlewares/Third_Party/LwIP/src/include/posix | ../Middlewares/Third_Party/LwIP/src/include/posix/sys | ../Drivers/STM32F7xx_HAL_Driver/Inc | ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc | ../Middlewares/Third_Party/LwIP/system/arch | ../Middlewares/Third_Party/LwIP/src/include | ../LWIP/App | ../Core/Inc | ../Middlewares/Third_Party/LwIP/src/include/lwip | ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS | ../Drivers/STM32F7xx_HAL_Driver/Inc/Legacy | ../Middlewares/Third_Party/LwIP/system | ../FATFS/App | ../Middlewares/Third_Party/FreeRTOS/Source/include | ../USB_DEVICE/Target | ../Middlewares/Third_Party/LwIP/src/include/lwip/priv | ../Drivers/CMSIS/Device/ST/STM32F7xx/Include | ../Middlewares/Third_Party/LwIP/src/include/lwip/prot | ../Middlewares/Third_Party/LwIP/src/include/lwip/apps | ../Drivers/CMSIS/Include | ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc | ../USB_DEVICE/App | ../LWIP/Target | ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1 | ../FATFS/Target | ../Middlewares/Third_Party/FatFs/src | ../Middlewares/Third_Party/LwIP/src/include/netif ||  ||  || USE_HAL_DRIVER | STM32F767xx ||  || LWIP | Drivers | Core/Startup | Middlewares | Core | FATFS | USB_DEVICE ||  ||  || ${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld} || true || NonSecure ||  || secure_nsclib.o || " valueType="string"/>
+							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults.290606359" name="Defaults" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults" useByScannerDiscovery="false" value="com.st.stm32cube.ide.common.services.build.inputs.revA.1.0.3 || Debug || true || Executable || com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.base.gnu-tools-for-stm32 || NUCLEO-F767ZI || 0 || 0 || arm-none-eabi- || ${gnu_tools_for_stm32_compiler_path} || ../Middlewares/Third_Party/LwIP/src/include/netif/ppp | ../Middlewares/Third_Party/LwIP/src/include/compat/stdc | ../Drivers/STM32F7xx_HAL_Driver/Inc | ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc | ../Middlewares/Third_Party/LwIP/system/arch | ../Middlewares/Third_Party/LwIP/src/include | ../LWIP/App | ../Middlewares/Third_Party/LwIP/src/include/compat/posix | ../Core/Inc | ../Middlewares/Third_Party/LwIP/src/include/lwip | ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS | ../Drivers/STM32F7xx_HAL_Driver/Inc/Legacy | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/arpa | ../Middlewares/Third_Party/LwIP/system | ../FATFS/App | ../Middlewares/Third_Party/FreeRTOS/Source/include | ../USB_DEVICE/Target | ../Middlewares/Third_Party/LwIP/src/include/lwip/priv | ../Drivers/CMSIS/Device/ST/STM32F7xx/Include | ../Middlewares/Third_Party/LwIP/src/include/lwip/prot | ../Middlewares/Third_Party/LwIP/src/include/lwip/apps | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/sys | ../Drivers/CMSIS/Include | ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc | ../USB_DEVICE/App | ../LWIP/Target | ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1 | ../FATFS/Target | ../Middlewares/Third_Party/LwIP/src/apps/http | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/net | ../Middlewares/Third_Party/FatFs/src | ../Middlewares/Third_Party/LwIP/src/include/netif ||  ||  || USE_HAL_DRIVER | STM32F767xx ||  || LWIP | Drivers | Core/Startup | Middlewares | Core | FATFS | USB_DEVICE ||  ||  || ${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld} || true || NonSecure ||  || secure_nsclib.o || " valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform.321984630" isAbstract="false" osList="all" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform"/>
 							<builder buildPath="${workspace_loc:/my12}/Debug" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder.44939500" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder"/>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler.493755237" name="MCU GCC Assembler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler">
@@ -57,7 +57,6 @@
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FatFs/src"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/netif/ppp"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/apps/httpd"/>
 									<listOptionValue builtIn="false" value="../Middlewares/ST/STM32_USB_Device_Library/Core/Inc"/>
 									<listOptionValue builtIn="false" value="../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32F7xx/Include"/>
@@ -66,10 +65,14 @@
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/lwip/priv"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/lwip/prot"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/netif"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/posix"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/posix/sys"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/system/arch"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Include"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/apps/http"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/arpa"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/net"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/sys"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/stdc"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.16871381" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>
@@ -79,7 +82,7 @@
 							</tool>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.1114938517" name="MCU GCC Linker" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker">
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script.1730987514" name="Linker Script (-T)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script" useByScannerDiscovery="false" value="${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld}" valueType="string"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags.986977374" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags" useByScannerDiscovery="false" valueType="stringList">
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags.986977374" name="Other flags" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags" useByScannerDiscovery="false" valueType="stringList">
 									<listOptionValue builtIn="false" value="-u _printf_float"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input.377696473" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input">
@@ -101,7 +104,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Third_Party/LwIP/src/apps/httpd/fsdata_custom.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry excluding="Third_Party/LwIP/src/apps/http/fsdata_custom.c|Third_Party/LwIP/src/apps/httpd/fsdata_custom.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="FATFS"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="LWIP"/>
@@ -136,7 +139,7 @@
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu.2023547992" name="Floating-point unit" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu" value="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.fpu.value.fpv5-d16" valueType="enumerated"/>
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi.1774616345" name="Floating-point ABI" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi" value="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.floatabi.value.hard" valueType="enumerated"/>
 							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_board.278434156" name="Board" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.target_board" value="NUCLEO-F767ZI" valueType="string"/>
-							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults.1827055300" name="Defaults" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults" value="com.st.stm32cube.ide.common.services.build.inputs.revA.1.0.3 || Release || false || Executable || com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.base.gnu-tools-for-stm32 || NUCLEO-F767ZI || 0 || 0 || arm-none-eabi- || ${gnu_tools_for_stm32_compiler_path} || ../Middlewares/Third_Party/LwIP/src/include/netif/ppp | ../Middlewares/Third_Party/LwIP/src/apps/httpd | ../Middlewares/Third_Party/LwIP/src/include/posix | ../Middlewares/Third_Party/LwIP/src/include/posix/sys | ../Drivers/STM32F7xx_HAL_Driver/Inc | ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc | ../Middlewares/Third_Party/LwIP/system/arch | ../Middlewares/Third_Party/LwIP/src/include | ../LWIP/App | ../Core/Inc | ../Middlewares/Third_Party/LwIP/src/include/lwip | ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS | ../Drivers/STM32F7xx_HAL_Driver/Inc/Legacy | ../Middlewares/Third_Party/LwIP/system | ../FATFS/App | ../Middlewares/Third_Party/FreeRTOS/Source/include | ../USB_DEVICE/Target | ../Middlewares/Third_Party/LwIP/src/include/lwip/priv | ../Drivers/CMSIS/Device/ST/STM32F7xx/Include | ../Middlewares/Third_Party/LwIP/src/include/lwip/prot | ../Middlewares/Third_Party/LwIP/src/include/lwip/apps | ../Drivers/CMSIS/Include | ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc | ../USB_DEVICE/App | ../LWIP/Target | ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1 | ../FATFS/Target | ../Middlewares/Third_Party/FatFs/src | ../Middlewares/Third_Party/LwIP/src/include/netif ||  ||  || USE_HAL_DRIVER | STM32F767xx ||  || LWIP | Drivers | Core/Startup | Middlewares | Core | FATFS | USB_DEVICE ||  ||  || ${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld} || true || NonSecure ||  || secure_nsclib.o || " valueType="string"/>
+							<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults.1827055300" name="Defaults" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.option.defaults" value="com.st.stm32cube.ide.common.services.build.inputs.revA.1.0.3 || Release || false || Executable || com.st.stm32cube.ide.mcu.gnu.managedbuild.toolchain.base.gnu-tools-for-stm32 || NUCLEO-F767ZI || 0 || 0 || arm-none-eabi- || ${gnu_tools_for_stm32_compiler_path} || ../Middlewares/Third_Party/LwIP/src/include/netif/ppp | ../Middlewares/Third_Party/LwIP/src/include/compat/stdc | ../Drivers/STM32F7xx_HAL_Driver/Inc | ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc | ../Middlewares/Third_Party/LwIP/system/arch | ../Middlewares/Third_Party/LwIP/src/include | ../LWIP/App | ../Middlewares/Third_Party/LwIP/src/include/compat/posix | ../Core/Inc | ../Middlewares/Third_Party/LwIP/src/include/lwip | ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS | ../Drivers/STM32F7xx_HAL_Driver/Inc/Legacy | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/arpa | ../Middlewares/Third_Party/LwIP/system | ../FATFS/App | ../Middlewares/Third_Party/FreeRTOS/Source/include | ../USB_DEVICE/Target | ../Middlewares/Third_Party/LwIP/src/include/lwip/priv | ../Drivers/CMSIS/Device/ST/STM32F7xx/Include | ../Middlewares/Third_Party/LwIP/src/include/lwip/prot | ../Middlewares/Third_Party/LwIP/src/include/lwip/apps | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/sys | ../Drivers/CMSIS/Include | ../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc | ../USB_DEVICE/App | ../LWIP/Target | ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1 | ../FATFS/Target | ../Middlewares/Third_Party/LwIP/src/apps/http | ../Middlewares/Third_Party/LwIP/src/include/compat/posix/net | ../Middlewares/Third_Party/FatFs/src | ../Middlewares/Third_Party/LwIP/src/include/netif ||  ||  || USE_HAL_DRIVER | STM32F767xx ||  || LWIP | Drivers | Core/Startup | Middlewares | Core | FATFS | USB_DEVICE ||  ||  || ${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld} || true || NonSecure ||  || secure_nsclib.o || " valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform.1499583740" isAbstract="false" osList="all" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.targetplatform"/>
 							<builder buildPath="${workspace_loc:/my12}/Release" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder.1862893193" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.builder"/>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler.1947185657" name="MCU GCC Assembler" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.assembler">
@@ -167,7 +170,6 @@
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM7/r0p1"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FatFs/src"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/netif/ppp"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/apps/httpd"/>
 									<listOptionValue builtIn="false" value="../Middlewares/ST/STM32_USB_Device_Library/Core/Inc"/>
 									<listOptionValue builtIn="false" value="../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Device/ST/STM32F7xx/Include"/>
@@ -176,10 +178,14 @@
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/lwip/priv"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/lwip/prot"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/netif"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/posix"/>
-									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/posix/sys"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/system/arch"/>
 									<listOptionValue builtIn="false" value="../Drivers/CMSIS/Include"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/apps/http"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/arpa"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/net"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/posix/sys"/>
+									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/LwIP/src/include/compat/stdc"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1252214498" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>
@@ -189,7 +195,7 @@
 							</tool>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.1742037140" name="MCU GCC Linker" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker">
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script.512707057" name="Linker Script (-T)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script" value="${workspace_loc:/${ProjName}/STM32F767ZITX_FLASH.ld}" valueType="string"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags.1445819" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags" useByScannerDiscovery="false" valueType="stringList">
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags.1445819" name="Other flags" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.otherflags" useByScannerDiscovery="false" valueType="stringList">
 									<listOptionValue builtIn="false" value="-u _printf_float"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input.759524488" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input">
@@ -211,7 +217,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Third_Party/LwIP/src/apps/httpd/fsdata_custom.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry excluding="Third_Party/LwIP/src/apps/http/fsdata_custom.c|Third_Party/LwIP/src/apps/httpd/fsdata_custom.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="FATFS"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="LWIP"/>

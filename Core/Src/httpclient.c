@@ -279,6 +279,9 @@ int hc_open(ip_addr_t remoteIP, char *Page, char *PostVars, void (*returnpage)(u
 		free(state->PostVars);
 		free(state);
 		tcp_close(pcb);
+#ifdef TESTING
+		printf("httpclient: no pcb memory\n");
+#endif
 		return 0;
 	}
 	// Place allocated copy data

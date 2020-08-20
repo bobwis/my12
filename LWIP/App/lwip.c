@@ -91,8 +91,10 @@ void MX_LWIP_Init(void)
   link_arg.netif = &gnetif;
   link_arg.semaphore = Netif_LinkSemaphore;
   /* Create the Ethernet link handler thread */
-  osThreadDef(LinkThr, ethernetif_set_link, osPriorityNormal, 0, configMINIMAL_STACK_SIZE * 2);
+/* USER CODE BEGIN OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
+  osThreadDef(LinkThr, ethernetif_set_link, osPriorityBelowNormal, 0, configMINIMAL_STACK_SIZE * 2);
   osThreadCreate (osThread(LinkThr), &link_arg);
+/* USER CODE END OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
 
   /* Start DHCP negotiation for a network interface (IPv4) */
   dhcp_start(&gnetif);

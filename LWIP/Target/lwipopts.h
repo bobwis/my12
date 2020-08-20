@@ -25,7 +25,7 @@
 #include "main.h"
 
 /*-----------------------------------------------------------------------------*/
-/* Current version of LwIP supported by CubeMx: 2.0.3 -*/
+/* Current version of LwIP supported by CubeMx: 2.1.2 -*/
 /*-----------------------------------------------------------------------------*/
 
 /* Within 'USER CODE' section, code will be kept by default at each generation */
@@ -65,6 +65,10 @@
 #define MEMP_OVERFLOW_CHECK 2
 /*----- Default Value for MEMP_SANITY_CHECK: 0 ---*/
 #define MEMP_SANITY_CHECK 1
+/*----- Default Value for MEM_OVERFLOW_CHECK: 0 ---*/
+#define MEM_OVERFLOW_CHECK 2
+/*----- Default Value for MEM_SANITY_CHECK: 0 ---*/
+#define MEM_SANITY_CHECK 1
 /*----- Default Value for LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT: 0 ---*/
 #define LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT 1
 /*----- Default Value for MEMP_NUM_PBUF: 16 ---*/
@@ -73,6 +77,8 @@
 #define MEMP_NUM_RAW_PCB 8
 /*----- Default Value for MEMP_NUM_TCP_PCB_LISTEN: 8 ---*/
 #define MEMP_NUM_TCP_PCB_LISTEN 16
+/*----- Default Value for MEMP_NUM_TCP_SEG: 16 ---*/
+#define MEMP_NUM_TCP_SEG 32
 /*----- Default Value for PBUF_POOL_SIZE: 16 ---*/
 #define PBUF_POOL_SIZE 42
 /*----- Default Value for ARP_TABLE_SIZE: 10 ---*/
@@ -85,8 +91,6 @@
 #define LWIP_ETHERNET 1
 /*----- Default Value for LWIP_RAW: 0 ---*/
 #define LWIP_RAW 1
-/*----- Default Value for LWIP_DHCP_CHECK_LINK_UP: 0 ---*/
-#define LWIP_DHCP_CHECK_LINK_UP 1
 /*----- Value in opt.h for LWIP_DNS_SECURE: (LWIP_DNS_SECURE_RAND_XID | LWIP_DNS_SECURE_NO_MULTIPLE_OUTSTANDING | LWIP_DNS_SECURE_RAND_SRC_PORT) -*/
 #define LWIP_DNS_SECURE 7
 /*----- Value in opt.h for TCP_SND_QUEUELEN: (4*TCP_SND_BUF + (TCP_MSS - 1))/TCP_MSS -----*/
@@ -99,12 +103,12 @@
 #define TCP_WND_UPDATE_THRESHOLD 536
 /*----- Default Value for LWIP_NETIF_STATUS_CALLBACK: 0 ---*/
 #define LWIP_NETIF_STATUS_CALLBACK 1
-/*----- Default Value for LWIP_NETIF_LINK_CALLBACK: 0 ---*/
+/*----- Value in opt.h for LWIP_NETIF_LINK_CALLBACK: 0 -----*/
 #define LWIP_NETIF_LINK_CALLBACK 1
 /*----- Value in opt.h for TCPIP_THREAD_STACKSIZE: 0 -----*/
 #define TCPIP_THREAD_STACKSIZE 1024
 /*----- Value in opt.h for TCPIP_THREAD_PRIO: 1 -----*/
-#define TCPIP_THREAD_PRIO 3
+#define TCPIP_THREAD_PRIO osPriorityNormal
 /*----- Value in opt.h for TCPIP_MBOX_SIZE: 0 -----*/
 #define TCPIP_MBOX_SIZE 6
 /*----- Value in opt.h for SLIPIF_THREAD_STACKSIZE: 0 -----*/
@@ -121,6 +125,12 @@
 #define DEFAULT_TCP_RECVMBOX_SIZE 6
 /*----- Value in opt.h for DEFAULT_ACCEPTMBOX_SIZE: 0 -----*/
 #define DEFAULT_ACCEPTMBOX_SIZE 6
+/*----- Default Value for LWIP_TCPIP_TIMEOUT: 0 ---*/
+#define LWIP_TCPIP_TIMEOUT 1
+/*----- Default Value for LWIP_SO_RCVTIMEO: 0 ---*/
+#define LWIP_SO_RCVTIMEO 1
+/*----- Default Value for LWIP_SO_LINGER: 0 ---*/
+#define LWIP_SO_LINGER 1
 /*----- Value in opt.h for RECV_BUFSIZE_DEFAULT: INT_MAX -----*/
 #define RECV_BUFSIZE_DEFAULT 20000
 /*----- Default Value for LWIP_HTTPD: 0 ---*/
@@ -131,6 +141,8 @@
 #define LWIP_HTTPD_SSI 1
 /*----- Default Value for LWIP_HTTPD_SUPPORT_POST: 0 ---*/
 #define LWIP_HTTPD_SUPPORT_POST 1
+/*----- Default Value for LWIP_HTTPD_MAX_TAG_INSERT_LEN: 192 ---*/
+#define LWIP_HTTPD_MAX_TAG_INSERT_LEN 254
 /*----- Default Value for LWIP_HTTPD_SUPPORT_EXTSTATUS: 0 ---*/
 #define LWIP_HTTPD_SUPPORT_EXTSTATUS 1
 /*----- Default Value for LWIP_HTTPD_SUPPORT_11_KEEPALIVE: 0 ---*/
@@ -167,6 +179,12 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_ON
 #define LWIP_DEBUG
 #define LWIP_STATS_DISPLAY 1
+#define LWIP_SO_RCVTIMEO                  1              // default is 0
+ /**
+  * TCP_SND_BUF: TCP sender buffer space (bytes).
+  * To achieve good performance, this should be at least 2 * TCP_MSS.
+  */
+#define TCP_SND_BUF                     (4 * TCP_MSS)
 #endif
 /* USER CODE END 1 */
 

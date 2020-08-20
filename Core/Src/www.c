@@ -31,7 +31,7 @@ extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
 
 // The cgi handler is called when the user changes something on the webpage
-void httpd_cgi_handler(const char *uri, int count, char **http_cgi_params, char **http_cgi_param_vals) {
+void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params, char **http_cgi_param_vals) {
 	const char id[15][6] = { "led1", "sw1A", "sw1B", "sw1C", "sw1D", "sw2A", "sw2B", "sw2C", "sw2D", "btn", "PG2",
 			"PG1", "PG0", "RF1", "AGC" };
 
@@ -53,6 +53,9 @@ void httpd_cgi_handler(const char *uri, int count, char **http_cgi_params, char 
 			__NVIC_SystemReset();   // reboot
 			break;
 		case 11:				// LED1
+#ifdef TESTING
+				stats_display(); // this needs stats in LwIP enabling to do anything
+#endif
 			if (((*http_cgi_param_vals)[i]) == '0')
 				HAL_GPIO_WritePin(GPIOD, LED_D4_Pin, GPIO_PIN_RESET);
 			else

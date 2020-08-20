@@ -1,7 +1,12 @@
+/**
+ * @file
+ * This file is a posix wrapper for lwip/if_api.h.
+ */
+
 /*
- * Copyright (c) 2001-2003 Swedish Institute of Computer Science.
- * All rights reserved. 
- * 
+ * Copyright (c) 2017 Joel Cunningham, Garmin International, Inc. <joel.cunningham@garmin.com>
+ * All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without modification, 
  * are permitted provided that the following conditions are met:
  *
@@ -25,26 +30,7 @@
  * OF SUCH DAMAGE.
  *
  * This file is part of the lwIP TCP/IP stack.
- * 
- * Author: Adam Dunkels <adam@sics.se>
  *
  */
-#ifndef LWIP_FSDATA_H
-#define LWIP_FSDATA_H
 
-#include "lwip/apps/httpd_opts.h"
-#include "lwip/apps/fs.h"
-
-struct fsdata_file {
-  const struct fsdata_file *next;
-  const unsigned char *name;
-  const unsigned char *data;
-  int len;
-  u8_t flags;
-#if HTTPD_PRECALCULATED_CHECKSUM
-  u16_t chksum_count;
-  const struct fsdata_chksum *chksum;
-#endif /* HTTPD_PRECALCULATED_CHECKSUM */
-};
-
-#endif /* LWIP_FSDATA_H */
+#include "lwip/if_api.h"

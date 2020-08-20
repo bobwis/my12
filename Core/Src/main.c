@@ -17,7 +17,6 @@
  ******************************************************************************
  */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
@@ -308,6 +307,7 @@ int main(void) {
 	MX_TIM2_Init();
 	MX_USART6_UART_Init();
 	MX_DAC_Init();
+	MX_FATFS_Init();
 	MX_I2C1_Init();
 	MX_UART4_Init();
 	MX_UART5_Init();
@@ -380,7 +380,6 @@ int main(void) {
 	osKernelStart();
 
 	/* We should never get here as control is now taken by the scheduler */
-
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
@@ -407,7 +406,8 @@ void SystemClock_Config(void) {
 	 */
 	__HAL_RCC_PWR_CLK_ENABLE();
 	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-	/** Initializes the CPU, AHB and APB busses clocks
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
 	 */
 	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSE;
 	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
@@ -426,7 +426,7 @@ void SystemClock_Config(void) {
 	if (HAL_PWREx_EnableOverDrive() != HAL_OK) {
 		Error_Handler();
 	}
-	/** Initializes the CPU, AHB and APB busses clocks
+	/** Initializes the CPU, AHB and APB buses clocks
 	 */
 	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
 	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -1027,7 +1027,7 @@ static void MX_TIM1_Init(void) {
 	htim1.Instance = TIM1;
 	htim1.Init.Prescaler = 0;
 	htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-	htim1.Init.Period = 0;
+	htim1.Init.Period = 65535;
 	htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	htim1.Init.RepetitionCounter = 0;
 	htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -1810,16 +1810,11 @@ void calcagc() {
  */
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const *argument) {
-
 	/* init code for USB_DEVICE */
 	MX_USB_DEVICE_Init();
 
 	/* init code for LWIP */
 	MX_LWIP_Init();
-
-	/* init code for FATFS */
-	MX_FATFS_Init();
-
 	/* USER CODE BEGIN 5 */
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
@@ -1939,9 +1934,7 @@ void StartDefaultTask(void const *argument) {
 		printf("Try to get new S/N using http client. Try=%d\n", i++);
 		httpclient(stmuid);
 		osDelay(5000);
-#ifdef TESTING
-		stats_display() ; // this needs stats in LwIP enabling to do anything
-#endif
+
 		if (i++ > 10) {
 			printf("************* ABORTED **************\n");
 			rebootme();
@@ -1955,7 +1948,7 @@ void StartDefaultTask(void const *argument) {
 
 // tim7 drives DAC
 #if 1
-	printf("Warming up phasors\n");
+	printf("Warming up Phasers\n");
 //		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, dacdata, sizeof(dacdata) >> 1, DAC_ALIGN_12B_L);
 	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
 	DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
@@ -2144,10 +2137,10 @@ void StarLPTask(void const *argument) {
 			sprintf(nowtimestr, "\"%s\"", str);
 #else
 						sprintf(nowtimestr, "\"%u\"", epochtime);
-			#endif
+#endif
 			sprintf(tempstr, "%d.%d", temperature, tempfrac);
 			sprintf(pressstr, "%d.%d", pressure, pressfrac);
-#if 1
+
 			// construct detector status for webpage
 			sprintf(statstr,
 					"\"<b>Uptime</b> %d <b>secs<br><br>Last trigger</b> %s<br><br><b>Triggers</b> %d<br><br><b>Noise</b> %d<br><br><b>ADC Base</b> %d<br><br>\"",
@@ -2159,13 +2152,6 @@ void StarLPTask(void const *argument) {
 			} else {
 				strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");
 			}
-#endif
-
-#if 0
-				if (agc) {
-					calcagc();		// try to set the gain automatically
-				}
-#endif
 
 			onesectimer++;
 
@@ -2187,7 +2173,7 @@ void StarLPTask(void const *argument) {
 			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
 				printf("semaphore release failed\n");
 			}
-		}		// if seconds timer hit
+		}		// if 1 second timer hit
 
 		/**********************  Every 10 Secs   *******************************/
 
@@ -2225,9 +2211,6 @@ void StarLPTask(void const *argument) {
 				onesectimer = 0;
 				if (locateudp() != uip)		// periodic check
 					rebootme();	// target udp host has changed or network has gone away
-#ifdef TESTING
-				stats_display() ; // this needs stats in LwIP enabling to do anything
-#endif
 			}
 		} // end 10 sec
 	}
