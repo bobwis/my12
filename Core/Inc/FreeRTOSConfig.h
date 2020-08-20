@@ -25,6 +25,20 @@
  *
  * 1 tab == 4 spaces!
  */
+
+/* FreeRTOS stats */
+#if 0
+extern	volatile unsigned long rtos_debug_timer;
+/* zzz for freeRTOS debug stats */
+
+#define configUSE_TRACE_FACILITY 1
+#define configGENERATE_RUN_TIME_STATS 1
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() rtos_debug_timer_setup()
+#define portGET_RUN_TIME_COUNTER_VALUE()           rtos_debug_timer
+
+#endif
+
+
 /* USER CODE END Header */
 
 #ifndef FREERTOS_CONFIG_H
@@ -144,6 +158,7 @@ standard names. */
 
 /* USER CODE BEGIN Defines */
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
+
 /* USER CODE END Defines */
 
 #endif /* FREERTOS_CONFIG_H */
