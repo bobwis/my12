@@ -360,8 +360,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 			sigsend = 1;	// the real trigger
 		}
 		// more sensitive pretrigger, used to set the trigger level in LPTask 100ms loop
-		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + (trigthresh-6))) { // provide margin of 6 over 'continuous' trigger level
-			pretrigcnt++;
+//		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + (trigthresh-6))) { // provide margin of 6 over 'continuous' trigger level
+		if ((abs(meanwindiff + 3  + (globaladcnoise>>7)  )) > ((abs(lastmeanwindiff)) + trigthresh )) {  // provide a margin over 'continuous' trigger level
+		pretrigcnt++;
 		}
 #if 0
 		{ int neww, oldw;
@@ -386,7 +387,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		if (sigprev == 0)		// no trigger last time, so this is a new event
 			adcbatchid++;		// start a new adc batch number
 		sigprev = 1;	// remember this trigger for next packet
-		ledhang = 100;		// 100 x 10ms in Idle proc
+		ledhang = 50;		// 500 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
 
 	} else {			// no trigger

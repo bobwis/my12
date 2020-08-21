@@ -93,6 +93,9 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 	while (ps->ref != 1) { // old packet not finished with yet
 		printf("******* timed status2: ps->ref = %d *******\n", ps->ref);
+#ifdef TESTING
+		osDelay(100);
+#endif
 		vTaskDelay(0); // but we need wait to update the data packet next, so wait
 	}
 	statuspkt.udppknum++;
@@ -105,7 +108,7 @@ void sendtimedstatus(struct pbuf *ps, struct udp_pcb *pcb, uint8_t batchid) {
 	static uint32_t talive = 0;
 
 #ifdef TESTING
-	if ((t1sec != talive) && (t1sec % 1 == 0)) { // this is a temporary mech to send timed status pkts...
+	if ((t1sec != talive) && (t1sec % 4 == 0)) { // this is a temporary mech to send timed status pkts...
 		talive = t1sec;
 
 #else

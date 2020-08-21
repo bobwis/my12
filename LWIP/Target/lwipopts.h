@@ -173,6 +173,8 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
+#define MEMP_NUM_SYS_TIMEOUT 	8
+#define MEMP_NUM_UDP_PCB        8
 #ifdef TESTING
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(x) do {printf x;} while(0)

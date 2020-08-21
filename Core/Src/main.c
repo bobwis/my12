@@ -2188,8 +2188,8 @@ void StarLPTask(void const * argument)
 //		if (globaladcnoise == 0)
 //			globaladcnoise = statuspkt.adcbase;		// dont allow zero peaks
 
-		if (statuspkt.trigcount > (360 + trigs)) { // spamming: 3600 packets sent in 2 Sec (out of approx 7.2K packets)
-			jabber = 200;		// 2 seconds pause
+		if (statuspkt.trigcount > (100 + trigs)) { // spamming: 100 packets sent in about 20mS
+			jabber = 100;		// 1 seconds pause
 			statuspkt.jabcnt++;
 		} else {
 			if (jabber)
@@ -2263,7 +2263,7 @@ void StarLPTask(void const * argument)
 						trigthresh++;
 				}
 				if (n == 0) {		// no triggers in last 100mS
-					if (trigthresh > 5)	// dont permit trigthresh < 5
+					if (trigthresh > 3)	// dont permit trigthresh < 3
 						trigthresh--;
 				}
 				lastpretrigcnt = pretrigcnt;	// (dont worry about 2^32 wrap)
