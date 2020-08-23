@@ -27,7 +27,7 @@
  */
 
 /* FreeRTOS stats */
-#if 1
+#if 0
 extern	volatile unsigned long rtos_debug_timer;
 /* zzz for freeRTOS debug stats */
 

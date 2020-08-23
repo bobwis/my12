@@ -31,6 +31,7 @@ unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
 volatile unsigned int sigsend = 0;	// flag to tell udp to send sample packet
 uint32_t globaladcavg = 0;		// adc average over milli-secs
 uint32_t globaladcnoise = 0;	// adc noise peaks average over milli-secs
+uint16_t pretrigthresh = TRIG_THRES;		// pretrigger threshold
 uint16_t trigthresh = TRIG_THRES;		// dynamic trigger offset
 uint8_t adcbatchid = 0;	// adc sequence number of a batch of 1..n consecutive triggered buffers
 uint8_t sendendstatus = 0; 	// flag to send end of capture status
@@ -355,15 +356,19 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
 		windiff[j] = meanwindiff;	// store latest window mean of differences
 
+		if ((abs(meanwindiff) + pretrigthresh) > ((abs(lastmeanwindiff)) + trigthresh)) {
+			pretrigcnt++;
+		}
+
 //		trigthresh = (logampmode > 0) ? 37 : 10;	// SPLAT Logamp in operation?  now in idle task
 		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + trigthresh)) { // if new mean diff > last mean diff +1
-			sigsend = 1;	// the real trigger
+			sigsend |= 1;	// the real trigger
 		}
 		// more sensitive pretrigger, used to set the trigger level in LPTask 100ms loop
 //		if ((abs(meanwindiff)) > ((abs(lastmeanwindiff)) + (trigthresh-6))) { // provide margin of 6 over 'continuous' trigger level
-		if ((abs(meanwindiff + 3  + (globaladcnoise>>7)  )) > ((abs(lastmeanwindiff)) + trigthresh )) {  // provide a margin over 'continuous' trigger level
-		pretrigcnt++;
-		}
+//		if ((abs(meanwindiff + 3  + (globaladcnoise>>7)  )) > ((abs(lastmeanwindiff)) + trigthresh )) {  // provide a margin over 'continuous' trigger level
+//		pretrigcnt++;
+
 #if 0
 		{ int neww, oldw;
 		neww = meanwindiff*meanwindiff;
@@ -384,8 +389,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 #ifndef SPLAT1
 			HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);	// blue led
 #endif
-		if (sigprev == 0)		// no trigger last time, so this is a new event
-			adcbatchid++;		// start a new adc batch number
+		if (sigprev == 0) {		// no trigger last time, so this is a new event
+			++adcbatchid; // start a new adc batch number
+			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt
+		}
 		sigprev = 1;	// remember this trigger for next packet
 		ledhang = 50;		// 500 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
@@ -414,8 +421,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 		adcbgbaseacc = 0;
 		samplecnt = 0;
 	}
-	globaladcnoise = meanwindiff;
-	statuspkt.adcnoise = (globaladcnoise & 0xfff);	// agc
+
+	globaladcnoise = abs(meanwindiff);
+
+	statuspkt.adcnoise = globaladcnoise & 0xfff;	// agc
 	statuspkt.adcbase = (globaladcavg & 0xfff);	// agc
 
 	if (xTaskToNotify == NULL) {

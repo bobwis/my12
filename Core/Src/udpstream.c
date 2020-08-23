@@ -78,7 +78,7 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 	volatile err_t err;
 
-	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabber & 0xff) << 8) | batchid);
+	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabber & 0xff) << 8) | adcbatchid);
 
 //	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);
 	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh | ((pgagain & 7)<<12);
@@ -108,7 +108,7 @@ void sendtimedstatus(struct pbuf *ps, struct udp_pcb *pcb, uint8_t batchid) {
 	static uint32_t talive = 0;
 
 #ifdef TESTING
-	if ((t1sec != talive) && (t1sec % 4 == 0)) { // this is a temporary mech to send timed status pkts...
+	if ((t1sec != talive) && (t1sec % 1 == 0)) { // this is a temporary mech to send timed status pkts...
 		talive = t1sec;
 
 #else
@@ -186,8 +186,6 @@ void startudp(uint32_t ip) {
 	const TickType_t xMaxBlockTime = pdMS_TO_TICKS(1000);
 	volatile err_t err;
 	int i;
-
-	static uint8_t lastadcbatchid = 0;
 
 //printf("Startudp:\n");
 	/* Store the handle of the calling task. */
@@ -269,10 +267,10 @@ void startudp(uint32_t ip) {
 #endif
 		/* send end of sequence status packet if end of batch sequence */
 		if ((sendendstatus > 0) && (jabber == 0)) {
-			sendstatus(ENDSEQ, ps, pcb, lastadcbatchid); // send end of seq status
+			sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
 			sendendstatus = 0;	// cancel the flag
-			lastadcbatchid = adcbatchid;
 			statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
+
 		}
 
 		/* if we have a trigger, send a sample packet */
@@ -290,7 +288,7 @@ void startudp(uint32_t ip) {
 			}
 			sigsend = 0;	// assume its sent and the pb->p1 or p2 buffer is now clear
 
-			if (jabber == 0) {		// don't actually send it if jabbering
+			if  (jabber == 0) {		// don't actually send it if jabbering
 				err = sendudp(pcb, pd, &udpdestip, UDP_PORT_NO);		// send the sample packet
 
 				statuspkt.udpsent++;	// debug no of sample packets set
@@ -301,12 +299,12 @@ void startudp(uint32_t ip) {
 					vTaskDelay(0); // but we need wait to update the data packet next, so wait
 				}
 			} else {
-				sendtimedstatus(ps, pcb, lastadcbatchid); // on jabber, timed status sending masked by sigsend
+				sendtimedstatus(ps, pcb, adcbatchid); // on jabber, timed status sending masked by sigsend
 			}
 
 		} // if sigsend
 		else {		// no adc sample to send, so send timed status
-			sendtimedstatus(ps, pcb, lastadcbatchid);
+			sendtimedstatus(ps, pcb, adcbatchid);
 		}
 	} // forever while
 }

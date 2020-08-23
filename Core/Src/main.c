@@ -2170,6 +2170,8 @@ void StarLPTask(void const * argument)
 		reqtimer++;
 		tenmstimer++;
 
+		pretrigthresh = 3 + (globaladcnoise>>7);		// set the pretrigger level
+
 		if (ledhang) {	// trigger led
 			ledhang--;
 #ifdef SPLAT1
