@@ -168,7 +168,7 @@ int bumppga(int i) {
 	if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
 		gain = gain + i;
 		setpgagain(gain);
-		return(gain);
+		return(i);
 	}
 return(0);
 }
