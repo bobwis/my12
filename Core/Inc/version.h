@@ -16,7 +16,8 @@
 #if	1
 #define TESTING
 #if 1
-//#define configGENERATE_RUN_TIME_STATS 1
+#define configGENERATE_RUN_TIME_STATS 1
+
 #define USE_TRACE_FACILITY 1
 #define USE_STATS_FORMATTING_FUNCTIONS 1
 #endif

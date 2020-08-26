@@ -256,11 +256,14 @@ void startudp(uint32_t ip) {
 		//    memcpy (p1->payload, (lastbuf == 0) ? testbuf : testbuf, ADCBUFLEN);
 
 		/* Wait to be notified */
-		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
+//		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
 #if 0
 		if (ulNotificationValue == 1) {
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
+		}
+//			printf("ulNotificationValue = %d\n",ulNotificationValue );
 			/* The transmission ended as expected. */
-		} else {
+		else {
 			/* The call to ulTaskNotifyTake() timed out. */
 			printf("ulNotificationValue = %d\n",ulNotificationValue );
 		}
@@ -270,12 +273,12 @@ void startudp(uint32_t ip) {
 			sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
 			sendendstatus = 0;	// cancel the flag
 			statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
-
 		}
 
 		/* if we have a trigger, send a sample packet */
 		if ((sigsend) && (gpslocked)) { // only send if adc threshold was exceeded and GPS is locked
 
+HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 			pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
 
 			((uint8_t*) (pd->payload))[3] = 0;	// pkt type
@@ -306,6 +309,7 @@ void startudp(uint32_t ip) {
 		else {		// no adc sample to send, so send timed status
 			sendtimedstatus(ps, pcb, adcbatchid);
 		}
+HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET /*PB11*/);	// debug pin
 	} // forever while
 }
 

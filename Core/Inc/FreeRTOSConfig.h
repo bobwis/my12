@@ -27,7 +27,8 @@
  */
 
 /* FreeRTOS stats */
-#if 0
+#include <version.h>
+#ifdef configGENERATE_RUN_TIME_STATS
 extern	volatile unsigned long rtos_debug_timer;
 /* zzz for freeRTOS debug stats */
 
