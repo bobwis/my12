@@ -15,7 +15,7 @@
 // and uses different target IP addresses
 #if	1
 #define TESTING
-#if 1
+#if 0
 #define configGENERATE_RUN_TIME_STATS 1
 
 #define USE_TRACE_FACILITY 1
@@ -29,15 +29,15 @@
 #endif
 
 #ifdef TESTING
-#define MY_UID 1055	// 16 bits  "serial number" of the lightning detector
+#define MY_UID 1056	// 16 bits  "serial number" of the lightning detector
 #else
 #define MY_UID 1005	// 16 bits  "serial number" of the lightning detector
 #endif
 
 #ifdef SPLAT1
 // Pressures sensor type fitted
-#define MPL115A2	2
-#define MPL3115A2  1
+#define MPL115A2	1
+#define MPL3115A2  2
 #define PNONE 0
 
 #endif	/* SPLAT1 */

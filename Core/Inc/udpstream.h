@@ -13,8 +13,8 @@
 void startudp(uint32_t ip);
 
 #ifdef TESTING
-#define SERVER_DESTINATION "lightning.local"
-//#define SERVER_DESTINATION "10.10.201.223"
+//#define SERVER_DESTINATION "lightning.local"
+#define SERVER_DESTINATION "10.10.201.240"
 #else
 #define SERVER_DESTINATION "lightningudp.vk4ya.com"
 #endif

@@ -104,4 +104,22 @@ void myhexDump(char *desc, void *addr, int len) {
 	printf("  %s\n", buff);
 }
 
+// Direct GPIO output drive
+
+#define GPIOE_ODR (0x40021014)
+#define GPIOE_IDR (0x40021010)
+
+
+inline void gpioeset(uint32_t setbits) {
+
+*(uint32_t *)GPIOE_ODR = (*(uint32_t *)GPIOE_IDR) | setbits;
+
+}
+
+
+inline void gpioeclr(uint32_t clrbits) {
+
+*(uint32_t *)GPIOE_ODR = (*(uint32_t *)GPIOE_IDR) & ~clrbits;
+
+}
 

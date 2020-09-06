@@ -41,7 +41,7 @@ void myreboot(char *msg) {
 	err = udp_sendto(pcb, ps, &udpdestip, UDP_PORT_NO);
 	if (err != ERR_OK) {
 #ifdef TESTING
-	    stats_display() ; // this needs stats in LwIP enabling to do anything
+		stats_display(); // this needs stats in LwIP enabling to do anything
 #endif
 		printf("sendudp: err %i\n", err);
 		vTaskDelay(100); //some delay!
@@ -78,26 +78,37 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 	volatile err_t err;
 
-	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabber & 0xff) << 8) | adcbatchid);
+	statupkt.adcnoise = abs(meanwindiff) & 0xfff;	// agc
+	statuspkt.adcbase = (globaladcavg & 0xfff);	// agc
+	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 
 //	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);
-	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh | ((pgagain & 7)<<12);
+	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh | ((pgagain & 7) << 12);
 
-	while (ps->ref != 1) { // old packet not finished with yet
+#if 0
+	while (ps->ref > 0) { // old packet not finished with yet
 		printf("******* timed status1: ps->ref = %d *******\n", ps->ref);
-	}
-
-	((uint8_t*) (ps->payload))[3] = stype; // timed status pkt type
-
-	err = sendudp(pcb, ps, &udpdestip, UDP_PORT_NO);
-
-	while (ps->ref != 1) { // old packet not finished with yet
-		printf("******* timed status2: ps->ref = %d *******\n", ps->ref);
 #ifdef TESTING
 		osDelay(100);
 #endif
 		vTaskDelay(0); // but we need wait to update the data packet next, so wait
 	}
+#endif
+
+	((uint8_t*) (ps->payload))[3] = stype; // timed status pkt type
+
+	err = sendudp(pcb, ps, &udpdestip, UDP_PORT_NO);
+
+#if 0
+	while (ps->ref > 0) { // old packet not finished with yet
+		printf("******* timed status2: ps->ref = %d *******\n", ps->ref);
+
+#ifdef TESTING
+		osDelay(100);
+#endif
+		vTaskDelay(0); // but we need wait to update the data packet next, so wait
+	}
+#endif
 	statuspkt.udppknum++;
 }
 
@@ -239,10 +250,13 @@ void startudp(uint32_t ip) {
 	osDelay(5000);
 
 	statuspkt.auxstatus1 = 0;
-	statuspkt.adcudpover = 0;		// debug use count uns
+	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
 	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
 	statuspkt.telltale1 = 0xDEC0EDFE; //  0xFEEDC0DE marker at the end of each status packet
+
+	startadc();		// start the ADC DMA loop
+
 
 	netup = 1; // this is incomplete - it should be set by the phys layer also
 	printf("Arming UDP Railgun\nSystem ready and operating....\n");
@@ -256,60 +270,54 @@ void startudp(uint32_t ip) {
 		//    memcpy (p1->payload, (lastbuf == 0) ? testbuf : testbuf, ADCBUFLEN);
 
 		/* Wait to be notified */
-//		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
-#if 0
-		if (ulNotificationValue == 1) {
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
-		}
-//			printf("ulNotificationValue = %d\n",ulNotificationValue );
-			/* The transmission ended as expected. */
-		else {
-			/* The call to ulTaskNotifyTake() timed out. */
-			printf("ulNotificationValue = %d\n",ulNotificationValue );
-		}
-#endif
-		/* send end of sequence status packet if end of batch sequence */
-		if ((sendendstatus > 0) && (jabber == 0)) {
-			sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
-			sendendstatus = 0;	// cancel the flag
-			statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
-		}
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET /*PB11*/);	// debug pin
+		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 
-		/* if we have a trigger, send a sample packet */
-		if ((sigsend) && (gpslocked)) { // only send if adc threshold was exceeded and GPS is locked
+		if (ulNotificationValue > 0) {		// we were notified
+			sigsend = 0;
+			/* if we have a trigger, send a sample packet */
+			if ((gpslocked) && (jabbertimeout == 0)) { // only send if adc threshold was exceeded and GPS is locked
 
-HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
-			pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
+				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
+				pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
 
-			((uint8_t*) (pd->payload))[3] = 0;	// pkt type
-			((uint8_t*) (pd->payload))[0] = statuspkt.udppknum & 0xff;
-			((uint8_t*) (pd->payload))[1] = (statuspkt.udppknum & 0xff00) >> 8;
-			((uint8_t*) (pd->payload))[2] = (statuspkt.udppknum & 0xff0000) >> 16;
+				((uint8_t*) (pd->payload))[3] = 0;	// pkt type
+				((uint8_t*) (pd->payload))[0] = statuspkt.udppknum & 0xff;
+				((uint8_t*) (pd->payload))[1] = (statuspkt.udppknum & 0xff00) >> 8;
+				((uint8_t*) (pd->payload))[2] = (statuspkt.udppknum & 0xff0000) >> 16;
 
-			while (pd->ref != 1) {	// old packet not finished with yet
-				printf("*******send sample failed p->ref = %d *******\n", pd->ref);
-			}
-			sigsend = 0;	// assume its sent and the pb->p1 or p2 buffer is now clear
+				while (pd->ref != 1) {	// old packet not finished with yet
+					printf("*******send sample failed p->ref = %d *******\n", pd->ref);
+				}
 
-			if  (jabber == 0) {		// don't actually send it if jabbering
 				err = sendudp(pcb, pd, &udpdestip, UDP_PORT_NO);		// send the sample packet
 
 				statuspkt.udpsent++;	// debug no of sample packets set
 				statuspkt.adcpktssent++;	// UDP sample packet counter
 				statuspkt.udppknum++;		// UDP packet number
+#if 0
 				while (ps->ref != 1) { // old status packet not finished with yet
 					printf("******* end sample status: ps->ref = %d *******\n", ps->ref);
 					vTaskDelay(0); // but we need wait to update the data packet next, so wait
 				}
-			} else {
-				sendtimedstatus(ps, pcb, adcbatchid); // on jabber, timed status sending masked by sigsend
-			}
-
-		} // if sigsend
-		else {		// no adc sample to send, so send timed status
-			sendtimedstatus(ps, pcb, adcbatchid);
+#endif
+				/* send end of sequence status packet if end of batch sequence */
+				if ((sendendstatus > 0) && (jabbertimeout == 0)) {
+					sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
+					sendendstatus = 0;	// cancel the flag
+					statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
+				}
+			} // if sigsend via wakeup
 		}
-HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET /*PB11*/);	// debug pin
+//			printf("ulNotificationValue = %d\n",ulNotificationValue );
+		/* The transmission ended as expected. */
+		else {
+			/* The call to ulTaskNotifyTake() timed out. */
+			sendtimedstatus(ps, pcb, adcbatchid);
+//			printf("ulNotificationValue = %d\n",ulNotificationValue );
+		}
+
 	} // forever while
 }
 

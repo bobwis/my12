@@ -16,4 +16,9 @@ extern UART_HandleTypeDef huart2;
 
 void myhexDump(char *desc, void *addr, int len);
 
+// GPIO E Set and Clr output bits
+
+void gpioeset(uint32_t setbits);
+void gpioeclr(uint32_t clrbits);
+
 #endif /* MYDEBUG_H_ */

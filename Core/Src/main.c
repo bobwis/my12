@@ -1684,7 +1684,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|GPIO_PIN_11|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, XBEE_DTR_Pin|LP_FILT_Pin|XBEE_RST_Pin|GPIO_PIN_0, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|XBEE_RST_Pin
+                          |GPIO_PIN_0, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|LED_D4_Pin
@@ -1697,9 +1698,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(probe2_GPIO_Port, probe2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PE3 PE7 PE8 PE11
-                           PE12 PE13 PE1 */
+                           PE13 PE1 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_11
-                          |GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_1;
+                          |GPIO_PIN_13|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -1760,8 +1761,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : XBEE_DTR_Pin LP_FILT_Pin XBEE_RST_Pin PE0 */
-  GPIO_InitStruct.Pin = XBEE_DTR_Pin|LP_FILT_Pin|XBEE_RST_Pin|GPIO_PIN_0;
+  /*Configure GPIO pins : XBEE_DTR_Pin PE12 LP_FILT_Pin XBEE_RST_Pin
+                           PE0 */
+  GPIO_InitStruct.Pin = XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|XBEE_RST_Pin
+                          |GPIO_PIN_0;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -2002,6 +2005,20 @@ void StartDefaultTask(void const * argument)
 	statuspkt.adcpktssent = 0;
 	statuspkt.adctrigoff = TRIG_THRES;
 
+	statuspkt.adcudpover = 0;		// debug use count overruns
+	statuspkt.trigcount = 0;		// debug use adc trigger count
+	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
+
+#ifdef TESTING
+	statuspkt.bconf = 0x80000000;	// board config word
+#else
+	statuspkt.bconf = 0;
+#endif
+
+#ifdef SPLAT1
+	statuspkt.bconf |= 0x01;	// splat board version 1
+#endif
+
 //		osDelay(100);
 
 #ifdef TESTING
@@ -2063,7 +2080,6 @@ void StartDefaultTask(void const * argument)
 	} // end while
 #endif
 	ip_addr_t ip = { 0 };
-
 	ip = dhcp->offered_ip_addr;
 	myip = ip.addr;
 	printf("*****************************************\n");
@@ -2076,11 +2092,12 @@ void StartDefaultTask(void const * argument)
 	i = 1;
 	while (statuspkt.uid == MY_UID)		// not yet found new S/N from server
 	{
-		printf("Try to get new S/N using http client. Try=%d\n", i++);
+		printf("Try to get new S/N using http client. Try=%d\n", i);
 		httpclient(stmuid);
 		osDelay(5000);
 
-		if (i++ > 10) {
+		i++;
+		if (i > 10) {
 			printf("************* ABORTED **************\n");
 			rebootme();
 		}
@@ -2101,7 +2118,7 @@ void StartDefaultTask(void const * argument)
 #endif
 
 	setupnotify();
-	startadc();
+
 	uip = locateudp();
 	main_init_done = 1; // let lptask now main has initialised
 	printf("Waiting for lptask\n");
@@ -2169,7 +2186,7 @@ void StarLPTask(void const * argument)
 //		tcp_tmr();
 		reqtimer++;
 		tenmstimer++;
-
+		globaladcnoise = abs(meanwindiff);
 		pretrigthresh = 3 + (globaladcnoise >> 7);		// set the pretrigger level
 
 		if (ledhang) {	// trigger led
@@ -2190,12 +2207,12 @@ void StarLPTask(void const * argument)
 //		if (globaladcnoise == 0)
 //			globaladcnoise = statuspkt.adcbase;		// dont allow zero peaks
 
-		if (statuspkt.trigcount > (50 + trigs)) { // spamming: 50 packets sent in about 20mS
-			jabber = 100;		// 1 seconds pause
+		if (statuspkt.trigcount > (50 + trigs)) { // spamming: 50 packets sent in about 10mS
+			jabbertimeout = 100;		// 1 seconds pause
 			statuspkt.jabcnt++;
 		} else {
-			if (jabber)
-				jabber--;		// de-arm count
+			if (jabbertimeout)
+				jabbertimeout--;		// de-arm count
 		}
 		if (trigs != statuspkt.trigcount) {		// another tigger(s) has occured
 			trigs = statuspkt.trigcount;

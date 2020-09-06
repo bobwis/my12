@@ -283,6 +283,7 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
 /* create the task that handles the ETH_MAC */
 /* USER CODE BEGIN OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
   osThreadDef(EthIf, ethernetif_input, osPriorityRealtime, 0, INTERFACE_THREAD_STACK_SIZE);
+// osThreadDef(EthIf, ethernetif_input, osPriorityNormal, 0, INTERFACE_THREAD_STACK_SIZE);
   osThreadCreate (osThread(EthIf), netif);
 /* USER CODE END OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
   /* Enable MAC and DMA transmission and reception */

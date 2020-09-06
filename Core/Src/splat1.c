@@ -521,10 +521,12 @@ void initsplat(void) {
 	if (initpressure3115() == HAL_OK) {	// non zero result means MPL3115 nogood
 		printf("MPL3115A2 pressure sensor present\n\r");
 		psensor = MPL3115A2;
+		statuspkt.bconf |= (MPL3115A2<<3);
 	} else {
 		if (initpressure115() == HAL_OK) {
 			printf("MPL115A2 pressure sensor present\n\r");
 			psensor = MPL115A2;		// assume MPL115 fitted instead
+			statuspkt.bconf |= (MPL115A2<<3);
 		} else {
 			printf("NO pressure sensor present\n\r");
 		}
