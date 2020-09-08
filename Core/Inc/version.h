@@ -13,7 +13,7 @@
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
-#if	1
+#if	0
 #define TESTING
 #if 0
 #define configGENERATE_RUN_TIME_STATS 1

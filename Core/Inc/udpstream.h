@@ -16,7 +16,7 @@ void startudp(uint32_t ip);
 //#define SERVER_DESTINATION "lightning.local"
 #define SERVER_DESTINATION "10.10.201.240"
 #else
-#define SERVER_DESTINATION "lightningudp.vk4ya.com"
+#define SERVER_DESTINATION "lightning.vk4ya.com"
 #endif
 
 #define UDP_PORT_NO 5000

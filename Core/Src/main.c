@@ -2189,7 +2189,7 @@ void StarLPTask(void const * argument)
 		reqtimer++;
 		tenmstimer++;
 		globaladcnoise = abs(meanwindiff);
-		pretrigthresh = 3 + (globaladcnoise >> 7);		// set the pretrigger level
+		pretrigthresh = 4 + (globaladcnoise >> 7);		// set the pretrigger level
 
 		if (ledhang) {	// trigger led
 			ledhang--;

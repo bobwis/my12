@@ -282,12 +282,12 @@ void httpclient(char Page[64]) {
 	static char *Postvars = NULL;
 
 	if (remoteip.addr == 0) {
-		err = dnslookup("lightning.vk4ya.com", &remoteip);
+		err = dnslookup(SERVER_DESTINATION, &remoteip);		// find serial number server IP address
 
 		if (err != ERR_OK)
 			rebootme();
 		ip = remoteip.addr;
-		printf("\nHTTP Target IP: %lu.%lu.%lu.%lu\n", ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16,
+		printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16,
 				(ip & 0xff000000) >> 24);
 	}
 
