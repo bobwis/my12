@@ -78,7 +78,7 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 	volatile err_t err;
 
-	statupkt.adcnoise = abs(meanwindiff) & 0xfff;	// agc
+	statuspkt.adcnoise = abs(meanwindiff) & 0xfff;	// agc
 	statuspkt.adcbase = (globaladcavg & 0xfff);	// agc
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 
@@ -255,9 +255,6 @@ void startudp(uint32_t ip) {
 	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
 	statuspkt.telltale1 = 0xDEC0EDFE; //  0xFEEDC0DE marker at the end of each status packet
 
-	startadc();		// start the ADC DMA loop
-
-
 	netup = 1; // this is incomplete - it should be set by the phys layer also
 	printf("Arming UDP Railgun\nSystem ready and operating....\n");
 
@@ -270,9 +267,13 @@ void startudp(uint32_t ip) {
 		//    memcpy (p1->payload, (lastbuf == 0) ? testbuf : testbuf, ADCBUFLEN);
 
 		/* Wait to be notified */
+#ifdef TESTING
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET /*PB11*/);	// debug pin
+#endif
 		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
+#ifdef TESTING
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
+#endif
 
 		if (ulNotificationValue > 0) {		// we were notified
 			sigsend = 0;

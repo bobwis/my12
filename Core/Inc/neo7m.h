@@ -86,6 +86,7 @@ struct statpkt {
 	// bits 0..2 are Splat revision present (0 == no Spalt board fitted)
 	// bits 3..4 are Poressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
 	uint32_t bconf;			// the board configuration
+	uint32_t reserved2;
 	uint32_t telltale1;		// end of packet marker
 
 }volatile statuspkt;

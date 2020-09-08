@@ -2125,6 +2125,8 @@ void StartDefaultTask(void const * argument)
 	while (lptask_init_done == 0)
 		osDelay(100); // hold off starting udp railgun until LPtask has initalised
 
+	startadc();		// start the ADC DMA loop
+
 	while (1) {	//
 		startudp(uip);		// should never return
 		printf("UDP stream exited!!!\n\r");

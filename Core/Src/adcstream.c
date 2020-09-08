@@ -375,7 +375,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 #endif
 		if (sigprev == 0) {		// no trigger last time, so this is a new event
 			++adcbatchid; // start a new adc batch number
-			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt
+//			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt (redundant see 331)
 		}
 		sigprev = 1;	// remember this trigger for next packet
 		ledhang = 15;		// 15 x 10ms in Idle proc
