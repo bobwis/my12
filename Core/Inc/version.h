@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 8
+#define MINORVERSION 9
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -29,9 +29,9 @@
 #endif
 
 #ifdef TESTING
-#define MY_UID 1056	// 16 bits  "serial number" of the lightning detector
+#define BUILDNO 20001	// 16 bits  "build number" of the lightning detector
 #else
-#define MY_UID 1005	// 16 bits  "serial number" of the lightning detector
+#define BUILDNO 10001	// 16 bits  "build number" of the lightning detector
 #endif
 
 #ifdef SPLAT1
@@ -47,6 +47,20 @@
 #if 1
 #define LOCALTIME
 #endif
+
+// Time between sending timesd status packets (seconds)
+#ifdef TESTING
+#define STAT_TIME 2
+#else
+#define STAT_TIME 120
+#endif
+
+#ifndef TESTING
+#if 0
+#define HARDWARE_WATCHDOG 1
+#endif
+#endif
+
 
 /*
 #define LWIP_DEBUG

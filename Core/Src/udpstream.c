@@ -18,6 +18,7 @@
 extern uint32_t t1sec;
 uint8_t gpslocked = 0;
 uint8_t epochvalid = 0;
+unsigned int globalfreeze;		// freeze udp streaming
 
 struct ip4_addr udpdestip;		// udp dst ipv4 address
 char udp_ips[16]; // string version of IP address
@@ -118,14 +119,8 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 void sendtimedstatus(struct pbuf *ps, struct udp_pcb *pcb, uint8_t batchid) {
 	static uint32_t talive = 0;
 
-#ifdef TESTING
-	if ((t1sec != talive) && (t1sec % 1 == 0)) { // this is a temporary mech to send timed status pkts...
+	if ((t1sec != talive) && (t1sec % STAT_TIME == 0)) { // this is a temporary mech to send timed status pkts...
 		talive = t1sec;
-
-#else
-		if ((t1sec != talive) && (t1sec % 120 == 0)) { // this is a temporary mech to send timed status pkts...
-			talive = t1sec;
-#endif
 		sendstatus(TIMED, ps, pcb, batchid);
 	}
 }
@@ -270,6 +265,7 @@ void startudp(uint32_t ip) {
 #ifdef TESTING
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET /*PB11*/);	// debug pin
 #endif
+
 		ulNotificationValue = ulTaskNotifyTake( pdTRUE, xMaxBlockTime);
 #ifdef TESTING
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
@@ -278,7 +274,7 @@ void startudp(uint32_t ip) {
 		if (ulNotificationValue > 0) {		// we were notified
 			sigsend = 0;
 			/* if we have a trigger, send a sample packet */
-			if ((gpslocked) && (jabbertimeout == 0)) { // only send if adc threshold was exceeded and GPS is locked
+			if ((gpslocked) && (jabbertimeout == 0) && (!(globalfreeze))) { // only send if adc threshold was exceeded and GPS is locked
 
 				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 				pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
@@ -304,8 +300,9 @@ void startudp(uint32_t ip) {
 				}
 #endif
 				/* send end of sequence status packet if end of batch sequence */
-				if ((sendendstatus > 0) && (jabbertimeout == 0)) {
-					sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
+				if (sendendstatus > 0) {
+					if (jabbertimeout == 0)
+						sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
 					sendendstatus = 0;	// cancel the flag
 					statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
 				}

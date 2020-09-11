@@ -29,9 +29,12 @@
 
 extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
+char stmuid[64] = { 0 };	// STM UUID
+ip_addr_t remoteip = { 0 };
 
 // The cgi handler is called when the user changes something on the webpage
-void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params, char **http_cgi_param_vals) {
+void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params,
+		char **http_cgi_param_vals) {
 	const char id[15][6] = { "led1", "sw1A", "sw1B", "sw1C", "sw1D", "sw2A", "sw2B", "sw2C", "sw2D", "btn", "PG2",
 			"PG1", "PG0", "RF1", "AGC" };
 
@@ -240,7 +243,7 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
 	int nconv;
-	int p1, p2;
+	volatile int p1, p2;
 
 	if (errorm == 0) {
 //		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
@@ -249,7 +252,20 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 			switch (nconv) {
 
 			case 4: 							// converted  4 fields
+
 			case 3: 							// converted  3 fields
+				if (p1 == 1) {		// reboot
+					printf("Server -> commands a reboot...\n");
+					osDelay(2000);
+					rebootme();
+				}
+
+				if (p1 == 2) {		// freeze the UDP streaming
+					globalfreeze = 1;
+					printf("Server -> commands a streaming freeze\n");
+				} else
+					globalfreeze = 0;
+
 			case 2: 							// converted  2 fields
 #ifdef TESTING
 				strcpy(udp_target, SERVER_DESTINATION);
@@ -257,11 +273,14 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 				if (strlen(udp_target) < 7) {					// bad url or ip address
 					strcpy(udp_target, SERVER_DESTINATION);		// default it
 				}
-				printf("A response from Server -> Target UDP host changed to %s\n", udp_target);
+				printf("Server -> Target UDP host: %s\n", udp_target);
 
 			case 1: 							// converted the first field which is the serial number
-				statuspkt.uid = sn;
-				printf("A response from Server -> Serial Number Changed to %lu\n", statuspkt.uid);
+				if (statuspkt.uid != sn)
+				{
+					statuspkt.uid = sn;
+					printf("Server -> Serial Number: %lu\n", statuspkt.uid);
+				}
 				break;
 
 			default:
@@ -278,20 +297,47 @@ void httpclient(char Page[64]) {
 	volatile int result;
 	uint32_t ip;
 	int err;
-	static ip_addr_t remoteip = { 0 };
+
 	static char *Postvars = NULL;
 
-	if (remoteip.addr == 0) {
-		err = dnslookup(SERVER_DESTINATION, &remoteip);		// find serial number server IP address
-
-		if (err != ERR_OK)
-			rebootme();
-		ip = remoteip.addr;
-		printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16,
-				(ip & 0xff000000) >> 24);
-	}
+	err = dnslookup(SERVER_DESTINATION, &remoteip);		// find serial number and udp target IP address
+	if (err != ERR_OK)
+		rebootme();
+	ip = remoteip.addr;
+	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
+			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
 
 	result = hc_open(remoteip, Page, Postvars, returnpage);
 //	printf("result=%d\n", result);
 
+}
+
+void apisn() {
+	sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+	httpclient(stmuid);		// get sn and targ
+}
+
+// get the serial number and udp target for this device
+// reboot if fails
+void initialapisn() {
+	int i;
+
+	i = 1;
+	while (statuspkt.uid == BUILDNO)		// not yet found new S/N from server
+	{
+		printf("getting S/N and UDP target using http. Try=%d\n", i);
+		apisn();
+		osDelay(5000);
+
+		i++;
+		if (i > 10) {
+			printf("************* ABORTED **************\n");
+			rebootme();
+		}
+	}
+}
+
+void requestapisn() {
+	printf("updating S/N and UDP target using http\n");
+	httpclient(stmuid);		// get sn and targ
 }

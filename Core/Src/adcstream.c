@@ -41,6 +41,8 @@ uint32_t ledhang = 0;
 int16_t meanwindiff = 0;	// sliding mean of window differences
 uint16_t lastmeanwindiff = 0;
 uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
+volatile uint32_t timestamp;	// ADC DMA complete timestamp
+volatile ADC_HandleTypeDef *globalhadc;	// dummy
 
 /* Stores the handle of the task that will be notified when the
  transmission is complete. */
@@ -293,13 +295,17 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)// adc conversion done
 }
 #endif
 
+
+
+
 // rolling window size, could be 32, 64, 128 etc
 #define WINSHIFT 5
 #define WINSIZE (1<<WINSHIFT)
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
+// ADC DMA conversion complete, called via Timer 5 interrupt as a proxy IRQ
+//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
+ADC_Conv_complete()
 {
-	uint32_t timestamp;
 	register int16_t i;
 	register uint8_t j;
 	register adcbuffer *buf;
@@ -316,7 +322,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 	static int32_t wmeanacc = 0;	// window mean accumulator
 	static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-	timestamp = TIM2->CNT;			// real time
+//	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
 //	gpioeset(GPIO_PIN_0);
 
@@ -414,14 +420,29 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (D
 
 }
 
+
+// handle the highest priority interrupt to capture the true DMA conversion complete time (below RTOSOS level)
+extern TIM_HandleTypeDef htim5;
+void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
+{
+	timestamp = TIM2->CNT;			// real time
+	TIM5->DIER = 0x01;
+	TIM5->CR1 = 0x19;				// restart timer to generate a follow-on interrupt for the *real* dma conversion complete processing at IRQ level 5
+
+//	HAL_TIM_Base_Start_IT(&htim5);
+}
+
+
+// these two are the real DMA Conversion complete interrupts
 void ADC_MultiModeDMAConvM0Cplt(ADC_HandleTypeDef *hadc) {
 	dmabufno = 0;
-	HAL_ADC_ConvCpltCallback(hadc);
+	ADC_ConvCpltCallback(hadc);
 }
 
 void ADC_MultiModeDMAConvM1Cplt(ADC_HandleTypeDef *hadc) {
+
 	dmabufno = 1;
-	HAL_ADC_ConvCpltCallback(hadc);
+	ADC_ConvCpltCallback(hadc);
 }
 
 void startadc() {

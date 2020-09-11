@@ -63,4 +63,6 @@ extern uint16_t lastmeanwindiff;
 
 extern uint32_t pretrigcnt;	// counter of pretrigger detections
 
+extern volatile ADC_HandleTypeDef *globalhadc;	// dummy
+
 #endif /* ADCSTREAM_H_ */

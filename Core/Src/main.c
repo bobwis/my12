@@ -173,6 +173,7 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim14;
@@ -245,6 +246,7 @@ static void MX_I2C2_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_TIM14_Init(void);
+static void MX_TIM5_Init(void);
 void StartDefaultTask(void const * argument);
 void StarLPTask(void const * argument);
 void Callback01(void const * argument);
@@ -334,6 +336,7 @@ int main(void)
   MX_TIM4_Init();
   MX_IWDG_Init();
   MX_TIM14_Init();
+  MX_TIM5_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
@@ -882,7 +885,7 @@ static void MX_IWDG_Init(void)
   /* USER CODE END IWDG_Init 0 */
 
   /* USER CODE BEGIN IWDG_Init 1 */
-#ifndef TESTING
+#ifdef HARDWARE_WATCHDOG
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
   hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
@@ -1314,6 +1317,52 @@ static void MX_TIM4_Init(void)
 }
 
 /**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 0;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_DOWN;
+  htim5.Init.Period = 4;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+  TIM5->CR1 |= (1 << 3);		// one pulse mode
+
+  /* USER CODE END TIM5_Init 2 */
+
+}
+
+/**
   * @brief TIM6 Initialization Function
   * @param None
   * @retval None
@@ -1653,7 +1702,7 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
   /* DMA2_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
 
 }
@@ -1901,10 +1950,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 		 printf(" globaladcavg=%u\n",globaladcavg);
 		 */
 	}
+
 	if (htim->Instance == TIM4) {
 		printf("Timer4 callback\n");
 	}
-	lastcap = t2cap[0];
+	lastcap = t2cap[0];			// dma has populated t2cap from Channel 3 trigger on Timer 2
 //	htim->Instance->SR = 0;		// cheat
 
 	/* USER CODE END Callback 1 */
@@ -1969,11 +2019,9 @@ void StartDefaultTask(void const * argument)
 	int i;
 	HAL_StatusTypeDef stat;
 //		uint16_t dacdata[64];
-	char stmuid[64] = { 0 };
 
 	printf("\n\n-------------------------------------------------------------------\n");
-	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, SW S/n=%d\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2],
-	MAJORVERSION, MINORVERSION, MY_UID);
+	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2],	MAJORVERSION, MINORVERSION, BUILDNO);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
 	if (!(netif_is_link_up(&gnetif))) {
@@ -1988,13 +2036,15 @@ void StartDefaultTask(void const * argument)
 		rebootme();
 	}
 
+	globalfreeze = 0;		// Allow UDP streaming
+
 	netif = netif_default;
 	netif_set_link_callback(netif, netif_link_callbk_fn);
 	netif_set_status_callback(netif, netif_status_callbk_fn);
 
 	t2cap[0] = 44444444;
 
-	statuspkt.uid = MY_UID;		// 16 bits
+	statuspkt.uid = BUILDNO;		// 16 bits
 	statuspkt.majorversion = MAJORVERSION;
 	statuspkt.minorversion = MINORVERSION;
 	statuspkt.udppknum = 0;
@@ -2087,30 +2137,16 @@ void StartDefaultTask(void const * argument)
 			(myip & 0xFF000000) >> 24);
 	printf("*****************************************\n");
 
-// start the web stuff
-	sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
-	i = 1;
-	while (statuspkt.uid == MY_UID)		// not yet found new S/N from server
-	{
-		printf("Try to get new S/N using http client. Try=%d\n", i);
-		httpclient(stmuid);
-		osDelay(5000);
-
-		i++;
-		if (i > 10) {
-			printf("************* ABORTED **************\n");
-			rebootme();
-		}
-	}
+	initialapisn();	// get initial s/n and UDP target; reboots if fails
 
 	osDelay(1000);
-	printf("Starting httpd\n");
+	printf("Starting httpd web server\n");
 	httpd_init();		// start the www server
 	init_httpd_ssi();	// set up the embedded tag handler
 
 // tim7 drives DAC
 #if 1
-	printf("Warming up Phasers\n");
+	printf("Warming up the sonic phaser\n");
 //		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, dacdata, sizeof(dacdata) >> 1, DAC_ALIGN_12B_L);
 	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
 	DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
@@ -2164,7 +2200,7 @@ void StarLPTask(void const * argument)
 #if 1
 #ifdef TESTING
 	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
-	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, MY_UID, statuspkt.majorversion, statuspkt.minorversion,
+	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
 			udp_target, udp_ips);
 #else
 	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
@@ -2277,7 +2313,7 @@ void StarLPTask(void const * argument)
 				// set the PGA to provide a sensible noise level
 				if ((smoothednoise >> NOISESMOOTHBITS) < 100)
 					gainchanged = bumppga(1);
-				else if ((smoothednoise >> NOISESMOOTHBITS) > 250)
+				else if ((smoothednoise >> NOISESMOOTHBITS) > 220)
 					gainchanged = bumppga(-1);
 
 				// adjust trigger to compensate a bit for the gain change
@@ -2386,7 +2422,7 @@ void StarLPTask(void const * argument)
 					}
 				}
 
-				printf("SN:%d/%lu %d:%d:%d:%d ", MY_UID, statuspkt.uid, myip & 0xFF, (myip & 0xFF00) >> 8,
+				printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 						(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
 				printf("triggers:%04d, pressure:%03d.%d, temp:%02d.%d, time:%s\n", trigs, pressure, pressfrac,
 						temperature, tempfrac / 1000, nowtimestr);
@@ -2395,10 +2431,10 @@ void StarLPTask(void const * argument)
 #endif
 			} // end if 30 second timer
 
+			/**********************  Every 15 minutes  *******************************/
 			if (onesectimer > 900) {			// 15 mins
 				onesectimer = 0;
-				if (locateudp() != uip)		// periodic check
-					rebootme();	// target udp host has changed or network has gone away
+				requestapisn();	//update s/n and udp target (reboot on fail)
 			}
 		} // end 10 sec
 	}
@@ -2424,7 +2460,9 @@ void Callback01(void const * argument)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-#ifdef TESTING
+	static int counter = 0;
+
+#ifdef configGENERATE_RUN_TIME_STATS
 
 	if (htim->Instance == TIM14) {				// TIM14 used for RTOS profiling
 //		printf("T14 PeriodElapsedCallback\n");
@@ -2432,6 +2470,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		return;
 	}
 #endif
+
+	if (htim->Instance == TIM5) {				// TIM5 interrupt is used as hook to run ADC_Conv_complete() at a lower IRQ  priority than dmacomplete
+
+//		printf("T5\n");
+		ADC_Conv_complete();			// It is a one-shot
+		return;
+	}
+
 	if (htim->Instance == TIM2) {
 		printf("T2P PeriodElapsedCallback %lu %lu\n", t2cap[0], statuspkt.clktrim);
 		return;
