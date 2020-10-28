@@ -200,13 +200,13 @@ uint32_t t1sec = 0;
 extern uint32_t t2cap[1];
 int main_init_done = 0;
 int lptask_init_done = 0;
-char trigtimestr[64] = { "No Triggers" };
-char nowtimestr[64] = { "\"No Time\"" };
+char trigtimestr[32] = { "No Triggers" };
+char nowtimestr[32] = { "\"No Time\"" };
 char pressstr[16] = { "0" };
 char tempstr[10] = { "0" };
-char snstr[256] = { "\"No S/N\"" };
-char statstr[256] = { "\"No status\"" };
-char gpsstr[128] = { "\"No GPS data\"" };
+char snstr[128] = { "\"No S/N\"" };
+char statstr[264] = { "\"No status\"" };
+char gpsstr[64] = { "\"No GPS data\"" };
 uint16_t agc = 1;	// agc enable > 0
 uint32_t myip;
 uint32_t uip;		// udp target
