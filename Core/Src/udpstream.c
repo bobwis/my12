@@ -301,7 +301,7 @@ void startudp(uint32_t ip) {
 #endif
 				/* send end of sequence status packet if end of batch sequence */
 				if (sendendstatus > 0) {
-					if (jabbertimeout == 0)
+//					if (jabbertimeout == 0)	// terminate curtailed sequence???
 						sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
 					sendendstatus = 0;	// cancel the flag
 					statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
