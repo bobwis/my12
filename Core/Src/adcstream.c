@@ -295,17 +295,13 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)// adc conversion done
 }
 #endif
 
-
-
-
 // rolling window size, could be 32, 64, 128 etc
 #define WINSHIFT 5
 #define WINSIZE (1<<WINSHIFT)
 
 // ADC DMA conversion complete, called via Timer 5 interrupt as a proxy IRQ
 //void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
-ADC_Conv_complete()
-{
+ADC_Conv_complete() {
 	register int16_t i;
 	register uint8_t j;
 	register adcbuffer *buf;
@@ -420,18 +416,36 @@ ADC_Conv_complete()
 
 }
 
-
 // handle the highest priority interrupt to capture the true DMA conversion complete time (below RTOSOS level)
 extern TIM_HandleTypeDef htim5;
 void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
 {
+
 	timestamp = TIM2->CNT;			// real time
+#if 0
+	{
+		static uint32_t last = 0;
+		static int index = 0;
+		static uint32_t samples[32] = { 0 };
+
+		if (timestamp > samples[index]) {			// debug looking at latency jitter
+			samples[index++] = timestamp - last;
+			if (index > 31)
+				index = 0;
+		} else {
+			index = 0;
+			samples[0] = 0;
+			last = 0;
+		}
+
+		last = timestamp;
+	}
+#endif
 	TIM5->DIER = 0x01;
-	TIM5->CR1 = 0x19;				// restart timer to generate a follow-on interrupt for the *real* dma conversion complete processing at IRQ level 5
+	TIM5->CR1 = 0x19;// restart timer to generate a follow-on interrupt for the *real* dma conversion complete processing at IRQ level 5
 
 //	HAL_TIM_Base_Start_IT(&htim5);
 }
-
 
 // these two are the real DMA Conversion complete interrupts
 void ADC_MultiModeDMAConvM0Cplt(ADC_HandleTypeDef *hadc) {
