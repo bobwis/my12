@@ -12,7 +12,8 @@
 #include <stdio.h>
 
 extern UART_HandleTypeDef huart1;
-extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart2;	// Console
+extern UART_HandleTypeDef huart5;	// LCD
 
 void myhexDump(char *desc, void *addr, int len);
 

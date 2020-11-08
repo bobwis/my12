@@ -8,6 +8,8 @@
 #ifndef NEO7M_H_
 #define NEO7M_H_
 
+#include "stm32f7xx_hal.h"
+
 /*
  * neo7m.h
  *

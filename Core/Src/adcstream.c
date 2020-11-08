@@ -469,7 +469,7 @@ void startadc() {
 	statuspkt.adcpktssent = 0;
 
 	printf("Starting ADC DMA\n");
-	osDelay(1000);
+	osDelay(100);
 // get some heap for the ADC stream DMA buffer 1
 	pktbuf = pvPortMalloc(UDPBUFSIZE * 2);	// two buffers concatenated
 	if (pktbuf == NULL) {

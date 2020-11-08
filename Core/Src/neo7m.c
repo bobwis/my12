@@ -34,7 +34,8 @@ typedef uint8_t byte;
 #define PC_SERIAL   Serial
 #define PC_BAUDRATE 9600L
 
-extern UART_HandleTypeDef huart6;
+extern UART_HandleTypeDef huart6, huart5;
+extern void	uart5_rxdone();
 
 struct tm now;		// gps time updated every second
 time_t epochtime;	// gps time updated every second
@@ -562,15 +563,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		}
 #endif
 	} else {
+		if (huart->Instance == UART5) {
+			uart5_rxdone();
+		}
+		else
 		printf("USART unknown uart int\n");
 	}
 }
+
 
 HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	HAL_StatusTypeDef stat;
 	uint8_t ch;
 
+	if (huart->Instance == USART6) { 		// GPS  UART
 	printf("GPS UART_Err Callback %0lx\n", huart->ErrorCode);
+	}
+	if (huart->Instance == UART5) { 			//LCD UART
+	printf("LCD UART_Err Callback %0lx\n", huart->ErrorCode);
+	lcd_init();
+	}
+	// whatever the error try to clear it blindly
+	__HAL_UART_CLEAR_FEFLAG(huart);
+	__HAL_UART_CLEAR_NEFLAG(huart);
+	__HAL_UART_CLEAR_OREFLAG(huart);
+	__HAL_UART_CLEAR_PEFLAG(huart);
+
+
 #if 0
 	//stat = HAL_UART_Receive_IT(&huart6, rxdatabuf, 1);		// restart rx
 	stat = HAL_UART_Receive_DMA(&huart6, rxdatabuf, 1)

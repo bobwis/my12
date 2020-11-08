@@ -13,7 +13,7 @@
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
-#if	0
+#if	1
 #define TESTING
 #if 0
 #define configGENERATE_RUN_TIME_STATS 1
@@ -29,9 +29,9 @@
 #endif
 
 #ifdef TESTING
-#define BUILDNO 20004	// 16 bits  "S/W build number" of the lightning detector
+#define BUILDNO 20005	// 16 bits  "S/W build number" of the lightning detector
 #else
-#define BUILDNO 10004	// 16 bits  "S/W build number" of the lightning detector
+#define BUILDNO 10005	// 16 bits  "S/W build number" of the lightning detector
 #endif
 
 #ifdef SPLAT1

@@ -8,6 +8,7 @@
 #ifndef ADCSTREAM_H_
 #define ADCSTREAM_H_
 
+#include "stm32f7xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
 

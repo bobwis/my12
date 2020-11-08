@@ -57,6 +57,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+extern int lcdrxfull;
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

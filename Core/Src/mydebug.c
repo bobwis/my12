@@ -18,18 +18,20 @@ struct __FILE {
 /* Struct FILE is implemented in stdio.h */
 FILE __stdout;
 
+
 int fputc(int ch, FILE *f) {
 	/* Do your stuff here */
 	/* Send your custom byte */
 	/* Send byte to USART */
 	//   TM_USART_Putc(USART1, ch);
-	HAL_UART_Transmit(&huart2, (uint8_t*) &ch, 1, 10);
+	HAL_UART_Transmit(&huart5, (uint8_t*) &ch, 1, 10);
 	/* If everything is OK, you have to return character written */
 	return ch;
 	/* If character is not correct, you can return EOF (-1) to stop writing */
 	//return -1;
 }
 
+//#undef __GNUC__
 #ifdef __GNUC__
 /* With GCC/RAISONANCE, small printf (option LD Linker->Libraries->Small printf
  set to 'Yes') calls __io_putchar() */
@@ -37,6 +39,7 @@ int fputc(int ch, FILE *f) {
 #else
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif /* __GNUC__ */
+//#define __GNUC__
 /**
  * @brief  Retargets the C library printf function to the USART.
  * @param  None
@@ -45,11 +48,14 @@ int fputc(int ch, FILE *f) {
 PUTCHAR_PROTOTYPE {
 	/* Place your implementation of fputc here */
 	/* e.g. write a character to the EVAL_COM1 and Loop until the end of transmission */
-	if (ch == '\n')
-		HAL_UART_Transmit(&huart2, "\r\n", 2, 10);
-	else
+	{
+		if (ch == '\n')
+			HAL_UART_Transmit(&huart2, "\r\n", 2, 10);
+		else
 		HAL_UART_Transmit(&huart2, &ch, 1, 10);
+
 	return ch;
+	}
 }
 
 void myhexDump(char *desc, void *addr, int len) {
