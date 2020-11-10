@@ -31,18 +31,18 @@ extern int getlcdpage(void);
 // display a chosen page
 extern int setlcdpage(char *, bool);
 
-// read a lcd named variable (unsigned long) expects numeric value
+// request to read a lcd named variable (unsigned long) expects numeric value
 // return -1 for error
-extern char getlcdnvar(char *, unsigned long *);
+extern int getlcdnvar(char *);
 
 // write to a text object
-extern void setlcdtext(char *, char *);
+extern int setlcdtext(char *, char *);
 
 // send some numbers to a lcd obj.val object, param is text
 extern void setlcdnum(char *, char *);
 
 // send some numbers to a lcd obj.val object, param is binary long number
-extern void setlcdbin(char *, unsigned long);
+extern int setlcdbin(char *, unsigned long);
 
 // send a string to the LCD (len max 255)
 // write to the lcd

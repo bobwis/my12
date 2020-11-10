@@ -1531,7 +1531,7 @@ static void MX_UART5_Init(void)
 
   /* USER CODE END UART5_Init 1 */
   huart5.Instance = UART5;
-  huart5.Init.BaudRate = 9600; // 115200;
+  huart5.Init.BaudRate = 9600;
   huart5.Init.WordLength = UART_WORDLENGTH_8B;
   huart5.Init.StopBits = UART_STOPBITS_1;
   huart5.Init.Parity = UART_PARITY_NONE;
@@ -2174,10 +2174,7 @@ void StartDefaultTask(void const * argument)
 	setupnotify();
 
 	uip = locateudp();
-#ifdef SPLAT1
-	printf("initilising LCD\n");
-	lcd_init();
-#endif
+
 	main_init_done = 1; // let lptask now main has initialised
 	printf("Waiting for lptask to start\n");
 	while (lptask_init_done == 0)
@@ -2212,9 +2209,9 @@ void StarLPTask(void const * argument)
 	int i, n, counter = 0;
 	char str[32] = { "empty" };
 	uint32_t lasttrigcount = 0;
-
+	time_t localepochtime;
 	char buffer[40];		// lcd message
-	struct tm *timeinfo;	// lcd time
+	struct tm timeinfo;	// lcd time
 
 	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
@@ -2222,6 +2219,11 @@ void StarLPTask(void const * argument)
 
 	while (main_init_done == 0)	// wait from main to complete the initilisation
 		osDelay(100);
+
+#ifdef SPLAT1
+	lcd_init();
+#endif
+
 #if 1
 #ifdef TESTING
 	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
@@ -2305,12 +2307,12 @@ void StarLPTask(void const * argument)
 #endif
 		}  // if (trigs != statuspkt.trigcount)
 #ifdef SPLAT1
-			processnex();		// process Nextion
+		processnex();		// process Nextion
 #endif
 
 		/**********************  Every 100mSec   *******************************/
 
-		if (tenmstimer % 10 == 0) {
+		if ((tenmstimer+3) % 10 == 0) {
 
 			static uint32_t jabtrigcnt = 0;
 
@@ -2353,18 +2355,33 @@ void StarLPTask(void const * argument)
 
 #endif
 
+#ifdef SPLAT1
+			localepochtime = epochtime + (time_t)(10 * 60 * 60);		// add ten hours
+			timeinfo = *localtime (&localepochtime);
+			strftime (buffer,sizeof(buffer),"%H:%M:%S",&timeinfo);
+			setlcdtext("t0.txt", buffer);
+#endif
+
+
+		/**********************  Every 250mSec   *******************************/
+
+		if ((tenmstimer+4) % 25 == 0) {		// every 250 milli seconds
+#if 0
+#ifdef SPLAT1
+			localepochtime = epochtime + (time_t)(10 * 60 * 60);		// add ten hours
+			timeinfo = *localtime (&localepochtime);
+			strftime (buffer,sizeof(buffer),"%H:%M:%S",&timeinfo);
+			setlcdtext("t0.txt", buffer);
+#endif
+#endif
+		}
+
+
+
 		/**********************  Every 1 Sec   *******************************/
 
-		if (tenmstimer % 100 == 0) {		// every second
+		if ((tenmstimer+11) % 100 == 0) {		// every second
 			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
-
-
-#ifdef SPLAT1
-			  timeinfo = localtime (&epochtime);
-			  timeinfo->tm_hour = (timeinfo->tm_hour + 10) % 24;
-			  strftime (buffer,sizeof(buffer),"%H:%M:%S",timeinfo);
-			  setlcdtext("t0.txt", buffer);
-#endif
 
 #if 1
 
@@ -2424,10 +2441,10 @@ void StarLPTask(void const * argument)
 
 		/**********************  Every 10 Secs   *******************************/
 
-		if (tenmstimer % 1000 == 0) {		// every 10 seconds
+		if ((tenmstimer+27) % 1000 == 0) {		// every 10 seconds
 
 #ifdef SPLAT1
-			getlcdpage();
+//			getlcdpage();
 //			setlcdpage("0",1);
 
 #define MAXTRIGS10S 10
@@ -2457,14 +2474,14 @@ void StarLPTask(void const * argument)
 #endif
 
 		/**********************  Every 30 Secs   *******************************/
-		if (tenmstimer > 3000) {		// reset timer after 30 seconds
+		if ((tenmstimer+44) > 3000) {		// reset timer after 30 seconds
 			tenmstimer = 0;
 
+#if 1
 #ifdef SPLAT1
-
-		strftime (buffer,sizeof(buffer),"%a %e %h %Y ",timeinfo);
+		strftime (buffer,sizeof(buffer),"%a %e %h %Y ",&timeinfo);
 		setlcdtext("t1.txt", buffer);
-
+#endif
 #endif
 
 
@@ -2559,7 +2576,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		if (gpslocked) {
 			statuspkt.gpsuptime++;
 			/*	if (epochvalid == 0) */{
-				statuspkt.epochsecs = calcepoch();
+				statuspkt.epochsecs = calcepoch32();
 				epochvalid = 1;
 			}
 		} else {

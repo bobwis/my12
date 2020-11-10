@@ -23,7 +23,7 @@ extern inline int lcd_putc(uint8_t ch);
 
 
 // put a null terminated string
-extern void lcd_puts(char * str);
+extern int lcd_puts(char * str);
 
 
 // Transmit completed callback

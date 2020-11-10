@@ -9,11 +9,11 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 10
+#define MINORVERSION 11
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
-#if	1
+#if	0
 #define TESTING
 #if 0
 #define configGENERATE_RUN_TIME_STATS 1
@@ -29,9 +29,9 @@
 #endif
 
 #ifdef TESTING
-#define BUILDNO 20005	// 16 bits  "S/W build number" of the lightning detector
+#define BUILDNO 20006	// 16 bits  "S/W build number" of the lightning detector
 #else
-#define BUILDNO 10005	// 16 bits  "S/W build number" of the lightning detector
+#define BUILDNO 10006	// 16 bits  "S/W build number" of the lightning detector
 #endif
 
 #ifdef SPLAT1
@@ -56,7 +56,7 @@
 #endif
 
 #ifndef TESTING
-#if 1
+#if 0
 #define HARDWARE_WATCHDOG 1
 #endif
 #endif

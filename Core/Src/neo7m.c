@@ -123,17 +123,17 @@ struct tm* getgpstime() {
 	return (&now);
 }
 
-// calculate epoch seconds from 1970 to now using GPS date time fields
+// calculate epoch seconds from 1970 to now using GPS date time fields (32 bit unsigned, not 64 bit time_t as used by the library)
 // the number of seconds that have elapsed since January 1, 1970 (midnight UTC/GMT), not counting leap seconds
-uint32_t calcepoch() {
+uint32_t calcepoch32() {
 
 	epochtime = mktime(getgpstime());
 
 //    printf("Epoch=%ld\n", (long) epochtime);
 #ifdef LOCALTIME
-	return ((uint32_t) epochtime + (10 * 60 * 60));		// add ten hours
+	return (uint32_t)(epochtime + (time_t) (10 * 60 * 60));		// add ten hours
 #else
-    return((uint32_t)epochtime);
+    return (uint32_t)(epochtime);
 #endif
 
 }
@@ -548,7 +548,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				*((char*) (&(statuspkt.NavPvt)) + (i - offset)) = PACKETstore[i]; // copy into global struct
 			}
 			if (statuspkt.NavPvt.flags & 1) { // locked
-				statuspkt.epochsecs = calcepoch();// should not be needed if our 1 sec timer was accurate, also dbg desyncs this
+				statuspkt.epochsecs = calcepoch32();// should not be needed if our 1 sec timer was accurate, also dbg desyncs this
 //printf("*%d ",statuspkt.epochsecs % 60);
 				gpslocked = 1;
 			} else
@@ -576,6 +576,12 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	HAL_StatusTypeDef stat;
 	uint8_t ch;
 
+	// whatever the error try to clear it blindly
+	__HAL_UART_CLEAR_FEFLAG(huart);
+	__HAL_UART_CLEAR_NEFLAG(huart);
+	__HAL_UART_CLEAR_OREFLAG(huart);
+	__HAL_UART_CLEAR_PEFLAG(huart);
+
 	if (huart->Instance == USART6) { 		// GPS  UART
 	printf("GPS UART_Err Callback %0lx\n", huart->ErrorCode);
 	}
@@ -583,11 +589,7 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	printf("LCD UART_Err Callback %0lx\n", huart->ErrorCode);
 	lcd_init();
 	}
-	// whatever the error try to clear it blindly
-	__HAL_UART_CLEAR_FEFLAG(huart);
-	__HAL_UART_CLEAR_NEFLAG(huart);
-	__HAL_UART_CLEAR_OREFLAG(huart);
-	__HAL_UART_CLEAR_PEFLAG(huart);
+
 
 
 #if 0

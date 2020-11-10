@@ -43,6 +43,7 @@ volatile uint8_t lcdpevent = 0;		// lcd reported a page. set to 0xff for new rep
 unsigned int dimtimer = DIMTIME;	// lcd dim imer
 unsigned int cmdtimeout = 0;		// max timeout after issueing command
 unsigned int rxtimeout = 0;			// receive timeout, reset in lcd_getch
+static int txdmadone = 0;			// Tx DMA complete flag (1=done, 0=waiting for complete)
 
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
 
@@ -60,43 +61,113 @@ int cycdec(int index, int limit) {
 		return (0);
 }
 
+// wait for Tx DMA to complete - timeout if error
+// then re-arm the wait flag
+// returns -1 on timeout, 0 on okay
+int wait_armtx(void) {
+	int timeoutcnt;
+
+	timeoutcnt = 0;
+	while (timeoutcnt < 100) {
+		if (txdmadone == 1)		// its ready
+			break;
+//		printf("UART5 Waiting on Tx\n");
+		timeoutcnt++;
+		osDelay(0);		// give up timeslice
+	}
+	if (timeoutcnt >= 100) {
+		printf("UART5 Tx timeout\n");
+		return (-1);
+	}
+	txdmadone = 1;	// re-arm the flag to indicate okay to Tx
+	return (0);
+}
+
 // UART 5 Rx DMA complete
 void uart5_rxdone() {
 
 	printf("UART5 Rx Complete\n");
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Transmit completed callback
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 
-void lcd_init() {
-	HAL_StatusTypeDef stat;
-
-	lcdrxoutidx = 0;		// consumer index
-	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
-	if (stat != HAL_OK) {
-		printf("Err HAL_UART_Receive_DMA uart5\n");
-		return (stat);
+	if (huart->Instance == UART5) {
+		txdmadone = 1;		// its finished transmission
+//		printf("UART5 Tx Complete\n");
 	}
 }
 
-// request a new state in the LCD state machine
-int lcd_newstate(int newstate) {
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	if (lcd_state == LCD_IDLE) {		// anything is allowed
-		lcd_state = newstate;
-		return (newstate);
+void lcd_init() {
+	volatile HAL_StatusTypeDef stat;
+//	const unsigned char faster[] = { 'b', 'a', 'u', 'd', '=', '2', '3', '0', '4', '0', '0', 0xff, 0xff, 0xff, 0 };
+	const unsigned char lcd_fast[] = { "baud=230400\xff\xff\xff" };
+	const unsigned char lcd_slow[] = { "baud=9600\xff\xff\xff" };
+
+	printf("***Init LCD ***\n");
+
+	lcdrxoutidx = 0;		// consumer index
+
+	HAL_UART_DMAStop(&huart5);
+//	HAL_UART_Abort(&huart5);
+	HAL_UART_DeInit(&huart5);
+
+	huart5.Instance = UART5;
+	huart5.Init.BaudRate = 9600;
+	huart5.Init.WordLength = UART_WORDLENGTH_8B;
+	huart5.Init.StopBits = UART_STOPBITS_1;
+	huart5.Init.Parity = UART_PARITY_NONE;
+	huart5.Init.Mode = UART_MODE_TX_RX;
+	huart5.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart5.Init.OverSampling = UART_OVERSAMPLING_16;
+	huart5.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+	huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+	if (HAL_UART_Init(&huart5) != HAL_OK) {
+		printf("lcd_init: Failed to change UART5 to 9600\n");
 	}
 
-	if ((lcd_state == LCD_SENDCMD) && (newstate == LCD_IDLE)) {		// sending a var doesn't get ack'd
-		lcd_state = LCD_IDLE;
-		return (newstate);
+	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
+	if (stat != HAL_OK) {
+		printf("lcd_init: Err HAL_UART_Receive_DMA uart5\n");
 	}
 
-	if ((lcd_state == LCD_SENDCMD) && (newstate == LCD_WAITRESP)) {
+#if 1
+	txdmadone = 1;	// TX is free
+	lcd_puts(lcd_slow); 	// try to change Nextion baud rate
+	wait_armtx();			// wait for tx to complete
 
-		printf("lcd_newstate: refused change from %d to %d\n", lcd_state, newstate);
-		return (0);	// 0 means no state changed
+
+	HAL_UART_DeInit(&huart5);
+
+	huart5.Instance = UART5;
+	huart5.Init.BaudRate = 9600; // 230400;
+	huart5.Init.WordLength = UART_WORDLENGTH_8B;
+	huart5.Init.StopBits = UART_STOPBITS_1;
+	huart5.Init.Parity = UART_PARITY_NONE;
+	huart5.Init.Mode = UART_MODE_TX_RX;
+	huart5.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart5.Init.OverSampling = UART_OVERSAMPLING_16;
+	huart5.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+	huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+	if (HAL_UART_Init(&huart5) != HAL_OK) {
+		printf("lcd_init: Failed to change UART5 to 230400\n");
 	}
+	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
+	if (stat != HAL_OK) {
+		printf("lcd_init: Err HAL_UART_Receive_DMA uart5\n");
+	}
+	osDelay(500);
+	printf("Sending sendme1\n");
+	writelcdcmd("sendme"); 	// try to read page
+	wait_armtx();
+
+	osDelay(500);
+	printf("Sending sendme2\n");
+	writelcdcmd("sendme"); 	// try to read page
+	wait_armtx();
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,32 +177,56 @@ inline int lcd_putc(uint8_t ch) {
 	HAL_StatusTypeDef stat;
 
 //	printf("lcd_putc:%c\n", ch);
-	osDelay(4);		// zzz
-
+	wait_armtx();
+	txdmadone = 0;	// TX in progress
 	stat = HAL_UART_Transmit_DMA(&huart5, &ch, 1);
 	if (stat != HAL_OK) {
-		printf("lcd_putc: Err HAL_UART_Transmoit_DMA uart5\n");
+		printf("lcd_putc: Err %d HAL_UART_Transmit_DMA uart5\n",stat);
 		return (stat);
 	}
 	return (stat);
 }
 
 // put a null terminated string
-void lcd_puts(char *str) {
+int lcd_puts(char *str) {
+	HAL_StatusTypeDef stat;
 	int i;
 
-	i = 0;
+#if 1
 	while (str[i] != '\0') {
 		lcd_putc(str[i++]);
 	}
+	return 0;
+#else
+	i = 0;
+	while (str[i] != '\0') {
+		i++;
+	}
+	printf("lcd_puts: len=%d, [%s]\n", i, str);
+	wait_armtx();
+	txdmadone = 0;	// TX in progress
+	stat = HAL_UART_Transmit_DMA(&huart5, str, i);
+	if (stat != HAL_OK) {
+		printf("lcd_puts: Err %d HAL_UART_Transmit_DMA uart5\n",stat);
+	}
+	return (stat);
+#endif
 }
 
-// Transmit completed callback
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 
-	if (huart->Instance == UART5)
-		;
-//		printf("UART5 Tx Complete\n");
+// read the response to a general command from the lcd (not one needing return values)
+// returns 0xff on timeout
+// assumes 	lcdstatus = 0xff prior to call
+int getlcdack() {
+	static unsigned int trys = 0;
+
+	trys++;
+	if ((trys > 10) && (lcdstatus == 0xff)) {
+		printf("getlcdack: Timeout waiting for LCD response\n\r");
+		trys = 0;
+		return (-1);
+	}
+	return (lcdstatus);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,15 +234,17 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 // get Rx chars if available - non blocking using DMA
 // copies all dma rx'd chars into the lcd rx buffer
 int lcd_rxdma() {
-	int count = 0;
+	volatile int count = 0;
+	volatile int dmaindex = 0;
 
-	while (DMARXBUFSIZE - DMA1_Stream0->NDTR != lcdrxoutidx) {		// something waiting in Rx buffer
-		lcdrxbuffer[lcdrxoutidx] = dmarxbuffer[lcdrxoutidx];	// copy it to lcd rx buffer
+	dmaindex = DMARXBUFSIZE - DMA1_Stream0->NDTR;  // next index position the DMA will fill
+
+	while (dmaindex != lcdrxoutidx) {		// dma in index has moved on from lcd rx out index
+		lcdrxbuffer[lcdrxoutidx] = dmarxbuffer[lcdrxoutidx];	// copy the next char to lcd rx buffer
 		count++;
 		lcdrxoutidx = cycinc(lcdrxoutidx, LCDRXBUFSIZE);	// cyclic bump lcd rx index
 		return (count);
 	}
-
 	return (-1);
 }
 
@@ -161,82 +258,23 @@ int lcd_getc() {
 		ch = lcdrxbuffer[lastidx];
 		lastidx = cycinc(lastidx, LCDRXBUFSIZE);
 		rxtimeout = 100;
+printf("lcd_getc() got %02x\n", ch);
 	}
-//	printf("lcd_getc() got %x\n", ch);
+
 	return (ch);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // send a var string to the LCD (len max 255)
 // terminate with three 0xff's
-int writelcdvar(char *str) {
-	char i = 0;
-	volatile int result;
-
-	if (lcd_newstate(LCD_SENDCMD) == LCD_SENDCMD) {
-		lcd_puts(str);
-		for (i = 0; i < 3; i++) {
-			lcd_putc(0xff);
-		}
-		if (lcd_newstate(LCD_IDLE) == LCD_IDLE) {		// we dont expect a response to a command
-			return (0);
-		}
-		printf("writelcdvar: LCD_SENDVAR failed\n");
-	}
-	return (-1);
-}
-
-// read the response to a general command from the lcd (not one needing return values)
-// returns 0xff on timeout
-// assumes 	lcdstatus = 0xff prior to call
-int getlcdack() {
-	static unsigned int trys = 0;
-
-	if (lcd_newstate(LCD_WAITRESP) == LCD_WAITRESP) {			// we need the "ACK' from the LCD
-		trys++;
-		if ((trys > 10) && (lcdstatus == 0xff)) {
-			printf("getlcdack: Timeout waiting for LCD response\n\r");
-			trys = 0;
-			return (-1);
-		}
-	}
-	return (lcdstatus);
-}
-
-// send a cmd string to the LCD (len max 255)
-// terminate with three 0xff's
 int writelcdcmd(char *str) {
 	char i = 0;
-	volatile int result;
+	char pkt[48] __attribute__ ((aligned (16)));
 
-	if (lcd_newstate(LCD_SENDCMD)) {
-		lcd_puts(str);
-		for (i = 0; i < 3; i++) {
-			lcd_putc(0xff);
-		}
-		if (lcd_newstate(LCD_WAITRESP) == LCD_WAITRESP) {		// we expect a response to a command
-			return (0);
-		}
-		printf("writelcdcmd: LCD_SENDCMD failed\n");
-	}
-	return (-1);
-}
-
-// send two strings to the LCD (len max 255)
-// terminate with three 0xff's
-void writelcdcmd2(char *str, char *str2) {
-	char i = 0;
-
-	if (lcd_newstate(LCD_SENDCMD)) {
-
-		lcd_puts(str);
-		lcd_puts(str2);
-		for (i = 0; i < 3; i++) {
-			lcd_putc(0xff);
-		}
-		lcdstatus = 0xff;			// arm response variable - 0xff is unused status code
-	}
-
+	strcpy(pkt, str);
+	strcat(pkt, "\xff\xff\xff");
+	lcd_puts(pkt);
+	return (0);
 }
 
 // write a number digit on the LCD to a num object
@@ -247,65 +285,43 @@ void setndig(char *id, uint8_t val) {
 	lcd_puts(msg);
 }
 
-// read a lcd named variable (unsigned long) expects numeric value
+// request to read a lcd named variable (unsigned long) expects numeric value
 // return -1 for error
-char getlcdnvar(char *id, unsigned long *data) {
-	volatile unsigned char ack;
+int getlcdnvar(char *id) {
+	volatile int result = 0;
 
 	lcd_puts("get ");
-	writelcdcmd(id);
-	ack = getlcdack();		// wait for response
-	if (ack == 0xff) {
-		printf("No response from getlcdnvar cmd\n\r");
+	result = writelcdcmd(id);
+	if (result == -1) {		// wait for response
+		printf("getlcdnvar: Cmd failed\n\r");
 	}
-	if (lcdrxbuffer[0] == NEX_ENUM)		// numeric response: 4 bytes following
-	{
-		*data = *(unsigned long*) &lcdrxbuffer[1];
-//		printf("getlcdnvar returned %li\n\r",*data);
-		return (lcdrxbuffer[0]);
-	} else {
-		if (lcdrxbuffer[0] == NEX_SVAR)		// Variable Name Invalid
-		{
-			printf("getlcdnvar: var name %s invalid\n\r", id);
-		}
-	}
-	return (-1);
+	return(result);
 }
 
 // send some text to a lcd text object
-void setlcdtext(char id[], char string[]) {
-	char str[64];
-	volatile int result;
+int setlcdtext(char id[], char string[]) {
+	char str[64];    //  __attribute__ ((aligned (16)));
+	volatile int result = 0;
 
 	sprintf(str, "%s=\"%s\"", id, string);
-	result = writelcdvar(str);
+	result = writelcdcmd(str);
 	if (result == -1) {		// wait for response
 		printf("setlcdtext: Cmd failed\n\r");
 	}
-	return (result);
+	return(result);
 }
 
 // send some numbers to a lcd obj.val object, param is binary long number
-void setlcdbin(char *id, unsigned long value) {
-	char buffer[16];
+int setlcdbin(char *id, unsigned long value) {
+	char buffer[32];
 	volatile int result;
 
-	sprintf(buffer, "%lu", value);
-	lcd_puts(id);
-	lcd_putc('=');
+	sprintf(buffer, "%s=%lu", id, value);
 	result = writelcdcmd(buffer);
 	if (result == -1) {		// wait for response
 		printf("setlcdbin: Cmd failed\n\r");
 	}
 	return (result);
-}
-
-// send some numbers to a lcd obj.val object
-void setlcdnum(char id[], char string[]) {
-//printf("%s=%s",id,string);
-	lcd_puts(id);
-	lcd_putc('=');
-	writelcdcmd(string);
 }
 
 // request the current lcd page
@@ -357,7 +373,7 @@ int isnexpkt(unsigned char buffer[], uint8_t size) {
 
 	rawchar = lcd_getc();
 	if (rawchar >= 0) {
-#if 1
+#if 0
 		if ((rawchar >= '0') && (rawchar <= 'z'))
 			printf("rawch=0x%02x %c\n", rawchar, rawchar);
 		else
@@ -401,7 +417,7 @@ int isnexpkt(unsigned char buffer[], uint8_t size) {
 // returns: 0 nothing found (yet), > good event decodes, -1 error
 int lcd_event_process(void) {
 	static unsigned char eventbuffer[32];
-	int i, result;
+	volatile int i, result;
 
 	result = isnexpkt(eventbuffer, sizeof(eventbuffer));
 	if (result <= 0) {
@@ -425,7 +441,6 @@ int lcd_event_process(void) {
 				lcdpevent = 0;
 				break;
 			case NEX_EPAGE:
-
 				lcdtouched = 0;
 				lcdpevent = 0xff;		// notify lcd page event happened
 				pagenum = eventbuffer[1];
@@ -444,66 +459,14 @@ int lcd_event_process(void) {
 	}
 }
 
-// state machine for nextion
-void processnex(void) {
+void processnex() {		// process Nextion - called at regular intervals
+	volatile int result;
 
-	char ackbuf[24];
-	volatile int count, result;
-
-	if (dimtimer)		// lcd auto dim
-		dimtimer--;
-
-	count = lcd_rxdma();		// copy any dma'd rx chars into lcdbuf
-
-//		printf("lcd_rxdma copied %d\n", count);
-
-	switch (lcd_state) {
-
-	case 0:				/// from init
-		lcd_state = LCD_IDLE;
-	case LCD_IDLE:
-		if (count > 0) {		// new data in the rx buffer
-			printf("LCD_IDLE -> LCD_GOTRX\n");
-			lcd_state = LCD_GOTRX;
-		}
-		break;
-
-	case LCD_GOTRX:
-		result = lcd_event_process();
-		if (result != 0) {	// wait until a complete event packet or timeout
-			printf("LCD_GOTRX -> LCD_IDLE\n");
-			lcd_state = LCD_IDLE;
-		}
-		break;
-
-	case LCD_SENDCMD:
-		printf("LCD_SENDCMD -> LCD_WAITRESP\n");
-		lcd_state = LCD_WAITRESP;
-		break;
-
-	case LCD_CMDTIMEOUT:
-		printf("LCD_CMDTIMEOUT\n");
-		printf("LCD_CMDTIMEOUT -> LCD_IDLE\n");
-		lcd_state = LCD_IDLE;
-		break;
-
-	case LCD_WAITRESP: {
-		result = lcd_event_process();
-		if (result > 0) {	// wait until a complete event packet or timeout
-			printf("LCD_WAITRESP -> LCD_IDLE\n");
-			lcd_state = LCD_IDLE;
-//			gotresponse = 1;
-		} else {
-			if (result < 0) {	// timeout or error
-				printf("LCD_WAITRESP TIMEOUT\n");
-				printf("LCD_WAITRESP -> LCD_IDLE\n");
-				lcd_state = LCD_IDLE;
-			}
-		}  // result == 0, wait
-		break;
+	lcd_rxdma();		// get any new characters received
+	result = lcd_event_process();
+	if (result > 0) {
+		printf("processnex: Got something\n");
 	}
-	default:
-		printf("processnex case lost\n");
-		break;
-	}
+
 }
+
