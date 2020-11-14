@@ -361,8 +361,9 @@ HAL_StatusTypeDef getpressure3115(void) {
 	uint8_t data[8], dataout[8];
 	int i, trys;
 	HAL_StatusTypeDef result;
-	uint32_t p, t;
-	double fp, fn, ffrac;
+	volatile uint32_t p, t;
+//	double ffp, ffn, ffrac;
+	volatile uint32_t ifp, ifn, ifrac;
 
 	data[0] = 0x55;
 	for (trys = 0; trys < 4; trys++) {
@@ -388,7 +389,7 @@ HAL_StatusTypeDef getpressure3115(void) {
 //				printf("[0x%02x] ", data[0]);
 	}  // for
 
-	p = ((dataout[0] << 16) | (dataout[1] << 8) | (dataout[2] & 0xF0)) >> 4;
+	p = ((dataout[0] << 16) | (dataout[1] << 8) | (dataout[2] & 0xF0)) >> 4;	// 20 bits
 	t = ((dataout[3] << 8) | (dataout[4] & 0xF0)) >> 4;
 
 	statuspkt.temppress = t << 20 | p;								// update status packet
@@ -396,10 +397,24 @@ HAL_StatusTypeDef getpressure3115(void) {
 //	pressure = p >> 2;  	// these are in Pascals not KPa as required
 //	pressfrac = (p & 3) * 25;		// these are in Pascals not KPa as required
 
-	fp = p / 4000.0;
-	ffrac = modf(fp, &fn);
-	pressure = (uint32_t) fn;
+#if 0
+	ffp = p / 4000.0;
+	ffrac = modf(ffp, &ffn);
+	pressure = (uint32_t) ffn;
 	pressfrac = (uint32_t) (ffrac * 100000);  // eg frac 101.03 = frac 3, 101.52 = 52
+#else
+
+#endif
+
+	// convert quarterpascals to kilopascals
+	ifn = p / 4000;		// kilopascals
+	ifrac = (p % 4000);		// fractions of a kilopascal
+
+//	ifn = ifn >> 2;		// kilopascals
+//	ifrac = ifrac >> 2;	// fractions of a kilo pascal
+
+	pressure = ifn;
+	pressfrac = ifrac;  // eg frac 101.03 = frac 3, 101.52 = 52
 
 	temperature = t >> 4;
 	tempfrac = (t & 0x0F) * 625 * 100;

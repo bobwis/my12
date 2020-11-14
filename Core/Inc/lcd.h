@@ -44,4 +44,5 @@ extern void processnex(void);
 
 extern uint8_t lcdrxbuffer[LCDRXBUFSIZE];
 
+extern int inlcd_init; 				// recursion flag for init
 #endif /* INC_LCD_H_ */

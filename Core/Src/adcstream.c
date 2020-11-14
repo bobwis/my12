@@ -114,6 +114,7 @@ void ADC_MultiModeDMAHalfConvCplt(DMA_HandleTypeDef *hdma) {
 //HAL_DMA_Abort(&hadc1);
 //DMA2->HIFCR |= (uint32_t)0x0000001F;
 //	myhalfcomplete++;
+	printf("ADC Half ConvCplt\n");
 	HAL_ADC_ConvHalfCpltCallback(hadc);
 }
 

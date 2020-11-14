@@ -2484,7 +2484,6 @@ void StarLPTask(void const * argument)
 #endif
 #endif
 
-
 			if (gpsgood == 0) {	// gps is not talking to us
 				printf("GPS serial comms problem?\n");
 			}

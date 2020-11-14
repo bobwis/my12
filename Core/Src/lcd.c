@@ -43,6 +43,7 @@ volatile uint8_t lcdpevent = 0;		// lcd reported a page. set to 0xff for new rep
 unsigned int dimtimer = DIMTIME;	// lcd dim imer
 unsigned int cmdtimeout = 0;		// max timeout after issueing command
 unsigned int rxtimeout = 0;			// receive timeout, reset in lcd_getch
+int inlcd_init = 0; 				// recursion flag for init
 static int txdmadone = 0;			// Tx DMA complete flag (1=done, 0=waiting for complete)
 
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
@@ -65,21 +66,21 @@ int cycdec(int index, int limit) {
 // then re-arm the wait flag
 // returns -1 on timeout, 0 on okay
 int wait_armtx(void) {
-	int timeoutcnt;
+	volatile int timeoutcnt;
 
 	timeoutcnt = 0;
-	while (timeoutcnt < 100) {
+	while (timeoutcnt < 2) {
 		if (txdmadone == 1)		// its ready
 			break;
-//		printf("UART5 Waiting on Tx\n");
+//		printf("UART5 Wait Tx %d\n",timeoutcnt);
 		timeoutcnt++;
-		osDelay(0);		// give up timeslice
+		osDelay(1);		// give up timeslice
 	}
-	if (timeoutcnt >= 100) {
+	if (timeoutcnt >= 2) {
 		printf("UART5 Tx timeout\n");
 		return (-1);
 	}
-	txdmadone = 1;	// re-arm the flag to indicate okay to Tx
+	txdmadone = 1;	// re-arm the flag to indicate its okay to Tx
 	return (0);
 }
 
@@ -91,10 +92,20 @@ void uart5_rxdone() {
 
 // Transmit completed callback
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+	volatile uint32_t reg;
 
 	if (huart->Instance == UART5) {
 		txdmadone = 1;		// its finished transmission
-//		printf("UART5 Tx Complete\n");
+//	printf("UART5 Tx Complete\n");
+#if 0
+		while (1) {
+		reg = (UART5->ISR);
+		if ((reg &  0xD0) == 0xD0) // UART_IT_TXE and TC)
+			break;
+		else
+			printf("HAL_UART_TxCpltCallback, TXE busy\n");
+		}
+#endif
 	}
 }
 
@@ -102,13 +113,20 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 
 void lcd_init() {
 	volatile HAL_StatusTypeDef stat;
-//	const unsigned char faster[] = { 'b', 'a', 'u', 'd', '=', '2', '3', '0', '4', '0', '0', 0xff, 0xff, 0xff, 0 };
 	const unsigned char lcd_fast[] = { "baud=230400\xff\xff\xff" };
+//	const unsigned char lcd_fast[] = { "baud=19200\xff\xff\xff" };
 	const unsigned char lcd_slow[] = { "baud=9600\xff\xff\xff" };
 
-	printf("***Init LCD ***\n");
+	inlcd_init = 1; 				// recursion flag for init
+	printf("***Init LCD 9600 ***\n");
 
 	lcdrxoutidx = 0;		// consumer index
+
+	osDelay(200);
+	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
+	if (stat != HAL_OK) {
+		printf("lcd_init: 0 Err HAL_UART_Receive_DMA uart5 %d\n",stat);
+	}
 
 	HAL_UART_DMAStop(&huart5);
 //	HAL_UART_Abort(&huart5);
@@ -128,21 +146,34 @@ void lcd_init() {
 		printf("lcd_init: Failed to change UART5 to 9600\n");
 	}
 
+	osDelay(200);
 	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
 	if (stat != HAL_OK) {
-		printf("lcd_init: Err HAL_UART_Receive_DMA uart5\n");
+		printf("lcd_init: 1 Err HAL_UART_Receive_DMA uart5 %d\n",stat);
 	}
 
-#if 1
+	osDelay(200);
 	txdmadone = 1;	// TX is free
-	lcd_puts(lcd_slow); 	// try to change Nextion baud rate
-	wait_armtx();			// wait for tx to complete
+	printf("Sending sendme 1\n");
+	writelcdcmd("sendme"); 	// try to read page
+	wait_armtx();
 
+#if 1
+	osDelay(200);
+	txdmadone = 1;	// TX is free
+	lcd_puts(lcd_fast); 	// try to change Nextion baud rate
+	wait_armtx();			// wait for tx to complete
+	osDelay(500);
 
 	HAL_UART_DeInit(&huart5);
+	if (stat != HAL_OK) {
+		printf("lcd_init: Err UART_Deinit failed\n");
+	}
+	osDelay(500);
+	printf("***Init LCD 230400 ***\n");
 
 	huart5.Instance = UART5;
-	huart5.Init.BaudRate = 9600; // 230400;
+	huart5.Init.BaudRate = 230400;
 	huart5.Init.WordLength = UART_WORDLENGTH_8B;
 	huart5.Init.StopBits = UART_STOPBITS_1;
 	huart5.Init.Parity = UART_PARITY_NONE;
@@ -156,18 +187,15 @@ void lcd_init() {
 	}
 	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
 	if (stat != HAL_OK) {
-		printf("lcd_init: Err HAL_UART_Receive_DMA uart5\n");
+		printf("lcd_init: 2 Err HAL_UART_Receive_DMA uart5 %d\n",stat);
 	}
-	osDelay(500);
-	printf("Sending sendme1\n");
-	writelcdcmd("sendme"); 	// try to read page
-	wait_armtx();
 
 	osDelay(500);
-	printf("Sending sendme2\n");
+	printf("Sending sendme 2\n");
 	writelcdcmd("sendme"); 	// try to read page
 	wait_armtx();
 #endif
+	inlcd_init = 0; 				// recursion flag for init
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,7 +204,7 @@ void lcd_init() {
 inline int lcd_putc(uint8_t ch) {
 	HAL_StatusTypeDef stat;
 
-//	printf("lcd_putc:%c\n", ch);
+	printf("lcd_putc:%c\n", ch);
 	wait_armtx();
 	txdmadone = 0;	// TX in progress
 	stat = HAL_UART_Transmit_DMA(&huart5, &ch, 1);
@@ -190,27 +218,34 @@ inline int lcd_putc(uint8_t ch) {
 // put a null terminated string
 int lcd_puts(char *str) {
 	HAL_StatusTypeDef stat;
-	int i;
+	volatile int i;
+	static char buffer[64];
 
-#if 1
+
+#if 0
 	while (str[i] != '\0') {
 		lcd_putc(str[i++]);
 	}
 	return 0;
 #else
+#endif
+
 	i = 0;
 	while (str[i] != '\0') {
-		i++;
+			buffer[i] = str[i];
+			i++;
 	}
-	printf("lcd_puts: len=%d, [%s]\n", i, str);
+	buffer[i] = '\0';
+
 	wait_armtx();
 	txdmadone = 0;	// TX in progress
-	stat = HAL_UART_Transmit_DMA(&huart5, str, i);
+//	printf("lcd_puts: len=%d, [%s]\n", i, str);
+
+	stat = HAL_UART_Transmit_DMA(&huart5, buffer, i);
 	if (stat != HAL_OK) {
 		printf("lcd_puts: Err %d HAL_UART_Transmit_DMA uart5\n",stat);
 	}
 	return (stat);
-#endif
 }
 
 
@@ -269,7 +304,7 @@ printf("lcd_getc() got %02x\n", ch);
 // terminate with three 0xff's
 int writelcdcmd(char *str) {
 	char i = 0;
-	char pkt[48] __attribute__ ((aligned (16)));
+	char pkt[64];  //  __attribute__ ((aligned (16)));
 
 	strcpy(pkt, str);
 	strcat(pkt, "\xff\xff\xff");
@@ -300,12 +335,19 @@ int getlcdnvar(char *id) {
 
 // send some text to a lcd text object
 int setlcdtext(char id[], char string[]) {
-	char str[64];    //  __attribute__ ((aligned (16)));
+	int i;
+	char *str;
 	volatile int result = 0;
 
+	str = malloc(64);
+	if (str == NULL)
+		printf("setlcdtext: malloc failed\n");
 	sprintf(str, "%s=\"%s\"", id, string);
+//	printf("setcdtext: %s\n",str);
 	result = writelcdcmd(str);
-	if (result == -1) {		// wait for response
+	osDelay(50);
+	free(str);
+	if (result == -1) {
 		printf("setlcdtext: Cmd failed\n\r");
 	}
 	return(result);

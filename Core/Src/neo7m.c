@@ -28,6 +28,7 @@
 #include "neo7m.h"
 #include "adcstream.h"
 #include <time.h>
+#include "lcd.h"
 
 typedef uint8_t byte;
 
@@ -587,7 +588,8 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	}
 	if (huart->Instance == UART5) { 			//LCD UART
 	printf("LCD UART_Err Callback %0lx\n", huart->ErrorCode);
-	lcd_init();
+	if (!(inlcd_init))	// prevent recursion
+		lcd_init();
 	}
 
 
