@@ -393,11 +393,11 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 1024);
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 2048);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of LPTask */
-  osThreadDef(LPTask, StarLPTask, osPriorityLow, 0, 1024);
+  osThreadDef(LPTask, StarLPTask, osPriorityLow, 0, 2048);
   LPTaskHandle = osThreadCreate(osThread(LPTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -2221,7 +2221,7 @@ void StarLPTask(void const * argument)
 		osDelay(100);
 
 #ifdef SPLAT1
-	lcd_init();
+	lcd_initflag = 1;		// request LCD init
 #endif
 
 #if 1
@@ -2355,13 +2355,19 @@ void StarLPTask(void const * argument)
 
 #endif
 
+#if 1
 #ifdef SPLAT1
+
 			localepochtime = epochtime + (time_t)(10 * 60 * 60);		// add ten hours
 			timeinfo = *localtime (&localepochtime);
 			strftime (buffer,sizeof(buffer),"%H:%M:%S",&timeinfo);
 			setlcdtext("t0.txt", buffer);
-#endif
 
+			strftime (buffer,sizeof(buffer),"%a %e %h %Y ",&timeinfo);
+			setlcdtext("t1.txt", buffer);
+
+#endif
+#endif
 
 		/**********************  Every 250mSec   *******************************/
 
@@ -2477,10 +2483,10 @@ void StarLPTask(void const * argument)
 		if ((tenmstimer+44) > 3000) {		// reset timer after 30 seconds
 			tenmstimer = 0;
 
-#if 1
+#if 0
 #ifdef SPLAT1
-		strftime (buffer,sizeof(buffer),"%a %e %h %Y ",&timeinfo);
-		setlcdtext("t1.txt", buffer);
+			strftime (buffer,sizeof(buffer),"%a %e %h %Y ",&timeinfo);
+			setlcdtext("t1.txt", buffer);
 #endif
 #endif
 

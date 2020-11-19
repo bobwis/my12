@@ -36,7 +36,7 @@ typedef uint8_t byte;
 #define PC_BAUDRATE 9600L
 
 extern UART_HandleTypeDef huart6, huart5;
-extern void	uart5_rxdone();
+extern void uart5_rxdone();
 
 struct tm now;		// gps time updated every second
 time_t epochtime;	// gps time updated every second
@@ -132,7 +132,7 @@ uint32_t calcepoch32() {
 
 //    printf("Epoch=%ld\n", (long) epochtime);
 #ifdef LOCALTIME
-	return (uint32_t)(epochtime + (time_t) (10 * 60 * 60));		// add ten hours
+	return (uint32_t) (epochtime + (time_t) (10 * 60 * 60));		// add ten hours
 #else
     return (uint32_t)(epochtime);
 #endif
@@ -549,7 +549,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				*((char*) (&(statuspkt.NavPvt)) + (i - offset)) = PACKETstore[i]; // copy into global struct
 			}
 			if (statuspkt.NavPvt.flags & 1) { // locked
-				statuspkt.epochsecs = calcepoch32();// should not be needed if our 1 sec timer was accurate, also dbg desyncs this
+				statuspkt.epochsecs = calcepoch32(); // should not be needed if our 1 sec timer was accurate, also dbg desyncs this
 //printf("*%d ",statuspkt.epochsecs % 60);
 				gpslocked = 1;
 			} else
@@ -566,16 +566,25 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	} else {
 		if (huart->Instance == UART5) {
 			uart5_rxdone();
-		}
-		else
-		printf("USART unknown uart int\n");
+		} else
+			printf("USART unknown uart int\n");
 	}
 }
 
-
+#if 0
+// error codes for memory
+#define  HAL_UART_ERROR_NONE             ((uint32_t)0x00000000U)    /*!< No error                */
+#define  HAL_UART_ERROR_PE               ((uint32_t)0x00000001U)    /*!< Parity error            */
+#define  HAL_UART_ERROR_NE               ((uint32_t)0x00000002U)    /*!< Noise error             */
+#define  HAL_UART_ERROR_FE               ((uint32_t)0x00000004U)    /*!< Frame error             */
+#define  HAL_UART_ERROR_ORE              ((uint32_t)0x00000008U)    /*!< Overrun error           */
+#define  HAL_UART_ERROR_DMA              ((uint32_t)0x00000010U)    /*!< DMA transfer error      */
+#define  HAL_UART_ERROR_RTO              ((uint32_t)0x00000020U)    /*!< Receiver Timeout error  */
+#endif
 HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	HAL_StatusTypeDef stat;
 	uint8_t ch;
+	volatile uint32_t reg;
 
 	// whatever the error try to clear it blindly
 	__HAL_UART_CLEAR_FEFLAG(huart);
@@ -584,15 +593,29 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	__HAL_UART_CLEAR_PEFLAG(huart);
 
 	if (huart->Instance == USART6) { 		// GPS  UART
-	printf("GPS UART_Err Callback %0lx\n", huart->ErrorCode);
+		printf("GPS UART_Err Callback %0lx, ", huart->ErrorCode);
 	}
+
 	if (huart->Instance == UART5) { 			//LCD UART
-	printf("LCD UART_Err Callback %0lx\n", huart->ErrorCode);
-	if (!(inlcd_init))	// prevent recursion
-		lcd_init();
+
+		printf("LCD UART_Err Callback %0lx ", huart->ErrorCode);
+
+		switch (huart->ErrorCode) {
+		case HAL_UART_ERROR_NE:
+			printf("NOISE\n");
+			break;
+		case HAL_UART_ERROR_FE:
+			printf("FRAMING\n");
+			lcd_initflag = 1;		// assume display has dropped back to 9600
+			break;
+		case HAL_UART_ERROR_ORE:
+			printf("OVERRUN\n");
+		default:
+			printf("\n");
+		}
+		reg = (UART5->ISR);
+		reg = (UART5->RDR);
 	}
-
-
 
 #if 0
 	//stat = HAL_UART_Receive_IT(&huart6, rxdatabuf, 1);		// restart rx

@@ -28,10 +28,11 @@
 #define SPLAT1
 #endif
 
-#ifdef TESTING
-#define BUILDNO 20006	// 16 bits  "S/W build number" of the lightning detector
+#define BUILD 10007
+#ifndef TESTING
+#define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
-#define BUILDNO 10006	// 16 bits  "S/W build number" of the lightning detector
+#define BUILDNO BUILD+1000	// 16 bits  "S/W build number" of the lightning detector
 #endif
 
 #ifdef SPLAT1
