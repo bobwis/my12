@@ -44,7 +44,9 @@ extern void processnex(void);
 
 extern uint8_t lcdrxbuffer[LCDRXBUFSIZE];
 
-extern volatile int lcd_uart_reinitflag;		//  UART needs re-initilising
 extern volatile int lcd_initflag;			// lcd and or UART needs re-initilising
+extern volatile int lcduart_error;			// last uart err
+extern int lastday;		// the last date sown on the LCD
+extern uint16_t lastsec;	// the last second shown on the lcd
 
 #endif /* INC_LCD_H_ */

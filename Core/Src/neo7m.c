@@ -594,27 +594,24 @@ HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 
 	if (huart->Instance == USART6) { 		// GPS  UART
 		printf("GPS UART_Err Callback %0lx, ", huart->ErrorCode);
+		return;
 	}
 
 	if (huart->Instance == UART5) { 			//LCD UART
+		if (!(lcd_initflag)) {
 
-		printf("LCD UART_Err Callback %0lx ", huart->ErrorCode);
+		lcduart_error = huart->ErrorCode;
+//		printf("LCD UART_Err Callback %0lx ", huart->ErrorCode);
+		if (UART5->ISR & USART_ISR_ORE) // Overrun Error
+			UART5->ICR = USART_ICR_ORECF;
 
-		switch (huart->ErrorCode) {
-		case HAL_UART_ERROR_NE:
-			printf("NOISE\n");
-			break;
-		case HAL_UART_ERROR_FE:
-			printf("FRAMING\n");
-			lcd_initflag = 1;		// assume display has dropped back to 9600
-			break;
-		case HAL_UART_ERROR_ORE:
-			printf("OVERRUN\n");
-		default:
-			printf("\n");
-		}
-		reg = (UART5->ISR);
-		reg = (UART5->RDR);
+		if (UART5->ISR & USART_ISR_NE) // Noise Error
+			UART5->ICR = USART_ICR_NCF;
+
+		if (UART5->ISR & USART_ISR_FE) // Framing Error
+			UART5->ICR = USART_ICR_FECF;
+	}
+		return;
 	}
 
 #if 0

@@ -1308,10 +1308,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     hdma_uart5_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_uart5_rx.Init.Mode = DMA_CIRCULAR;
     hdma_uart5_rx.Init.Priority = DMA_PRIORITY_LOW;
-    hdma_uart5_rx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_uart5_rx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
-    hdma_uart5_rx.Init.MemBurst = DMA_MBURST_SINGLE;
-    hdma_uart5_rx.Init.PeriphBurst = DMA_PBURST_SINGLE;
+    hdma_uart5_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_uart5_rx) != HAL_OK)
     {
       Error_Handler();
@@ -1329,10 +1326,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     hdma_uart5_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_uart5_tx.Init.Mode = DMA_NORMAL;
     hdma_uart5_tx.Init.Priority = DMA_PRIORITY_LOW;
-    hdma_uart5_tx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-    hdma_uart5_tx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_HALFFULL;
-    hdma_uart5_tx.Init.MemBurst = DMA_MBURST_SINGLE;
-    hdma_uart5_tx.Init.PeriphBurst = DMA_PBURST_SINGLE;
+    hdma_uart5_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_uart5_tx) != HAL_OK)
     {
       Error_Handler();
