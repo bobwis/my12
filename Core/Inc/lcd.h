@@ -42,11 +42,20 @@ extern void  lcd_init();
 // tick call to process nextion IO
 extern void processnex(void);
 
+// Application specific stuff
+void lcd_time(void);		// send the time
+void lcd_date(void);		// send the date
+
+
+extern struct tm timeinfo;		// lcd time
+extern time_t localepochtime;	// lcd time
+
 extern uint8_t lcdrxbuffer[LCDRXBUFSIZE];
 
 extern volatile int lcd_initflag;			// lcd and or UART needs re-initilising
 extern volatile int lcduart_error;			// last uart err
 extern int lastday;		// the last date sown on the LCD
 extern uint16_t lastsec;	// the last second shown on the lcd
+extern volatile uint8_t lcd_currentpage;  // current LCD page
 
 #endif /* INC_LCD_H_ */

@@ -2100,9 +2100,6 @@ void StarLPTask(void const *argument) {
 	int i, n, counter = 0;
 	char str[32] = { "empty" };
 	uint32_t lasttrigcount = 0;
-	time_t localepochtime;
-	char buffer[40];		// lcd message
-	struct tm timeinfo;	// lcd time
 	int16_t gainchanged;
 
 	statuspkt.adcudpover = 0;		// debug use count overruns
@@ -2249,18 +2246,17 @@ void StarLPTask(void const *argument) {
 
 #ifdef SPLAT1
 
-		if ((!(lcd_initflag)) && (lastsec != onesectimer)) {
-			lastsec = onesectimer;
-			localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
+		if ((!(lcd_initflag)) && (lastsec != onesectimer) && (lcd_currentpage == 0)) {
 			timeinfo = *localtime(&localepochtime);
-			strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
-			setlcdtext("t0.txt", buffer);
-			if (timeinfo.tm_yday != lastday) {
-				lastday = timeinfo.tm_yday;
-				strftime(buffer, sizeof(buffer), "%a %e %h %Y ", &timeinfo);
-				setlcdtext("t1.txt", buffer);
+
+			lastsec = onesectimer;
+			lcd_time();
+
+			if (timeinfo.tm_yday != lastday ) {
+				lcd_date();
 			}
 		}
+
 #endif
 
 		/**********************  Every 1 Sec   *******************************/

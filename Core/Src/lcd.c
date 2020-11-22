@@ -17,6 +17,7 @@
 #include "neo7m.h"
 #include "adcstream.h"
 #include <time.h>
+#include "main.h"
 #include "lcd.h"
 #include "nextion.h"
 
@@ -32,21 +33,24 @@ static int lcd_state = LCD_IDLE;	// state variable
 
 uint8_t lcdrxbuffer[LCDRXBUFSIZE] = { "" };
 uint8_t dmarxbuffer[DMARXBUFSIZE] = { "" };
+
+char buffer[40];		// lcd message building buffer
+struct tm timeinfo;		// lcd time
+time_t localepochtime;	// lcd time
+
 int lcdrxoutidx = 0;			// consumed index into lcdrxbuffer
 
-char currentpage[16] = { "" };
-volatile uint8_t lcd_read_page = 0;		// binary LCD page number
+volatile uint8_t lcd_currentpage = 0;		// The current LCD page number
 
 volatile uint8_t lcdstatus = 0;		// response code, set to 0xff for not set
 volatile uint8_t lcdtouched = 0;		// this gets set to 0xff when an autonomous event or cmd reply happens
 volatile uint8_t lcdpevent = 0;		// lcd reported a page. set to 0xff for new report
 unsigned int dimtimer = DIMTIME;	// lcd dim imer
-unsigned int cmdtimeout = 0;		// max timeout after issueing command
 unsigned int rxtimeout = 0;			// receive timeout, reset in lcd_getch
 static int txdmadone = 0;			// Tx DMA complete flag (1=done, 0=waiting for complete)
 volatile int lcd_initflag = 0;		// lcd and or UART needs re-initilising
 volatile int lcduart_error = 0;		// lcd uart last err
-int lastday = 0;		// the last date sown on the LCD
+int lastday = 0;		// the last date shown on the LCD
 uint16_t lastsec = -1;	// the last second shown on the lcd
 
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
@@ -188,7 +192,7 @@ void lcd_init() {
 	osDelay(600);
 #endif
 
-	stat = HAL_UART_Transmit_DMA(&huart5, lcd_fast, sizeof(lcd_fast)-1);		// if leading nulls on tx line
+	stat = HAL_UART_Transmit_DMA(&huart5, lcd_fast, sizeof(lcd_fast) - 1);		// if leading nulls on tx line
 	if (stat != HAL_OK) {														// this cmd will be rejected
 		printf("lcd_init: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
 	}
@@ -199,7 +203,7 @@ void lcd_init() {
 	txdmadone = 0;	// TX is NOT free
 	osDelay(20);
 
-	stat = HAL_UART_Transmit_DMA(&huart5, lcd_fast, sizeof(lcd_fast)-1);
+	stat = HAL_UART_Transmit_DMA(&huart5, lcd_fast, sizeof(lcd_fast) - 1);
 	if (stat != HAL_OK) {
 		printf("lcd_init: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
 	}
@@ -281,12 +285,12 @@ int lcd_rxdma() {
 	volatile int dmaindex = 0;
 
 	dmaindex = DMARXBUFSIZE - DMA1_Stream0->NDTR;  // next index position the DMA will fill
-	if (dmaindex == 128)  {
+	if (dmaindex == 128) {
 #if 1
-	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// restart Rx cyclic DMA
-	if (stat != HAL_OK) {
-		printf("lcd_rxdma: Err HAL_UART_Receive_DMA uart5 %d\n", stat);
-	}
+		stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// restart Rx cyclic DMA
+		if (stat != HAL_OK) {
+			printf("lcd_rxdma: Err HAL_UART_Receive_DMA uart5 %d\n", stat);
+		}
 #endif
 		dmaindex = 0;	// DMA count-to-go had zero
 	}
@@ -336,27 +340,6 @@ int writelcdcmd(char *str) {
 	return (0);
 }
 
-// write a number digit on the LCD to a num object
-void setndig(char *id, uint8_t val) {
-	char msg[32];
-
-	sprintf(msg, "%s.val=%1d", id, val);
-	lcd_puts(msg);
-}
-
-// request to read a lcd named variable (unsigned long) expects numeric value
-// return -1 for error
-int getlcdnvar(char *id) {
-	volatile int result = 0;
-
-	lcd_puts("get ");
-	result = writelcdcmd(id);
-	if (result == -1) {		// wait for response
-		printf("getlcdnvar: Cmd failed\n\r");
-	}
-	return (result);
-}
-
 // send some text to a lcd text object
 int setlcdtext(char id[], char string[]) {
 	int i;
@@ -386,6 +369,13 @@ int setlcdbin(char *id, unsigned long value) {
 	return (result);
 }
 
+// set the LCD bracklight brightness
+void setlcddim(int level) {
+	dimtimer = DIMTIME;
+	setlcdbin("dim",level);
+}
+
+
 // request the current lcd page
 // this is processed mostly by the ISR, this routine assumes success
 // return -1 for error
@@ -402,26 +392,22 @@ int getlcdpage() {
 	return (result);
 }
 
-// display a chosen page
-// use cached pagename to skip if matched current page unless forced
-// returns lcd response code
-int setlcdpage(char *pagename, bool force) {
+// lcd page change ebvent occured Notification sent from the LCD)
+lcd_pagechange(uint8_t newpage) {
+	if (lcd_currentpage == newpage)
+		return (newpage);	// no action
 
-	if (lcd_newstate(LCD_SENDCMD)) {
-
-		if (*pagename)		// not null
-		{
-			if (!(strncmp(pagename, currentpage, sizeof(currentpage))) || (force)) {	// not already on this page
-				writelcdcmd2("page", pagename);
-				strncpy(currentpage, pagename, sizeof(currentpage));
-				getlcdack();
-//				osDelay(100);		// wait a bit
-				lcd_read_page = getlcdpage();		// associate with its number
-			}
-		}
-		return (0);
+	switch (newpage) {
+	case 0:		// changed to page 0
+		lcd_time();
+		lcd_date();
+		break;
+	case 1:		// changed to page 1
+		break;
+	default:
+		printf("Unknown page number\n");
+		break;
 	}
-	return (-1);
 }
 
 // Check if this is an LCD packet
@@ -488,8 +474,6 @@ int lcd_event_process(void) {
 	{
 
 		if ((eventbuffer[0] >= NEX_SINV) && (eventbuffer[0] <= NEX_SLEN)) {	// a status code packet - eg error
-			lcdtouched = 0;
-			lcdpevent = 0;
 			lcdstatus = eventbuffer[0];
 			if (eventbuffer[0] != NEX_SOK) {		// returned status from instruction was not OK
 
@@ -515,21 +499,17 @@ int lcd_event_process(void) {
 					break;
 				}
 			}
-
 		} else  // this is either a touch event or a response to a query packet
 		{
 			switch (eventbuffer[0]) {
 			case NEX_ETOUCH:
 				printf("lcd_event_process: Got Touch event\n");
-				dimtimer = DIMTIME;
-				lcdtouched = 0xff;		// its a touch
-				lcdpevent = 0;
+				setlcddim(100);
 				break;
 			case NEX_EPAGE:
-				lcdtouched = 0;
-				lcdpevent = 0xff;		// notify lcd page event happened
-				lcd_read_page = eventbuffer[1];
-				printf("lcd_event_process: Got Page event, Page=%d\n", lcd_read_page);
+				printf("lcd_event_process: Got Page event, OldPage=%d, NewPage=%d\n", lcd_currentpage,eventbuffer[1]);
+				setlcddim(100);
+				lcd_currentpage = lcd_pagechange(eventbuffer[1]);
 				break;
 			default:
 				printf("lcd_event_process: unknown response received\n");
@@ -556,7 +536,7 @@ void processnex() {		// process Nextion - called at regular intervals
 		break;
 	case HAL_UART_ERROR_FE:
 		printf("LCD UART FRAMING\n");
-			lcd_initflag = 1;		// assume display has dropped back to 9600
+		lcd_initflag = 1;		// assume display has dropped back to 9600
 		break;
 	case HAL_UART_ERROR_ORE:
 		printf("LCD UART OVERRUN\n");
@@ -573,8 +553,6 @@ void processnex() {		// process Nextion - called at regular intervals
 		lcd_init();		// has 100 + 100 ms pause
 		delay = 100;
 		lcd_initflag = 2;		// request wait for lcd to process baud speedup command
-//		result = DMARXBUFSIZE - (DMA1_Stream0->NDTR + 1);  // next index position the DMA will fill
-//		lcdrxoutidx = result;
 		return;
 	}
 
@@ -582,8 +560,7 @@ void processnex() {		// process Nextion - called at regular intervals
 		osDelay(1);
 		if (delay) {
 			delay--;
-		}
-			else
+		} else
 			lcd_initflag = 3;
 		return;
 	}
@@ -591,8 +568,6 @@ void processnex() {		// process Nextion - called at regular intervals
 	if (lcd_initflag == 3) {	// uart only
 		printf("calling lcd_uart_init(230400)\n");
 		lcd_uart_init(230400);
-//		result = DMARXBUFSIZE - (DMA1_Stream0->NDTR + 1);   // next index position the DMA will fill
-//		lcdrxoutidx = result;
 		lcd_initflag = 0;		// done
 		return;
 	}
@@ -608,9 +583,32 @@ void processnex() {		// process Nextion - called at regular intervals
 	if (dimtimer > 0) {
 		dimtimer--;
 		if (dimtimer == 0) {
-			printf("Auto Dim on\n");
-			writelcdcmd("dim=22");
+			printf("Auto Dimming now\n");
+			setlcddim(20);
 		}
 	}
+}
+
+///////////////////////////////////////////////////////////////
+//
+//Application specific display stuff
+//
+//////////////////////////////////////////////////////////////
+
+// send the time to t0.txt
+void lcd_time() {
+
+	localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
+	timeinfo = *localtime(&localepochtime);
+	strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+	setlcdtext("t0.txt", buffer);
+}
+
+// send the date to t1.txt (assumes timeinfo is current)
+void lcd_date() {
+
+	lastday = timeinfo.tm_yday;
+	strftime(buffer, sizeof(buffer), "%a %e %h %Y ", &timeinfo);
+	setlcdtext("t1.txt", buffer);
 }
 
