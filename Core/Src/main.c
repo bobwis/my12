@@ -1839,7 +1839,10 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 		rtseconds = (statuspkt.NavPvt.sec + 1) % 60; // assume we get here before serial comms updates gps seconds field
 
 #ifdef SPLAT1
-		HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+		if (!(ledsenabled)) {
+			HAL_GPIO_WritePin(GPIOD, LED_D1_Pin, GPIO_PIN_RESET);
+		} else
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
 #else
 	HAL_GPIO_TogglePin(GPIOB, LD1_Pin);		// green led
 #endif
@@ -2098,19 +2101,71 @@ void StarLPTask(void const *argument) {
 	uint16_t tenmstimer = 0;
 	uint16_t onesectimer = 0;
 	int i, n, counter = 0;
-	char str[32] = { "empty" };
+	char str[80] = { "empty" };
 	uint32_t lasttrigcount = 0;
 	int16_t gainchanged;
+	int last3min = 0;
 
 	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
 	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
 
-	while (main_init_done == 0)	// wait from main to complete the initilisation
-		osDelay(100);
+#ifdef SPLAT1
+	lcduart_error = HAL_UART_ERROR_NONE;
+
+	lcd_init(9600);  // reset LCD to 9600 from current (unknown) speed
+	lcd_uart_init(9600); // then change our baud to match
+	lcd_init(9600);  // reset LCD (might be 2nd time or not)
+	osDelay(600);
+
+	lcd_init(230400);  //  LCD *should* return in 230400 baud
+	osDelay(600);
+	lcd_uart_init(230400); // then change our baud to match
+
+	osDelay(600);
+	lcduart_error = HAL_UART_ERROR_NONE;
+	writelcdcmd("page 0");
+	printf("LCD page 0\n");
+
+	osDelay(600);
+	writelcdcmd("cls BLACK");
+	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d, Build:%d\"", MAJORVERSION, MINORVERSION, BUILD);
+	lcduart_error = HAL_UART_ERROR_NONE;
+	writelcdcmd(str);
+	lcduart_error = HAL_UART_ERROR_NONE;
+
+#endif
+	i = 0;
+	while (main_init_done == 0) { // wait from main to complete the init {
+		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
+		switch (i & 3) {
+		case 0:
+			writelcdcmd(strcat(str, ".\""));
+			break;
+		case 1:
+			writelcdcmd(strcat(str, "..\""));
+			break;
+		case 2:
+			writelcdcmd(strcat(str, "...\""));
+			break;
+		case 3:
+			writelcdcmd(strcat(str, "....\""));
+			break;
+		}
+		i++;
+		osDelay(250);
+
+		if (!(netif_is_link_up(&gnetif))) {
+			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
+		}
+	}
+
+	lcduart_error = HAL_UART_ERROR_NONE;
+	writelcdcmd("ref 0");		// refresh screen
 
 #ifdef SPLAT1
-	lcd_initflag = 1;		// request LCD init
+	lcduart_error = HAL_UART_ERROR_NONE;
+	writelcdcmd("page 0");
 #endif
 
 #if 1
@@ -2143,9 +2198,11 @@ void StarLPTask(void const *argument) {
 		globaladcnoise = abs(meanwindiff);
 		pretrigthresh = 4 + (globaladcnoise >> 7);		// set the pretrigger level
 
-		if (ledhang) {	// trigger led
-			ledhang--;
 #ifdef SPLAT1
+		if (!(ledsenabled)) {
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
+		} else if (ledhang) {	// trigger led
+			ledhang--;
 			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_SET);	// Splat D5 led on
 		} else {
 			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
@@ -2166,8 +2223,10 @@ void StarLPTask(void const *argument) {
 
 //			HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// start audio buzz - broken on splat 1
 ///			HAL_TIM_Base_Start(&htim7);	// audio synth sampling interval timer
-			HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
-			DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
+			if (soundenabled) {
+				HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
+				DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
+			}
 
 #if 1
 			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
@@ -2252,9 +2311,11 @@ void StarLPTask(void const *argument) {
 			lastsec = onesectimer;
 			lcd_time();
 
-			if (timeinfo.tm_yday != lastday ) {
+			if (timeinfo.tm_yday != lastday) {
 				lcd_date();
 			}
+		} else if (lcd_currentpage == 1) {
+			lcd_showvars();
 		}
 
 #endif
@@ -2262,7 +2323,10 @@ void StarLPTask(void const *argument) {
 		/**********************  Every 1 Sec   *******************************/
 
 		if ((tenmstimer + 11) % 100 == 0) {		// every second
-			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			if (ledsenabled)
+				HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			else
+				HAL_GPIO_WritePin(GPIOD, LED_D2_Pin, GPIO_PIN_RESET);
 #if 1
 
 			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
@@ -2315,6 +2379,8 @@ void StarLPTask(void const *argument) {
 			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
 				printf("semaphore 1c release failed\n");
 			}
+			lcd_trigplot();		// update lcd trigger and noise plots
+
 		}		// if 1 second timer hit
 
 		/**********************  Every 10 Secs   *******************************/
@@ -2371,13 +2437,23 @@ void StarLPTask(void const *argument) {
 
 			printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 					(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
-			printf("triggers:%04d, gain:%d, noise:%03d, thresh:%02d, press:%03d.%04d, temp:%02d.%03d, time:%s\n", trigs,
-					pgagain & 7, globaladcnoise, trigthresh, pressure, pressfrac, temperature, tempfrac / 1000,
+			printf("triggers:%04d, gain:%d, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
+					pgagain & 7, globaladcnoise, trigthresh, pressure, pressfrac/4, temperature, tempfrac / 1000,
 					nowtimestr);
+
 #else
 			printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
 #endif
 		} // end if 30 second timer
+
+
+
+		/**********************  Every 3 minutes   *******************************/
+		if (((onesectimer+21) % 180 == 0) && (last3min != onesectimer)) {
+			last3min = onesectimer;	// prevent multiple calls while inside this second
+			lcd_pressplot();		// add a point to the pressure plot
+		}
+
 
 		/**********************  Every 15 minutes  *******************************/
 		if (onesectimer > 900) {			// 15 mins

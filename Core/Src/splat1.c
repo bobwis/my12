@@ -40,6 +40,9 @@ int psensor = PNONE;		// pressure sensor type
 extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c1;
 
+// user interface
+uint16_t ledsenabled = 1, soundenabled = 1;
+
 // globs for pressure sensor results
 uint32_t pressure, pressfrac, temperature, tempfrac;
 

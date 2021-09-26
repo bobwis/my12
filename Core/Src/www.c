@@ -141,8 +141,11 @@ int i, j;
 // the tag callback handler
 tSSIHandler tag_callback(int index, char *newstring, int maxlen) {
 //  LOCK_TCPIP_CORE();
-
-	HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
+	if (ledsenabled) {
+		HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
+	} else {
+		HAL_GPIO_WritePin(GPIOD, LED_D3_Pin, GPIO_PIN_RESET);
+	}
 	/*
 	 newstring[0] = '5';
 	 newstring[1] = '\0';
@@ -265,6 +268,7 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 					printf("Server -> commands a streaming freeze\n");
 				} else
 					globalfreeze = 0;
+				// falls through
 
 			case 2: 							// converted  2 fields
 #ifdef TESTING
@@ -274,10 +278,10 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 					strcpy(udp_target, SERVER_DESTINATION);		// default it
 				}
 				printf("Server -> Target UDP host: %s\n", udp_target);
+				// falls through
 
 			case 1: 							// converted the first field which is the serial number
-				if (statuspkt.uid != sn)
-				{
+				if (statuspkt.uid != sn) {
 					statuspkt.uid = sn;
 					printf("Server -> Serial Number: %lu\n", statuspkt.uid);
 				}
