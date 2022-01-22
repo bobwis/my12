@@ -1,3 +1,4 @@
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file    stm32f7xx_hal_conf_template.h
@@ -8,16 +9,16 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2017 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
+/* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __STM32F7xx_HAL_CONF_H
@@ -74,7 +75,7 @@
 /* #define HAL_DFSDM_MODULE_ENABLED   */
 /* #define HAL_DSI_MODULE_ENABLED   */
 /* #define HAL_JPEG_MODULE_ENABLED   */
-#define HAL_MDIOS_MODULE_ENABLED
+/* #define HAL_MDIOS_MODULE_ENABLED   */
 /* #define HAL_SMBUS_MODULE_ENABLED   */
 /* #define HAL_EXTI_MODULE_ENABLED   */
 #define HAL_GPIO_MODULE_ENABLED
@@ -247,10 +248,10 @@
 #define PHY_JABBER_DETECTION            ((uint16_t)0x0002U)  /*!< Jabber condition detected            */
 
 /* Section 4: Extended PHY Registers */
-#define PHY_SR                          ((uint16_t)0x1FU)    /*!< PHY status register Offset                      */
+#define PHY_SR                          ((uint16_t)0x10U)    /*!< PHY status register Offset                      */
 
-#define PHY_SPEED_STATUS                ((uint16_t)0x0004U)  /*!< PHY Speed mask                                  */
-#define PHY_DUPLEX_STATUS               ((uint16_t)0x0010U)  /*!< PHY Duplex mask                                 */
+#define PHY_SPEED_STATUS                ((uint16_t)0x0002U)  /*!< PHY Speed mask                                  */
+#define PHY_DUPLEX_STATUS               ((uint16_t)0x0004U)  /*!< PHY Duplex mask                                 */
 
 #define PHY_ISFR                        ((uint16_t)0x001DU)    /*!< PHY Interrupt Source Flag register Offset   */
 #define PHY_ISFR_INT4                   ((uint16_t)0x000BU)  /*!< PHY Link down inturrupt       */
@@ -480,4 +481,3 @@
 
 #endif /* __STM32F7xx_HAL_CONF_H */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

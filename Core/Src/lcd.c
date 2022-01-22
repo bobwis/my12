@@ -420,7 +420,7 @@ int getlcdpage(void) {
 		printf("getlcdpage: Cmd failed\n\r");
 	}
 	result = lcd_getlack();		// wait for a response
-	printf("getlcdpage: returned %d\n\r",result);
+//	printf("getlcdpage: returned %d\n\r",result);
 
 	while (result == 0xff ) {	// try again
 		result = intwritelcdcmd("sendme");
@@ -428,7 +428,7 @@ int getlcdpage(void) {
 			printf("getlcdpage2: Cmd failed\n\r");
 		}
 		result = lcd_getlack();		// wait for a response
-		printf("getlcdpage2: returned %d\n\r",result);
+//		printf("getlcdpage2: returned %d\n\r",result);
 	}
 	lcd_txblocked = 0;		// allow others sending to the LCD
 	return (result);
@@ -546,6 +546,9 @@ int lcd_event_process(void) {
 				case 0x23:
 					printf("Variable name too long\n");
 					break;
+				case 0x24:
+					printf("Ser Buffer Overflow\n");
+					break;
 				case 0x1e:
 					printf("Invalid number of parameters\n");
 					break;
@@ -572,6 +575,10 @@ int lcd_event_process(void) {
 		} else  // this is either a touch event or a response to a query packet
 		{
 			switch (eventbuffer[0]) {
+			case 0x24:
+				printf("Serial Buffer Overflow!\n");
+				return(1);
+				break;
 			case NEX_ETOUCH:
 				printf("lcd_event_process: Got Touch event %0x %0x %0x\n",eventbuffer[1],eventbuffer[2],eventbuffer[3] );
 
@@ -606,7 +613,7 @@ int lcd_event_process(void) {
 				break;
 
 			case NEX_EPAGE:
-				printf("lcd_event_process: Got Page event, OldPage=%d, NewPage=%d\n", lcd_currentpage, eventbuffer[1]);
+//				printf("lcd_event_process: Got Page event, OldPage=%d, NewPage=%d\n", lcd_currentpage, eventbuffer[1]);
 				setlcddim(lcdbright);
 				if (((lcd_pagechange(eventbuffer[1]) < 0) || (lcd_pagechange(eventbuffer[1]) > 5)))	// page number limits
 					printf("lcd_event_process: invalid page received %d\n", lcd_pagechange(eventbuffer[1]));
@@ -713,6 +720,7 @@ void processnex() {		// process Nextion - called at regular intervals
 
 // send the time to t0.txt
 void lcd_time() {
+	unsigned char str[16];
 
 	localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
 	timeinfo = *localtime(&localepochtime);
@@ -722,7 +730,8 @@ void lcd_time() {
 	if (!(gpslocked))
 		writelcdcmd("vis t3,1");	// hide
 	else {
-		setlcdtext("t3.txt", "GPS UNLOCKED");
+		sprintf(str,"AQUIRE GPS:%d",statuspkt.NavPvt.numSV);
+		setlcdtext("t3.txt", str);
 		writelcdcmd("vis t3,0");
 	}
 

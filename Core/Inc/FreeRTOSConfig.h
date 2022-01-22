@@ -78,7 +78,7 @@ extern	volatile unsigned long rtos_debug_timer;
 #define configTICK_RATE_HZ                       ((TickType_t)1000)
 #define configMAX_PRIORITIES                     ( 7 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)0x100)
-#define configTOTAL_HEAP_SIZE                    ((size_t)0x20000)
+#define configTOTAL_HEAP_SIZE                    ((size_t)0x18000)
 #define configMAX_TASK_NAME_LEN                  ( 16 )
 #define configUSE_16_BIT_TICKS                   0
 #define configUSE_MUTEXES                        1

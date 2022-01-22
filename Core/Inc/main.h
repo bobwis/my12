@@ -148,5 +148,3 @@ extern char udp_target[];	// dns or ip address of udp target
 #endif
 
 #endif /* __MAIN_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

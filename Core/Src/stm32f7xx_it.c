@@ -64,7 +64,6 @@ extern ADC_HandleTypeDef hadc2;
 extern ADC_HandleTypeDef hadc3;
 extern DMA_HandleTypeDef hdma_dac1;
 extern DAC_HandleTypeDef hdac;
-extern MDIOS_HandleTypeDef hmdios;
 extern DMA_HandleTypeDef hdma_tim2_up_ch3;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
@@ -287,7 +286,7 @@ void EXTI15_10_IRQHandler(void)
   /* USER CODE BEGIN EXTI15_10_IRQn 0 */
 
   /* USER CODE END EXTI15_10_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+  HAL_GPIO_EXTI_IRQHandler(USER_Btn_Pin);
   /* USER CODE BEGIN EXTI15_10_IRQn 1 */
 
   /* USER CODE END EXTI15_10_IRQn 1 */
@@ -461,21 +460,7 @@ void FPU_IRQHandler(void)
   /* USER CODE END FPU_IRQn 1 */
 }
 
-/**
-  * @brief This function handles MDIO slave global interrupt.
-  */
-void MDIOS_IRQHandler(void)
-{
-  /* USER CODE BEGIN MDIOS_IRQn 0 */
-
-  /* USER CODE END MDIOS_IRQn 0 */
-  HAL_MDIOS_IRQHandler(&hmdios);
-  /* USER CODE BEGIN MDIOS_IRQn 1 */
-
-  /* USER CODE END MDIOS_IRQn 1 */
-}
-
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+

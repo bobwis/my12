@@ -528,7 +528,6 @@ void initsplat(void) {
 
 	printf("Initsplat: Dual Mux\n\r");
 	initdualmux();
-
 	osDelay(500);
 	printf("Initsplat: Programmable Gain Amp\n");
 	initpga();

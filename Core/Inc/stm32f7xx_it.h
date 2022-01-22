@@ -73,7 +73,6 @@ void ETH_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
 void USART6_IRQHandler(void);
 void FPU_IRQHandler(void);
-void MDIOS_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
@@ -83,5 +82,3 @@ void MDIOS_IRQHandler(void);
 #endif
 
 #endif /* __STM32F7xx_IT_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
