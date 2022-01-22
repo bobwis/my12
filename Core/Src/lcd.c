@@ -361,7 +361,7 @@ int intwritelcdcmd(char *str) {
 // returns 0 if sent
 int writelcdcmd(char *str) {
 	char i = 0;
-	char pkt[64];  //  __attribute__ ((aligned (16)));
+	char pkt[96];  //  __attribute__ ((aligned (16)));
 
 	strcpy(pkt, str);
 	strcat(pkt, "\xff\xff\xff");
@@ -374,7 +374,7 @@ int writelcdcmd(char *str) {
 // send some text to a lcd text object
 int setlcdtext(char id[], char string[]) {
 	int i;
-	char str[64];
+	char str[96];
 	volatile int result = 0;
 
 	sprintf(str, "%s=\"%s\"", id, string);
@@ -747,7 +747,8 @@ void lcd_date() {
 
 // populate the page2 vars
 lcd_showvars() {
-	unsigned char str[64];
+	unsigned char str[96];
+	unsigned long board;
 
 	sprintf(str, "%d.%d.%d.%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
 			(myip & 0xFF000000) >> 24);
@@ -779,7 +780,7 @@ lcd_showvars() {
 	sprintf(str, "%d", statuspkt.sysuptime);	// system up time
 	setlcdtext("t5.txt", str);
 
-	sprintf(str, "Ver %d.%d, Build:%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, STM32_UUID[0],	STM32_UUID[1], STM32_UUID[2]);
+	sprintf(str, "Ver %d.%d, Build:%d PCB=%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, pcb, STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 //	sprintf(str, "UID=%lx %lx %lx", STM32_UUID[0],	STM32_UUID[1], STM32_UUID[2]);
 	setlcdtext("t26.txt", str);
 

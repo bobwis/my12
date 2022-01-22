@@ -58,7 +58,7 @@ uint8_t muxdat[] = { 0x81 };		// sw1A (AMPout -> ADC) sw2D (DAC->Spker)
 uint32_t logampmode = 0;	// log amp mode flag
 
 // Programmable gain amplifier
-extern const int pgamult[] = {1,2,4,5,8,10,16,32};		// maps from 0..7 gain control to the PGA
+extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32 };		// maps from 0..7 gain control to the PGA
 
 //////////////////////////////////////////////
 //
@@ -104,8 +104,11 @@ void initrfswtch(void) {
 //
 // Set the Programmable Gain Amplifier GAIN
 //
+// added switch for 10dB boost for gain 0x1X (uses channel B input on PGA)
 //////////////////////////////////////////////
 void setpgagain(int gain) {
+	uint16_t pgacmd[1];
+
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
 	osDelay(5);
@@ -118,6 +121,22 @@ void setpgagain(int gain) {
 	osDelay(5);
 //printf("PGA Gain set to %d\n",pgagain & 7);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
+
+	osDelay(5);
+	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
+	osDelay(5);
+
+	pgacmd[0] = 0x4100 | ((gain & 0x10) >> 4);		// select input channel
+
+	if (HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000) != HAL_OK) {	// write it out
+		printf("setpgagain: SPI Error2\n");
+	}
+
+	pgagain = gain;
+	osDelay(5);
+	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
+	printf("setpgagain: PGA Gain set to 0x%0x\n", pgagain);
+
 }
 
 //////////////////////////////////////////////
@@ -162,20 +181,52 @@ int initpga() {
 	return (0);
 }
 
-
 // bump the pga by one step
 int bumppga(int i) {
 	volatile int gain;
 
-	gain = pgagain & 0x7;
-	if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
-		gain = gain + i;
-		setpgagain(gain);
-		return(i);
+	gain = pgagain;
+	if (!((i == 1) || (i == -1))) {
+		printf("bumppga: invalid step %d\n", i);
 	}
-return(0);
-}
 
+	if (pcb == SPLATBOARD1) {		/// this doesn't have the boost function
+		gain = pgagain & 0x7;
+		if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
+			gain = gain + i;
+			setpgagain(gain);
+			return (i);
+		}
+	} else { // not SPLAT1
+//	printf("bumppga: req: %d, gain=%d\n", i, gain);
+
+		if (i == 1) {				// bump gain up
+			if (gain == 0x17)		// already at max gain with boost
+				return (0);
+			if (gain == 0x07)		// max pga gain so switch on boost
+				gain = 0x17;
+			else {
+				if ((gain >= 0) && (gain < 0x07))
+					gain++;
+			}
+			setpgagain(gain);
+			return (1);
+		}
+
+		else if (i == -1) {  // bump gain down by 1
+			if (gain <= 0)
+				return (0);  // already at min gain
+			if (gain & 0x10) {	// boost is on
+				gain = 0x07;	// turn it off and set max PGA gain
+			} else {
+				gain--;
+			}
+			setpgagain(gain);
+			return (-1);
+		}
+	}
+	return (0);
+}
 
 //////////////////////////////////////////////
 //
@@ -209,7 +260,7 @@ HAL_StatusTypeDef getpressure115(void) {
 	osDelay(4);		// conversion time max 3mS
 
 	for (i = 0; i < 4; i++) {
-		result = HAL_I2C_Mem_Read(&hi2c1, (0x60 << 1) | 1, i, 1, &data[i], 1, 1000);		// rd pressure and temp regs
+		result = HAL_I2C_Mem_Read(&hi2c1, (0x60 << 1) | 1, i, 1, &data[i], 1, 1000);	// rd pressure and temp regs
 		if (result != HAL_OK) {
 			printf("I2C MPL115 HAL returned error %d\n\r", result);
 			if (i == 3)
@@ -526,9 +577,11 @@ void initsplat(void) {
 	osDelay(500);
 	printf("Initsplat: LED cycle\n");
 
-	printf("Initsplat: Dual Mux\n\r");
-	initdualmux();
-	osDelay(500);
+	if (pcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
+		printf("Initsplat: Dual Mux\n\r");
+		initdualmux();
+		osDelay(500);
+	}
 	printf("Initsplat: Programmable Gain Amp\n");
 	initpga();
 
@@ -538,12 +591,12 @@ void initsplat(void) {
 	if (initpressure3115() == HAL_OK) {	// non zero result means MPL3115 nogood
 		printf("MPL3115A2 pressure sensor present\n\r");
 		psensor = MPL3115A2;
-		statuspkt.bconf |= (MPL3115A2<<3);
+		statuspkt.bconf |= (MPL3115A2 << 3);
 	} else {
 		if (initpressure115() == HAL_OK) {
 			printf("MPL115A2 pressure sensor present\n\r");
 			psensor = MPL115A2;		// assume MPL115 fitted instead
-			statuspkt.bconf |= (MPL115A2<<3);
+			statuspkt.bconf |= (MPL115A2 << 3);
 		} else {
 			printf("NO pressure sensor present\n\r");
 		}

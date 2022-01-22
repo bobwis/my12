@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 12
+#define MINORVERSION 13
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,7 +28,7 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10014
+#define BUILD 10015
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -63,6 +63,14 @@
 #endif
 
 
+#define SPLATBOARD1	11
+#define SPLATBOARD2 12
+#define LIGHTNINGBOARD1	21
+#define LIGHTNINGBOARD2	22
+#define UNKNOWNPCB 0
+
+
+unsigned int pcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
 /*
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);

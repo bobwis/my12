@@ -8,6 +8,8 @@
 #ifndef SPLAT1_H_
 #define SPLAT1_H_
 
+#include "version.h"
+
 extern void initsplat(void);
 extern uint16_t getpgagain(void);
 extern int bumppga(int);

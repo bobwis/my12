@@ -1762,10 +1762,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(probe1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC0 PC8 PC9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_8|GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  /*Configure GPIO pin : PC0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA6 */
@@ -1839,6 +1839,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USB_OverCurrent_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC8 PC9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA10 */
   GPIO_InitStruct.Pin = GPIO_PIN_10;
@@ -1966,43 +1972,22 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 	/* USER CODE END Callback 1 */
 }
 
+// try to figure out what PCB is connected to the STM
+// PC0 and PF5
+void getpcb()
+{
+	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {	// floats high on SPLAT1
+		pcb = LIGHTNINGBOARD1;
+	} else {
+		pcb = SPLATBOARD1;		// assumed
+	}
+}
+
 void setupnotify() {
 	/* Store the handle of the calling task. */
 	xTaskToNotify = xTaskGetCurrentTaskHandle();
 }
 
-#if 0
-// caclulate and set the pga gain - gets called once per second
-// uses agc noise but this may be too simplistic...
-#define GAININT 20	/* seconds */
-void calcagc() {
-	static uint32_t noiseacc = 0;
-	static int samples = 0;
-	uint16_t newgain;
-
-	noiseacc += globaladcnoise;
-	samples++;
-
-	if (samples > GAININT) {
-		newgain = (pgagain & 0x07);
-		if (noiseacc > (40 * GAININT))	// too noisy
-				{
-			if (newgain > 0) {
-				newgain--;			// decrease the gain
-				setpgagain(newgain);
-			}
-		} else if (noiseacc < (3 * GAININT))	// too quiet
-				{
-			if (newgain < 7) {
-				newgain++;			// increase the gain
-				setpgagain(newgain);
-			}
-		}
-		samples = 0;
-		noiseacc = 0;
-	}
-}
-#endif
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -2026,9 +2011,10 @@ void StartDefaultTask(void const * argument)
 	HAL_StatusTypeDef stat;
 //		uint16_t dacdata[64];
 
-	printf("\n\n-------------------------------------------------------------------\n");
-	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2],
-	MAJORVERSION, MINORVERSION, BUILDNO);
+	getpcb();		// find our daughterboard
+	printf("\n\n----------------------------------------------------------------------------\n");
+	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2],
+	MAJORVERSION, MINORVERSION, BUILDNO, pcb);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
 	if (!(netif_is_link_up(&gnetif))) {
@@ -2066,10 +2052,10 @@ void StartDefaultTask(void const * argument)
 
 	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
-	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
+	statuspkt.udpsent = 0;		// debug use adc udp sample packet sent count
 
 #ifdef TESTING
-	statuspkt.bconf = 0x80000000;	// board config word
+statuspkt.bconf = 0x80000000;	// board config word
 #else
 	statuspkt.bconf = 0;
 #endif
@@ -2081,7 +2067,7 @@ void StartDefaultTask(void const * argument)
 //		osDelay(100);
 
 #ifdef TESTING
-	printf("*** TESTING BUILD USED ***\n");
+printf("*** TESTING BUILD USED ***\n");
 //		testeeprom();
 #endif
 
@@ -2095,7 +2081,7 @@ void StartDefaultTask(void const * argument)
 #endif
 	printf("Setting up timers\n");
 
-	if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
+	if ( xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
 		/*printf("Initial semaphoregive failed\n")*/;	// expect this to fail as part of the normal setup
 	}
 
@@ -2111,10 +2097,10 @@ void StartDefaultTask(void const * argument)
 	HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_2);		// precision uS timer
 	HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_4);		// precision uS timer
 
-	//HAL_TIM_IC_Init and HAL_TIM_IC_ConfigChannel
-	//  (++) Input Capture :  HAL_TIM_IC_Start(), HAL_TIM_IC_Start_DMA(), HAL_TIM_IC_Start_IT()
+//HAL_TIM_IC_Init and HAL_TIM_IC_ConfigChannel
+//  (++) Input Capture :  HAL_TIM_IC_Start(), HAL_TIM_IC_Start_DMA(), HAL_TIM_IC_Start_IT()
 
-	// capture on PB10 input
+// capture on PB10 input
 	if ((err = HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_3, t2cap, (sizeof(t2cap) / 4))) != HAL_OK) {
 		printf("TIM_Base_Start_DMA err %i", err);
 		Error_Handler();
@@ -2159,7 +2145,7 @@ void StartDefaultTask(void const * argument)
 //		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, dacdata, sizeof(dacdata) >> 1, DAC_ALIGN_12B_L);
 	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
 	DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
-	HAL_TIM_Base_Start(&htim7);		// fast interval DAC timer sample rate
+	HAL_TIM_Base_Start(&htim7);	// fast interval DAC timer sample rate
 #endif
 
 	setupnotify();
@@ -2174,7 +2160,7 @@ void StartDefaultTask(void const * argument)
 	startadc();		// start the ADC DMA loop
 
 	while (1) {	//
-		startudp(uip);		// should never return
+		startudp(uip);	// should never return
 		printf("UDP stream exited!!!\n\r");
 		rebootme();
 	}
@@ -2225,7 +2211,8 @@ void StarLPTask(void const * argument)
 
 	osDelay(600);
 	writelcdcmd("cls BLACK");
-	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d, Build:%d\"", MAJORVERSION, MINORVERSION, BUILD);
+	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d, Build:%d\"", MAJORVERSION, MINORVERSION,
+	BUILD);
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
@@ -2534,7 +2521,7 @@ void StarLPTask(void const * argument)
 			printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 					(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
 			printf("triggers:%04d, gain:%d, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
-					pgagain & 7, globaladcnoise, trigthresh, pressure, pressfrac/4, temperature, tempfrac / 1000,
+					pgagain & 7, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000,
 					nowtimestr);
 
 #else
@@ -2542,14 +2529,11 @@ void StarLPTask(void const * argument)
 #endif
 		} // end if 30 second timer
 
-
-
 		/**********************  Every 3 minutes   *******************************/
-		if (((onesectimer+21) % 180 == 0) && (last3min != onesectimer)) {
+		if (((onesectimer + 21) % 180 == 0) && (last3min != onesectimer)) {
 			last3min = onesectimer;	// prevent multiple calls while inside this second
 			lcd_pressplot();		// add a point to the pressure plot
 		}
-
 
 		/**********************  Every 15 minutes  *******************************/
 		if (onesectimer > 900) {			// 15 mins
