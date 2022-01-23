@@ -80,7 +80,7 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 	volatile err_t err;
 
 	statuspkt.adcnoise = abs(meanwindiff) & 0xfff;	// agc
-	statuspkt.adcbase = (globaladcavg & 0xfff);	// agc
+	statuspkt.adcbase = (globaladcavg & 0xfff) | (((pgagain & 0x38) >> 3) << 13); 	// agc + boost gain
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 
 //	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);

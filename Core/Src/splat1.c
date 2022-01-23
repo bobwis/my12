@@ -135,7 +135,7 @@ void setpgagain(int gain) {
 	pgagain = gain;
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
-	printf("setpgagain: PGA Gain set to 0x%0x\n", pgagain);
+//	printf("setpgagain: PGA Gain set to 0x%0x\n", pgagain);
 
 }
 
