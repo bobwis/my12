@@ -91,8 +91,6 @@ extern char udp_target[];	// dns or ip address of udp target
 #define XBEE_DTR_GPIO_Port GPIOE
 #define LP_FILT_Pin GPIO_PIN_14
 #define LP_FILT_GPIO_Port GPIOE
-#define XBEE_RST_Pin GPIO_PIN_15
-#define XBEE_RST_GPIO_Port GPIOE
 #define RMII_TXD1_Pin GPIO_PIN_13
 #define RMII_TXD1_GPIO_Port GPIOB
 #define LD3_Pin GPIO_PIN_14

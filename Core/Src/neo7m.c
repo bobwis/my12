@@ -597,7 +597,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	const unsigned char offset = 6;
 //	unsigned char data;
 	HAL_StatusTypeDef stat;
-	volatile int len;
+	int len;
 
 //	printf("UART6 RxCpl");
 	if (huart->Instance == USART6) { //our UART
