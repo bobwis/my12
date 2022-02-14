@@ -29,7 +29,8 @@ extern char statstr[]; // current status as a string
 extern char gpsstr[];	// gps status as a string
 
 extern uint32_t pressure, pressfrac, temperature, tempfrac;
-extern uint16_t pgagain;
+extern int16_t pgagain;
+extern uint16_t boosttrys;	// prevent boost mode oscillating inside 3 min timer
 extern uint16_t agc;
 
 extern int psensor;		// pressure sensor type

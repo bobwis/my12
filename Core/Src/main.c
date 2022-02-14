@@ -182,11 +182,13 @@ DMA_HandleTypeDef hdma_tim2_up_ch3;
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart5;
 UART_HandleTypeDef huart7;
+UART_HandleTypeDef huart8;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_uart5_rx;
 DMA_HandleTypeDef hdma_uart5_tx;
+DMA_HandleTypeDef hdma_uart8_rx;
 DMA_HandleTypeDef hdma_usart6_rx;
 
 osThreadId defaultTaskHandle;
@@ -238,7 +240,6 @@ static void MX_DAC_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_UART4_Init(void);
 static void MX_UART5_Init(void);
-static void MX_UART7_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_SPI4_Init(void);
 static void MX_SPI3_Init(void);
@@ -249,6 +250,8 @@ static void MX_TIM4_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_UART8_Init(void);
+static void MX_UART7_Init(void);
 void StartDefaultTask(void const * argument);
 void StarLPTask(void const * argument);
 void Callback01(void const * argument);
@@ -336,7 +339,6 @@ int main(void)
   MX_I2C1_Init();
   MX_UART4_Init();
   MX_UART5_Init();
-  MX_UART7_Init();
   MX_USART3_UART_Init();
   MX_SPI4_Init();
   MX_SPI3_Init();
@@ -347,6 +349,8 @@ int main(void)
   MX_IWDG_Init();
   MX_TIM14_Init();
   MX_TIM5_Init();
+  MX_UART8_Init();
+  MX_UART7_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
@@ -1544,14 +1548,57 @@ static void MX_UART7_Init(void)
   huart7.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart7.Init.OverSampling = UART_OVERSAMPLING_16;
   huart7.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart7.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_RS485Ex_Init(&huart7, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
+  huart7.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
+  huart7.AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
+  if (HAL_UART_Init(&huart7) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN UART7_Init 2 */
-
+#ifdef LIGHTNINGBOARD2
+  huart7.Init.BaudRate = 9600;
+  if (HAL_UART_Init(&huart7) != HAL_OK)		// UART7 is console with SPlat2, GPS with LB1A
+  {
+    Error_Handler();
+  }
+#endif
   /* USER CODE END UART7_Init 2 */
+
+}
+
+/**
+  * @brief UART8 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART8_Init(void)
+{
+
+  /* USER CODE BEGIN UART8_Init 0 */
+
+  /* USER CODE END UART8_Init 0 */
+
+  /* USER CODE BEGIN UART8_Init 1 */
+
+  /* USER CODE END UART8_Init 1 */
+  huart8.Instance = UART8;
+  huart8.Init.BaudRate = 9600;
+  huart8.Init.WordLength = UART_WORDLENGTH_8B;
+  huart8.Init.StopBits = UART_STOPBITS_1;
+  huart8.Init.Parity = UART_PARITY_NONE;
+  huart8.Init.Mode = UART_MODE_RX;
+  huart8.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart8.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart8.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart8.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
+  huart8.AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
+  if (HAL_UART_Init(&huart8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART8_Init 2 */
+
+  /* USER CODE END UART8_Init 2 */
 
 }
 
@@ -1649,9 +1696,8 @@ static void MX_USART6_UART_Init(void)
   huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart6.Init.OverSampling = UART_OVERSAMPLING_16;
   huart6.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart6.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT|UART_ADVFEATURE_DMADISABLEONERROR_INIT;
+  huart6.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
   huart6.AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
-  huart6.AdvancedInit.DMADisableonRxError = UART_ADVFEATURE_DMA_DISABLEONRXERROR;
   if (HAL_UART_Init(&huart6) != HAL_OK)
   {
     Error_Handler();
@@ -1682,6 +1728,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
   /* DMA1_Stream7_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream7_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream7_IRQn);
@@ -1720,8 +1769,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|GPIO_PIN_11|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|GPIO_PIN_15
-                          |GPIO_PIN_0, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|LED_D4_Pin
@@ -1734,9 +1782,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(probe2_GPIO_Port, probe2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PE3 PE7 PE8 PE11
-                           PE13 PE1 */
+                           PE13 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_11
-                          |GPIO_PIN_13|GPIO_PIN_1;
+                          |GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -1748,9 +1796,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(USER_Btn_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PF2 PF3 PF4 PF5
-                           PF10 PF11 PF12 PF13 */
+                           PF8 PF10 PF11 PF12
+                           PF13 */
   GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13;
+                          |GPIO_PIN_8|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12
+                          |GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
@@ -1803,10 +1853,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : XBEE_DTR_Pin PE12 LP_FILT_Pin PE15
-                           PE0 */
-  GPIO_InitStruct.Pin = XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|GPIO_PIN_15
-                          |GPIO_PIN_0;
+  /*Configure GPIO pins : XBEE_DTR_Pin PE12 LP_FILT_Pin PE15 */
+  GPIO_InitStruct.Pin = XBEE_DTR_Pin|GPIO_PIN_12|LP_FILT_Pin|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -1976,7 +2024,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 // PC0 and PF5
 void getpcb() {
 	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {	// floats high on SPLAT1
-		pcb = LIGHTNINGBOARD1;
+//		pcb = LIGHTNINGBOARD1;		// prototype
+		pcb = LIGHTNINGBOARD2;		// Rev 1A
 	} else {
 		pcb = SPLATBOARD1;		// assumed
 	}
@@ -2354,7 +2403,7 @@ void StarLPTask(void const * argument)
 				statuspkt.jabcnt++;
 				printf("Jabbering: %d\n", statuspkt.trigcount - jabtrigcnt);
 				gainchanged = 0;
-				if (pgagain & 0x7 == 0) {		// gain already at zero
+				if (pgagain == 0) {		// gain is at zero (gain 1)
 					if (trigthresh < 4095)
 						trigthresh++;
 				}
@@ -2437,7 +2486,7 @@ void StarLPTask(void const * argument)
 				sprintf(gpsstr, "\"Locked: %d Sats<br>Lon: %d<br>Lat: %d\"", statuspkt.NavPvt.numSV,
 						statuspkt.NavPvt.lon, statuspkt.NavPvt.lat);
 			} else {
-				strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");
+				strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");  // for http
 			}
 
 			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore
@@ -2523,7 +2572,7 @@ void StarLPTask(void const * argument)
 			printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 					(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
 			printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
-					pgagain & 0x17, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000,
+					pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000,
 					nowtimestr);
 
 #else
@@ -2534,6 +2583,9 @@ void StarLPTask(void const * argument)
 		/**********************  Every 3 minutes   *******************************/
 		if (((onesectimer + 21) % 180 == 0) && (last3min != onesectimer)) {
 			last3min = onesectimer;	// prevent multiple calls while inside this second
+
+			if (boosttrys > 0)		// timer for boost gain oscillating
+				boosttrys--;
 			lcd_pressplot();		// add a point to the pressure plot
 		}
 

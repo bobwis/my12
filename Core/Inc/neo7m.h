@@ -118,5 +118,6 @@ extern struct netif gnetif;	// LWIP network interface status struc
 extern unsigned int gpsgood;	// GPS comms status
 extern unsigned int globalfreeze;	// freeze UDP streaming
 
+
 #endif /* NEO7M_H_ */
 

@@ -568,6 +568,10 @@ int lcd_event_process(void) {
 					printf("Successful execution\n");
 					return (0);
 					break;
+				case 0x02:
+					printf("Invalid Component ID\n");
+					return (0);
+					break;
 				default:
 					printf("Error status 0x%02x\n\r", eventbuffer[0]);
 					break;
@@ -703,15 +707,15 @@ void processnex() {		// process Nextion - called at regular intervals
 	}
 #endif
 
-	if (dimtimer > 0) {
+	if (dimtimer > 50000) {
 		dimtimer--;
-		if (dimtimer == 0) {
-			printf("Auto Dimming now\n");
-			i = lcdbright - 40;
-			if (i < 14)
-				i = 14;	// prevent black
-			setlcddim(i);
-		}
+	} else {
+		dimtimer = 60000;
+		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 2) + (lcdbright >> 4)));		// - 87.5% dim
+		if (i < 2)
+			i = 2;	// prevent black
+//		printf("Auto Dimming now %d to %d\n", lcdbright, i);
+		setlcddim(i);
 	}
 }
 
@@ -730,12 +734,12 @@ void lcd_time() {
 	strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
 	setlcdtext("t0.txt", buffer);
 
-	if (!(gpslocked)) {
-		writelcdcmd("vis t3,1");	// hide warning
+	if (gpslocked) {
+		writelcdcmd("vis t3,0");	// hide warning
 	} else {
 		sprintf(str, "AQUIRE GPS:%d", statuspkt.NavPvt.numSV);
 		setlcdtext("t3.txt", str);
-		writelcdcmd("vis t3,0");
+		writelcdcmd("vis t3,1");
 	}
 }
 
@@ -766,7 +770,7 @@ lcd_showvars() {
 		setlcdtext("t8.txt", str);
 		sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
 		setlcdtext("t7.txt", str);
-		sprintf(str, "0x%02x", pgagain & 0x17);	// gain
+		sprintf(str, "%d", pgagain);	// gain
 		setlcdtext("t6.txt", str);
 		sprintf(str, "%d", statuspkt.adcudpover);	// overuns
 		setlcdtext("t24.txt", str);
@@ -953,7 +957,7 @@ lcd_pressplot() {
 	p = p - 93000;
 	val = p / (10000 / 240);		// scale for 240 Y steps on chart
 
-	printf("pressure for LCD %d", val);
+//	printf("pressure for LCD %d", val);
 
 //	val = rand() & 0xFF;  // 0 - 255
 

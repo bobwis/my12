@@ -51,14 +51,17 @@ static double a0, b1, b2, c12;
 
 // SPI based PGA
 const uint16_t spicmdchan[] = { 0x4100 };	// set chan reg 0
-uint16_t pgagain = 0x4001;  // initial gain set
+int16_t pgagain = 0; 	 // initial gain set to 0 (gain 1)
+uint16_t boosttrys = 0;  	// N attempts at boost mode inside a time window
 
 // dual mux
 uint8_t muxdat[] = { 0x81 };		// sw1A (AMPout -> ADC) sw2D (DAC->Spker)
 uint32_t logampmode = 0;	// log amp mode flag
 
 // Programmable gain amplifier
-extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32 };		// maps from 0..7 gain control to the PGA
+
+extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
+extern const uint8_t pgaset[] = {0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
 
 //////////////////////////////////////////////
 //
@@ -106,17 +109,21 @@ void initrfswtch(void) {
 //
 // added switch for 10dB boost for gain 0x1X (uses channel B input on PGA)
 //////////////////////////////////////////////
-void setpgagain(int gain) {
+void setpgagain(int gain) {		// this takes gain 0..9
 	uint16_t pgacmd[1];
+	HAL_StatusTypeDef stat;
 
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
-	pgagain = 0x4000 | (gain & 0x07);
-	if (HAL_SPI_Transmit(&hspi2, &pgagain, 1, 1000) != HAL_OK) {	// select gain
-		printf("setpgagain: SPI Error\n");
+
+	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register
+	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
+
+	if ((stat=HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
+		printf("setpgagain: SPI Error1: %d pgacmd[0]=0x%0x\n", stat, pgacmd[0]);
 	}
 	osDelay(5);
 //printf("PGA Gain set to %d\n",pgagain & 7);
@@ -126,17 +133,21 @@ void setpgagain(int gain) {
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
 
-	pgacmd[0] = 0x4100 | ((gain & 0x10) >> 4);		// select input channel
+	if (gain > 7) {
+	pgacmd[0] = 0x4101;			// write to channel reg select ch1
+	} else {
+		pgacmd[0] = 0x4100;		// write to channel reg select ch0
+	}
+	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
 
-	if (HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000) != HAL_OK) {	// write it out
-		printf("setpgagain: SPI Error2\n");
+	if ((stat=HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
+		printf("setpgagain: SPI Error2: %d\n",stat);
 	}
 
-	pgagain = gain;
 	osDelay(5);
-	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
-//	printf("setpgagain: PGA Gain set to 0x%0x\n", pgagain);
+	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PG
 
+	pgagain = gain;		// update global gain
 }
 
 //////////////////////////////////////////////
@@ -145,53 +156,55 @@ void setpgagain(int gain) {
 //
 //////////////////////////////////////////////
 int initpga() {
+	HAL_StatusTypeDef stat;
+
 	// init spi based single ended PG Amp
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// reset the PGA seq
 	osDelay(50);
+
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
-	osDelay(50);
+	osDelay(5);
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
-	if (HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0 }, 1, 1000) != HAL_OK) {	// nop cmd
-		printf("initpga: SPI error 2\n\r");
+	if ((stat=HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0 }, 1, 1000)) != HAL_OK) {	// nop cmd
+		printf("initpga: SPI error 2: %d\n\r",stat);
 		return (1);
-	}
-	{
-		volatile int dly;
-		for (dly = 0; dly < 50; dly++)
-			;
 	}
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PG
-	osDelay(50);
+	osDelay(5);
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
-	//osDelay(5);
-	if (HAL_SPI_Transmit(&hspi2, &spicmdchan[0], 1, 1000) != HAL_OK) {	// set the channel to ch1
-		printf("initpga: SPI error 2\n\r");
+	osDelay(5);
+	if ((stat=HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0x4100 }, 1, 1000)) != HAL_OK) {	// set the channel to ch0
+		printf("initpga: SPI error 2: %d\n\r",stat);
 		return (1);
 	}
-	{
-		volatile int dly;
-		for (dly = 0; dly < 50; dly++)
-			;
-	}
-	setpgagain(1);			// 1 == gain of 2x
+	setpgagain(0);			// 0 == gain of 1x
 	return (0);
 }
 
-// bump the pga by one step
+// bump the pga by one step (up or down)
 int bumppga(int i) {
 	volatile int gain;
 
 	gain = pgagain;
 	if (!((i == 1) || (i == -1))) {
-		printf("bumppga: invalid step %d\n", i);
+//		printf("bumppga: invalid step %d\n", i);
 	}
-
+	if ((pgagain > 9) || (pgagain < 0)) {
+		printf("bumppga: invalid gain %d\n", pgagain);
+		pgagain = 0;
+	}
+	if (pgagain < 0)		// safety
+		pgagain = 0;
 	if (pcb == SPLATBOARD1) {		/// this doesn't have the boost function
-		gain = pgagain & 0x7;
+		if (pgagain > 7) {
+			pgagain = 7;			// reached max gain
+		}
+
+
 		if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
 			gain = gain + i;
 			setpgagain(gain);
@@ -199,30 +212,13 @@ int bumppga(int i) {
 		}
 	} else { // not SPLAT1
 //	printf("bumppga: req: %d, gain=%d\n", i, gain);
-
-		if (i == 1) {				// bump gain up
-			if (gain == 0x17)		// already at max gain with boost
-				return (0);
-			if (gain == 0x07)		// max pga gain so switch on boost
-				gain = 0x17;
-			else {
-				if ((gain >= 0) && (gain < 0x07))
-					gain++;
-			}
-			setpgagain(gain);
-			return (1);
+		if (pgagain > 9) {
+			pgagain = 9;			// reached max gain
 		}
-
-		else if (i == -1) {  // bump gain down by 1
-			if (gain <= 0)
-				return (0);  // already at min gain
-			if (gain & 0x10) {	// boost is on
-				gain = 0x07;	// turn it off and set max PGA gain
-			} else {
-				gain--;
-			}
+		if (!(((gain <= 0) && (i < 0)) || ((gain >= 9) && (i > 0)))) {	// there is room to change
+			gain = gain + i;
 			setpgagain(gain);
-			return (-1);
+			return (i);
 		}
 	}
 	return (0);
@@ -565,6 +561,96 @@ HAL_StatusTypeDef initpressure3115(void)	// returns 1 on bad MPL3115, 0 on good.
 	return (result);
 }
 
+////////////////////////////////////////////////////////////////////////////
+//  DS2485 1 wire bus controller
+////////////////////////////////////////////////////////////////////////////
+
+extern I2C_HandleTypeDef hi2c1;
+
+void init_ds2485(void) {
+	uint8_t data[16];
+	int i;
+	HAL_StatusTypeDef stat;
+
+//HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
+
+	printf("init_ds2485\n");
+
+	data[0] = 0xAA;		// Read status cmd
+	data[1] = 0x01;		// cmd len
+	data[2] = 0x01;		// for man id
+	if ((stat=HAL_I2C_Master_Transmit(&hi2c1, 0x40 << 1, &data[0], 3, 1000)) != HAL_OK) {	// DS2485
+		printf("I2C ds2485 HAL returned error %d\n\r",stat);
+	}
+
+	osDelay(10);
+	for (i = 0; i < 1; i++) {
+		data[i] = 0xA5 + i;
+	}
+
+//	HAL_StatusTypeDef HAL_I2C_Mem_Read	(I2C_HandleTypeDef * hi2c, uint16_t DevAddress, uint16_t MemAddress, uint16_t MemAddSize, uint8_t * pData, uint16_t	Size, uint32_t Timeout)
+
+	for (i = 0; i < 1; i++) {
+		stat = HAL_I2C_Master_Receive(&hi2c1, ((0x40 << 1) | 1), &data[0], 4, 1000);	// read ack + len + 1 bytes data
+		if (stat != HAL_OK) {
+			printf("I2C ds2485 HAL returned error %d\n\r", stat);
+		}
+	}
+
+	printf("init_ds2485: read status manid[0] = 0x%02x\n", data[0]);
+	printf("init_ds2485: read status manid[1] = 0x%02x\n", data[1]);
+	printf("init_ds2485: read status manid[2] = 0x%02x\n", data[2]);
+	printf("init_ds2485: read status manid[3] = 0x%02x\n", data[3]);
+}
+
+// read protection status
+void readp_ds2485(int b) {
+	uint8_t data[16];
+	int i;
+	HAL_StatusTypeDef stat;
+
+//HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
+
+	printf("read protection ds2485\n");
+
+	data[0] = 0xAA;		// Read status cmd
+	data[1] = 0x1;		// cmd len
+	data[2] = 0x00;		// cmd: for protection status
+	if (HAL_I2C_Master_Transmit(&hi2c1, 0x40 << 1, &data[0], 3, 1000) != HAL_OK) {	// DS2485
+		printf("I2C ds2485 tx returned error 1\n\r");
+	}
+
+	osDelay(30);
+
+//	HAL_StatusTypeDef HAL_I2C_Mem_Read	(I2C_HandleTypeDef * hi2c, uint16_t DevAddress, uint16_t MemAddress, uint16_t MemAddSize, uint8_t * pData, uint16_t	Size, uint32_t Timeout)
+// HAL_StatusTypeDef HAL_I2C_Master_Receive (I2C_HandleTypeDef * hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
+	for (i = 0; i < 1; i++) {
+		data[i] = 0x5A + i;
+	}
+
+	stat = HAL_I2C_Master_Receive(&hi2c1, ((0x40 << 1) | 1), &data[0], b, 1000);	// read ack + len + 6 bytes data
+//		stat = HAL_I2C_Mem_Read(&hi2c1, ((0x40 << 1) | 1), 0x55, 1, &data[i], b, 1000);	// read 7 byte
+	if (stat != HAL_OK) {
+		printf("I2C ds2485 rx  returned error %d\n\r", stat);
+	}
+
+	printf("init_ds2485: read status protection= ");
+	for (i = 0; i < 8; i++) {
+		printf("0x%02x ", data[i]);
+	}
+	printf("\n");
+}
+
+void test_ds2485() {
+	int d;
+
+	init_ds2485();
+	osDelay(80);
+	readp_ds2485(8);
+
+}
+
+
 //////////////////////////////////////////////
 //
 // Initialise the splat board
@@ -602,5 +688,8 @@ void initsplat(void) {
 		}
 	}
 	osDelay(500);
+	if (pcb != SPLATBOARD1) {
+		test_ds2485();
+	}
 }
 #endif

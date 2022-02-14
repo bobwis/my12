@@ -59,7 +59,7 @@ void Error_Handler(void);
 
 extern int lcdrxfull;
 extern uint32_t myip;
-extern uint16_t pgagain;
+extern int16_t pgagain;
 extern uint16_t ledsenabled, soundenabled;
 extern char udp_target[];	// dns or ip address of udp target
 
