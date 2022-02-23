@@ -39,6 +39,9 @@
 int psensor = PNONE;		// pressure sensor type
 extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart6;
+
+extern inline int cycinc(int index, int limit);
 
 // user interface
 uint16_t ledsenabled = 1, soundenabled = 1;
@@ -61,7 +64,7 @@ uint32_t logampmode = 0;	// log amp mode flag
 // Programmable gain amplifier
 
 extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
-extern const uint8_t pgaset[] = {0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
+extern const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
 
 //////////////////////////////////////////////
 //
@@ -120,9 +123,9 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 
 	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register
-	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
+//	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
 
-	if ((stat=HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
+	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
 		printf("setpgagain: SPI Error1: %d pgacmd[0]=0x%0x\n", stat, pgacmd[0]);
 	}
 	osDelay(5);
@@ -134,14 +137,14 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 
 	if (gain > 7) {
-	pgacmd[0] = 0x4101;			// write to channel reg select ch1
+		pgacmd[0] = 0x4101;			// write to channel reg select ch1
 	} else {
 		pgacmd[0] = 0x4100;		// write to channel reg select ch0
 	}
-	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
+//	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
 
-	if ((stat=HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
-		printf("setpgagain: SPI Error2: %d\n",stat);
+	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
+		printf("setpgagain: SPI Error2: %d\n", stat);
 	}
 
 	osDelay(5);
@@ -168,8 +171,8 @@ int initpga() {
 	osDelay(5);
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
-	if ((stat=HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0 }, 1, 1000)) != HAL_OK) {	// nop cmd
-		printf("initpga: SPI error 2: %d\n\r",stat);
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0 }, 1, 1000)) != HAL_OK) {	// nop cmd
+		printf("initpga: SPI error 2: %d\n\r", stat);
 		return (1);
 	}
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PG
@@ -177,8 +180,8 @@ int initpga() {
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
-	if ((stat=HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0x4100 }, 1, 1000)) != HAL_OK) {	// set the channel to ch0
-		printf("initpga: SPI error 2: %d\n\r",stat);
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0x4100 }, 1, 1000)) != HAL_OK) {	// set the channel to ch0
+		printf("initpga: SPI error 2: %d\n\r", stat);
 		return (1);
 	}
 	setpgagain(0);			// 0 == gain of 1x
@@ -203,7 +206,6 @@ int bumppga(int i) {
 		if (pgagain > 7) {
 			pgagain = 7;			// reached max gain
 		}
-
 
 		if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
 			gain = gain + i;
@@ -562,6 +564,90 @@ HAL_StatusTypeDef initpressure3115(void)	// returns 1 on bad MPL3115, 0 on good.
 }
 
 ////////////////////////////////////////////////////////////////////////////
+//  ESP32 C3-13 WiFi Hybrid
+////////////////////////////////////////////////////////////////////////////
+char espch, esprxdatabuf[96];
+static int esprxindex = 0;
+static int espoutindex = 0;
+
+void init_esp() {
+	HAL_StatusTypeDef stat;
+	int waitforoutput;
+
+	printf("init_esp32_c3_13\n");
+
+	stat = HAL_UART_Receive_DMA(&huart6, &espch, 1);		// set up RX
+	if (stat != HAL_OK) {
+		printf("init_esp: huart6 error\n");
+	}
+
+	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// put ESP into reset
+	osDelay(20);
+	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);		// make sure ESP reset is high (i.e. ESP run)
+
+	for (waitforoutput = 0; waitforoutput < 2000; waitforoutput++) {
+		printfromesp();		// try to empty anything in the buffer
+		osDelay(1);
+	}
+	osDelay(200);	// wait for prnt to finish
+	printf("\n");
+}
+
+uart6_rxdone() {
+	HAL_StatusTypeDef stat;
+	int i;
+
+	i = esprxindex;
+	esprxdatabuf[esprxindex++] = espch;
+	if (esprxindex >= sizeof(esprxdatabuf))
+		esprxindex = 0;
+	if (esprxindex == espoutindex) {	// overrun
+		printf("*** ESP RX overrun......\n");
+		esprxindex = i;
+	}
+}
+
+void esp_cmd(unsigned char *buffer) {
+	unsigned char txbuf[16];\
+	volatile int len;
+	HAL_StatusTypeDef stat;
+
+	strcpy(txbuf, buffer);
+	strcat(txbuf, "\r\n");
+	len = strlen(txbuf);
+	printf("Sending ESP: %s\n", txbuf);
+
+	stat = HAL_UART_Transmit_DMA(&huart6, &txbuf[0], len);	// send the command
+//	stat = HAL_UART_Transmit(&huart6, &txbuf[0], len, 1000);	// send the command
+	if (stat != HAL_OK) {
+		printf("esp_cmd: Tx uart6 error 0x%0x\n", stat);
+	}
+}
+
+void test_esp() {
+	static unsigned char getstatus[] = "AT+GMR";
+	HAL_StatusTypeDef stat;
+	int waitforoutput;
+
+	printf("Testing if ESP responds to command:-\n");
+	osDelay(200);
+	esp_cmd(getstatus);	// send the command
+
+	for (waitforoutput = 0; waitforoutput < 1000; waitforoutput++) {
+		printfromesp();		// try to empty anything in the buffer
+		osDelay(1);
+	}
+}
+
+printfromesp() {
+	while (espoutindex != esprxindex) {
+		putchar(esprxdatabuf[espoutindex++]);
+		if (espoutindex > sizeof(esprxdatabuf))
+			espoutindex = 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////
 //  DS2485 1 wire bus controller
 ////////////////////////////////////////////////////////////////////////////
 
@@ -579,8 +665,8 @@ void init_ds2485(void) {
 	data[0] = 0xAA;		// Read status cmd
 	data[1] = 0x01;		// cmd len
 	data[2] = 0x01;		// for man id
-	if ((stat=HAL_I2C_Master_Transmit(&hi2c1, 0x40 << 1, &data[0], 3, 1000)) != HAL_OK) {	// DS2485
-		printf("I2C ds2485 HAL returned error %d\n\r",stat);
+	if ((stat = HAL_I2C_Master_Transmit(&hi2c1, 0x40 << 1, &data[0], 3, 1000)) != HAL_OK) {	// DS2485
+		printf("I2C ds2485 HAL returned error %d\n\r", stat);
 	}
 
 	osDelay(10);
@@ -596,16 +682,17 @@ void init_ds2485(void) {
 			printf("I2C ds2485 HAL returned error %d\n\r", stat);
 		}
 	}
-
+#if 0
 	printf("init_ds2485: read status manid[0] = 0x%02x\n", data[0]);
 	printf("init_ds2485: read status manid[1] = 0x%02x\n", data[1]);
 	printf("init_ds2485: read status manid[2] = 0x%02x\n", data[2]);
 	printf("init_ds2485: read status manid[3] = 0x%02x\n", data[3]);
+#endif
 }
 
 // read protection status
 void readp_ds2485(int b) {
-	uint8_t data[16];
+	uint8_t data[12];
 	int i;
 	HAL_StatusTypeDef stat;
 
@@ -647,9 +734,7 @@ void test_ds2485() {
 	init_ds2485();
 	osDelay(80);
 	readp_ds2485(8);
-
 }
-
 
 //////////////////////////////////////////////
 //
@@ -688,8 +773,21 @@ void initsplat(void) {
 		}
 	}
 	osDelay(500);
-	if (pcb != SPLATBOARD1) {
+
+	if ((pcb == LIGHTNINGBOARD1) || (pcb == LIGHTNINGBOARD2)) {
+		huart6.Init.BaudRate = 115200;
+		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
+		{
+			Error_Handler();
+		}
+
 		test_ds2485();
+		init_esp();
+		osDelay(500);
+		test_esp();
+		osDelay(200);
 	}
+
+	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
 }
 #endif

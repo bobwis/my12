@@ -534,8 +534,8 @@ void rx() {
 #endif
 
 // init neo7
-	HAL_StatusTypeDef setupneo() {
-		HAL_StatusTypeDef stat;
+HAL_StatusTypeDef setupneo() {
+	HAL_StatusTypeDef stat;
 
 #if 0
 	// Switching receiver's serial to the wanted baudrate
@@ -550,133 +550,138 @@ void rx() {
 	}
 #endif
 
-		// set up GPS RX
-		/**
-		 * @brief Receive an amount of data in DMA mode.
-		 * @param huart: UART handle.
-		 * @param pData: pointer to data buffer.
-		 * @param Size: amount of data to be received.
-		 * @note   When the UART parity is enabled (PCE = 1), the received data contain
-		 *         the parity bit (MSB position).
-		 * @retval HAL status
-		 */
-		if (pcb == LIGHTNINGBOARD2) {
-			gpsuartrx = huart8;
-			gpsuarttx = huart7;
-			GPSUARTRX = UART8;
-		} else {
-			gpsuartrx = huart6;
-			gpsuarttx = huart6;
-			GPSUARTRX = USART6;
+	if (pcb == LIGHTNINGBOARD2) {
+		huart7.Init.BaudRate = 9600;
+		if (HAL_UART_Init(&huart7) != HAL_OK)		// UART7 is console with Splat2, GPS with LB1A,B AKA LB2
+		{
+			Error_Handler();
 		}
-		stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+		gpsuartrx = huart8;
+		gpsuarttx = huart7;
+		GPSUARTRX = UART8;
+	}
+	else			// Splat1 or Lightningboard 1 prototype
+	{
+		gpsuartrx = huart6;
+		gpsuarttx = huart6;
+		GPSUARTRX = USART6;
+	}
 
-		if (stat != HAL_OK) {
-			printf("Err HAL_UART_Receive_DMA1 %d usart6/8\n", stat);
-			return (stat);
-		}
+	// set up GPS RX
+	/**
+	 * @brief Receive an amount of data in DMA mode.
+	 * @param huart: UART handle.
+	 * @param pData: pointer to data buffer.
+	 * @param Size: amount of data to be received.
+	 * @note   When the UART parity is enabled (PCE = 1), the received data contain
+	 *         the parity bit (MSB position).
+	 * @retval HAL status
+	 */
 
-		// Disabling NMEA messages by sending appropriate packets
+	stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+
+	if (stat != HAL_OK) {
+		printf("Err HAL_UART_Receive_DMA1 %d usart6/8\n", stat);
+		return (stat);
+	}
+
+	// Disabling NMEA messages by sending appropriate packets
 //		printf("Disabling NMEA messages...\n\r");
-		disableNmea();
-		osDelay(500);
+	disableNmea();
+	osDelay(500);
 
-		// is there a device - what is it running?
-		askneo_ver();
-		osDelay(500);
+	// is there a device - what is it running?
+	askneo_ver();
+	osDelay(500);
 
-		restoreDefaults();
-		osDelay(1500);
+	restoreDefaults();
+	osDelay(1500);
 
-		// 	Set reporting frequency to 1 Sec
-		printf("NEO: Changing receiving frequency to 1 Sec...\n\r");
+	// 	Set reporting frequency to 1 Sec
+	printf("NEO: Changing receiving frequency to 1 Sec...\n\r");
 
-		changeFrequency();
-		osDelay(500);
+	changeFrequency();
+	osDelay(500);
 
-		//rx();		// debugging
+	//rx();		// debugging
 
-		// Disabling unnecessary channels like SBAS or QZSS
-		printf("NEO: Disabling unnecessary channels...\r\n");
-		disableUnnecessaryChannels();
-		osDelay(500);
+	// Disabling unnecessary channels like SBAS or QZSS
+	printf("NEO: Disabling unnecessary channels...\r\n");
+	disableUnnecessaryChannels();
+	osDelay(500);
 
-		// Enabling NAV-PVT messages
-		printf("NEO: Enabling NAV-PVT messages...\n\r");
-		enableNavPvt();
-		osDelay(500);
+	// Enabling NAV-PVT messages
+	printf("NEO: Enabling NAV-PVT messages...\n\r");
+	enableNavPvt();
+	osDelay(500);
 
 // Enable Time pulse
-		enableNaTP5();
-		osDelay(500);
+	enableNaTP5();
+	osDelay(500);
 
-		statuspkt.NavPvt.flags = 0;		// make sure gps not showing as locked
-		printf("NEO: Auto-configuration is complete\n\r");
+	statuspkt.NavPvt.flags = 0;		// make sure gps not showing as locked
+	printf("NEO: Auto-configuration is complete\n\r");
 
 #if 0
 	// this is not needed
-	stat = HAL_UART_Receive_DMA(&huart6, rxdatabuf, 1);		// zzz redundant
+	stat = HAL_UART_Receive_DMA(&gpsuartrx rxdatabuf, 1);		// zzz redundant
 	if (stat != HAL_OK) {
 		printf("Err HAL_UART_Receive_DMA2 %d usart6/8\n", stat);
 	}
 #endif
 //		fastdelay_ms(100); // Little delay before flushing
-		return (stat);
-	}
+	return (stat);
+}
 
-	void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-		const unsigned char offset = 6;
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	const unsigned char offset = 6;
 //	unsigned char data;
-		volatile HAL_StatusTypeDef stat;
-		int len;
+	volatile HAL_StatusTypeDef stat;
+	int len;
 
 //	printf("USART6 RxCpl");
-		if (huart->Instance == GPSUARTRX) { //our UART
+	if (huart->Instance == GPSUARTRX) { //our UART
+		data = rxdatabuf[0];
+		flag = 1;
 
-			data = rxdatabuf[0];
-			flag = 1;
-#if 0
-		stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+		if ((len = IsPacketReady(data)) > 0) {
+			switch (len) {
+			case 84:				// NAV Packet
 
-		if (stat != HAL_OK) {
-//			printf("Err HAL_UART_Receive3 %d usart6\/7n", stat);
-			__HAL_UART_CLEAR_FEFLAG(huart);
-			__HAL_UART_CLEAR_NEFLAG(huart);
-			__HAL_UART_CLEAR_OREFLAG(huart);
-			__HAL_UART_CLEAR_PEFLAG(huart);
-			stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);		// redundant ??
-		}
-#endif
-			if ((len = IsPacketReady(data)) > 0) {
-				switch (len) {
-				case 84:				// NAV Packet
-
-					for (unsigned int i = offset; i < sizeof(statuspkt.NavPvt); i++) {
-						*((char*) (&(statuspkt.NavPvt)) + (i - offset)) = PACKETstore[i]; // copy into global struct
-					}
-					statuspkt.epochsecs = calcepoch32(); // should not be needed if our 1 sec timer was accurate, also dbg desyncs this
-//printf("*%d ",statuspkt.epochsecs % 60);
-					if (statuspkt.NavPvt.flags & 1) { // locked
-						gpslocked = 1;
-					} else
-						gpslocked = 0;
-					break;
-				case 100:		// assume MON_VER status response
-					printf("NEO Reports versions: sw=%s, hw=%s, ext=%s\n", &PACKETstore[6], &PACKETstore[36],
-							&PACKETstore[46]);
-					break;
-				default:
-					printPacket("***** GPS: Unknown pkt Rx", PACKETstore, len);
-					break;
+				for (unsigned int i = offset; i < sizeof(statuspkt.NavPvt); i++) {
+					*((char*) (&(statuspkt.NavPvt)) + (i - offset)) = PACKETstore[i]; // copy into global struct
 				}
+				statuspkt.epochsecs = calcepoch32(); // should not be needed if our 1 sec timer was accurate, also dbg desyncs this
+//printf("*%d ",statuspkt.epochsecs % 60);
+				if (statuspkt.NavPvt.flags & 1) { // locked
+					gpslocked = 1;
+				} else
+					gpslocked = 0;
+				break;
+			case 100:		// assume MON_VER status response
+				printf("NEO Reports versions: sw=%s, hw=%s, ext=%s\n", &PACKETstore[6], &PACKETstore[36],
+						&PACKETstore[46]);
+				break;
+			default:
+				printPacket("***** GPS: Unknown pkt Rx", PACKETstore, len);
+				break;
 			}
-		} else {
-			if (huart->Instance == UART5) {
-				uart5_rxdone();
-			} else
-				printf("USART unknown uart int\n");
 		}
+		return;
 	}
+
+	if (huart->Instance == UART5) {
+		uart5_rxdone();
+		return;
+	}
+
+	if (huart->Instance == USART6) {
+		uart6_rxdone();
+		return;
+	}
+
+	printf("USART unknown uart int\n");
+}
 
 #if 0
 // error codes for memory
@@ -688,46 +693,56 @@ void rx() {
 #define  HAL_UART_ERROR_DMA              ((uint32_t)0x00000010U)    /*!< DMA transfer error      */
 #define  HAL_UART_ERROR_RTO              ((uint32_t)0x00000020U)    /*!< Receiver Timeout error  */
 #endif
-	HAL_UART_ErrorCallback(UART_HandleTypeDef * huart)
-	{
-		HAL_StatusTypeDef stat;
-		uint8_t ch;
-		volatile uint32_t reg;
+HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+	HAL_StatusTypeDef stat;
+	uint8_t ch;
+	int error;
+	volatile uint32_t reg;
 
-		// whatever the error try to clear it blindly
+	// whatever the error try to clear it blindly
+	__HAL_UART_CLEAR_FEFLAG(huart);
+	__HAL_UART_CLEAR_NEFLAG(huart);
+	__HAL_UART_CLEAR_OREFLAG(huart);
+	__HAL_UART_CLEAR_PEFLAG(huart);
+
+	if (huart->Instance == GPSUARTRX) { 		// GPS  UART
+
+		printf("GPS UART_Err Callback %0lx, ", huart->ErrorCode);
+		// restart
+		stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+		if ((stat != HAL_OK) && (stat != HAL_BUSY)) {
+			printf("Err HAL_UART_Receive_DMA usart6/8 stat=%d\n", stat);
+		}
+
+		return;
+	}
+
+	if (huart->Instance == UART5) { 			//LCD UART
+		if (!(lcd_initflag)) {
+
+			lcduart_error = huart->ErrorCode;
+//		printf("LCD UART_Err Callback %0lx ", huart->ErrorCode);
+			if (UART5->ISR & USART_ISR_ORE) // Overrun Error
+				UART5->ICR = USART_ICR_ORECF;
+
+			if (UART5->ISR & USART_ISR_NE) // Noise Error
+				UART5->ICR = USART_ICR_NCF;
+
+			if (UART5->ISR & USART_ISR_FE) // Framing Error
+				UART5->ICR = USART_ICR_FECF;
+		}
+		return;
+	}
+
+	if (huart->Instance == USART6) { 			//ESP UART
+		error = huart->ErrorCode;
+		printf("HAL_UART_ErrorCallback: USART6 error=0x%x\n", error);
 		__HAL_UART_CLEAR_FEFLAG(huart);
 		__HAL_UART_CLEAR_NEFLAG(huart);
 		__HAL_UART_CLEAR_OREFLAG(huart);
 		__HAL_UART_CLEAR_PEFLAG(huart);
-
-		if (huart->Instance == GPSUARTRX) { 		// GPS  UART
-
-			printf("GPS UART_Err Callback %0lx, ", huart->ErrorCode);
-			// restart
-			stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
-			if ((stat != HAL_OK) && (stat != HAL_BUSY)) {
-				printf("Err HAL_UART_Receive_DMA usart6/8 stat=%d\n", stat);
-			}
-
-			return;
-		}
-
-		if (huart->Instance == UART5) { 			//LCD UART
-			if (!(lcd_initflag)) {
-
-				lcduart_error = huart->ErrorCode;
-//		printf("LCD UART_Err Callback %0lx ", huart->ErrorCode);
-				if (UART5->ISR & USART_ISR_ORE) // Overrun Error
-					UART5->ICR = USART_ICR_ORECF;
-
-				if (UART5->ISR & USART_ISR_NE) // Noise Error
-					UART5->ICR = USART_ICR_NCF;
-
-				if (UART5->ISR & USART_ISR_FE) // Framing Error
-					UART5->ICR = USART_ICR_FECF;
-			}
-			return;
-		}
+		return;
+	}
 
 #if 0
 #define  HAL_UART_ERROR_NONE       ((uint32_t)0x00000000U)    /*!< No error            */
@@ -737,13 +752,13 @@ void rx() {
 #define  HAL_UART_ERROR_ORE        ((uint32_t)0x00000008U)    /*!< Overrun error       */
 #define  HAL_UART_ERROR_DMA        ((uint32_t)0x00000010U)    /*!< DMA transfer error  */
 #endif
-	}
+}
 
-	void neotime() {
-		static int oldsec = 0;
+void neotime() {
+	static int oldsec = 0;
 
-		if (statuspkt.NavPvt.sec != oldsec) {
-			oldsec = statuspkt.NavPvt.sec;
-			printf("sec: %02d\n", oldsec);
-		}
+	if (statuspkt.NavPvt.sec != oldsec) {
+		oldsec = statuspkt.NavPvt.sec;
+		printf("sec: %02d\n", oldsec);
 	}
+}

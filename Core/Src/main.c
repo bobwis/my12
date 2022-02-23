@@ -190,6 +190,7 @@ DMA_HandleTypeDef hdma_uart5_rx;
 DMA_HandleTypeDef hdma_uart5_tx;
 DMA_HandleTypeDef hdma_uart8_rx;
 DMA_HandleTypeDef hdma_usart6_rx;
+DMA_HandleTypeDef hdma_usart6_tx;
 
 osThreadId defaultTaskHandle;
 osThreadId LPTaskHandle;
@@ -1555,13 +1556,7 @@ static void MX_UART7_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART7_Init 2 */
-#ifdef LIGHTNINGBOARD2
-  huart7.Init.BaudRate = 9600;
-  if (HAL_UART_Init(&huart7) != HAL_OK)		// UART7 is console with SPlat2, GPS with LB1A
-  {
-    Error_Handler();
-  }
-#endif
+
   /* USER CODE END UART7_Init 2 */
 
 }
@@ -1740,6 +1735,9 @@ static void MX_DMA_Init(void)
   /* DMA2_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
+  /* DMA2_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
 
 }
 
@@ -2023,9 +2021,9 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 // try to figure out what PCB is connected to the STM
 // PC0 and PF5
 void getpcb() {
-	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {	// floats high on SPLAT1
+	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {	// floats high on SPLAT1, so this must be a lightningboard
 //		pcb = LIGHTNINGBOARD1;		// prototype
-		pcb = LIGHTNINGBOARD2;		// Rev 1A
+		pcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
 	} else {
 		pcb = SPLATBOARD1;		// assumed
 	}
@@ -2062,8 +2060,8 @@ void StartDefaultTask(void const * argument)
 	getpcb();		// find our daughterboard
 	printf("\n\n----------------------------------------------------------------------------\n");
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
-			STM32_UUID[2],
-			MAJORVERSION, MINORVERSION, BUILDNO, pcb);
+	STM32_UUID[2],
+	MAJORVERSION, MINORVERSION, BUILDNO, pcb);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
 	if (!(netif_is_link_up(&gnetif))) {
@@ -2128,7 +2126,9 @@ printf("*** TESTING BUILD USED ***\n");
 	}
 
 #ifdef SPLAT1
+
 	initsplat();
+
 #endif
 	printf("Setting up timers\n");
 
@@ -2267,7 +2267,6 @@ void StarLPTask(void const * argument)
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
-
 #endif
 	i = 0;
 	while (main_init_done == 0) { // wait from main to complete the init {
@@ -2571,8 +2570,8 @@ void StarLPTask(void const * argument)
 
 			printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 					(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
-			printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
-					pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000,
+			printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n",
+					trigs, pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000,
 					nowtimestr);
 
 #else

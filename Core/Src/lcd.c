@@ -64,14 +64,14 @@ static unsigned char trigvec[LCDXPIXELS] = { 0 }, noisevec[LCDXPIXELS] = { 0 };
 static unsigned char pressvec[LCDXPIXELS] = { 0 };
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
 
-int cycinc(int index, int limit) {
+inline int cycinc(int index, int limit) {
 	if (++index >= limit)
 		return (0);
 	else
 		return (index);
 }
 
-int cycdec(int index, int limit) {
+inline int cycdec(int index, int limit) {
 	if (--index < 0)
 		return (limit - 1);
 	else

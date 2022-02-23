@@ -72,6 +72,7 @@ void DMA2_Stream1_IRQHandler(void);
 void DMA2_Stream4_IRQHandler(void);
 void ETH_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
+void DMA2_Stream6_IRQHandler(void);
 void USART6_IRQHandler(void);
 void FPU_IRQHandler(void);
 void UART8_IRQHandler(void);
