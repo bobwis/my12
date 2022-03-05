@@ -260,7 +260,7 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 				if (p1 == 1) {		// reboot
 					printf("Server -> commands a reboot...\n");
 					osDelay(2000);
-					rebootme();
+					rebootme(6);
 				}
 
 				if (p1 == 2) {		// freeze the UDP streaming
@@ -306,7 +306,7 @@ void httpclient(char Page[64]) {
 
 	err = dnslookup(SERVER_DESTINATION, &remoteip);		// find serial number and udp target IP address
 	if (err != ERR_OK)
-		rebootme();
+		rebootme(7);
 	ip = remoteip.addr;
 	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
@@ -336,7 +336,7 @@ void initialapisn() {
 		i++;
 		if (i > 10) {
 			printf("************* ABORTED **************\n");
-			rebootme();
+			rebootme(8);
 		}
 	}
 }

@@ -178,7 +178,7 @@ uint32_t locateudp()		// called from LPtask every n seconds
 	printf("Finding %s for UDP streaming\n", udp_target);
 	err = dnslookup(udp_target, &udpdestip);
 	if (err)
-		rebootme();
+		rebootme(3);
 
 	ip = udpdestip.addr;
 	sprintf(udp_ips, "%lu.%lu.%lu.%lu", ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);

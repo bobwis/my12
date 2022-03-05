@@ -28,7 +28,7 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10022
+#define BUILD 10024
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -57,7 +57,7 @@
 #endif
 
 #ifndef TESTING
-#if 0
+#if 1
 #define HARDWARE_WATCHDOG 1
 #endif
 #endif

@@ -52,6 +52,7 @@ static const unsigned char UBXGPS_HEADER2[] = { 0xB5, 0x62, 0x0a, 0x04 };
 unsigned char PACKETstore[128];  //TODO, whats the max size of packet?
 
 int flag = 0;
+int neoispresent = 0;		// result of 1st polling
 uint8_t data;
 
 unsigned char lastGoodPacket[92];
@@ -536,6 +537,7 @@ void rx() {
 // init neo7
 HAL_StatusTypeDef setupneo() {
 	HAL_StatusTypeDef stat;
+	int i;
 
 #if 0
 	// Switching receiver's serial to the wanted baudrate
@@ -551,6 +553,8 @@ HAL_StatusTypeDef setupneo() {
 #endif
 
 	if (pcb == LIGHTNINGBOARD2) {
+		HAL_UART_Abort_IT(&huart7);
+		HAL_UART_DeInit(&huart7);
 		huart7.Init.BaudRate = 9600;
 		if (HAL_UART_Init(&huart7) != HAL_OK)		// UART7 is console with Splat2, GPS with LB1A,B AKA LB2
 		{
@@ -592,7 +596,17 @@ HAL_StatusTypeDef setupneo() {
 
 	// is there a device - what is it running?
 	askneo_ver();
-	osDelay(500);
+	i = 0;
+	while ((i < 1000 ) && (neoispresent == 0)) {
+		i++;
+		osDelay(1);
+	}
+
+	if (i >= 1000) {
+		printf("***** Neo7m is not responding.....rebooting\n");
+		osDelay(200);
+		rebootme(2);
+	}
 
 	restoreDefaults();
 	osDelay(1500);
@@ -661,6 +675,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 			case 100:		// assume MON_VER status response
 				printf("NEO Reports versions: sw=%s, hw=%s, ext=%s\n", &PACKETstore[6], &PACKETstore[36],
 						&PACKETstore[46]);
+				neoispresent = 1;
 				break;
 			default:
 				printPacket("***** GPS: Unknown pkt Rx", PACKETstore, len);

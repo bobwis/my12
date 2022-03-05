@@ -1911,10 +1911,63 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void rebootme() {
+err_leds(int why) {
+	volatile int i;
+
+	for (;;) {
+		switch (why) {
+		case 0:
+			break;
+		case 1:			// LAN disconnected
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			break;
+		case 2:		// GPS not found
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
+			break;
+		case 3:		// udp target not found
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D4_Pin);
+			break;
+		case 4:		// system crash - task exited
+			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
+			break;
+		case 5:			// GPS stopped responding
+			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D4_Pin);
+			break;
+		case 6:			// server commanded a reboot
+			HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D4_Pin);
+			break;
+		case 7:			// server lookup failed
+			HAL_GPIO_TogglePin(GPIOD, LED_D4_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D5_Pin);
+			break;
+		case 8:			// serial number and udp target lookup failed
+			HAL_GPIO_TogglePin(GPIOD, LED_D5_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+			break;
+		}
+		for (i = 0; i < 3500000; i++)
+			;
+	}
+}
+
+void rebootme(int why) {
+	volatile unsigned int i;
+
 	while (1) {
-		osDelay(2000);
+#ifdef HARDWARE_WATCHDOG
+		__disable_irq();			// mask all interrupts
+		err_leds(why);
+#else
+		err_leds(why);
+		osDelay(6000);
 		__NVIC_SystemReset();   // reboot
+#endif
 	}
 }
 
@@ -1949,7 +2002,7 @@ void netif_link_callbk_fn(struct netif *netif) {
 		if (!(netif_is_link_up(netif))) {
 #ifndef TESTING
 			printf("LAN interface appears disconnected, rebooting...\n");
-			rebootme();
+			rebootme(1);
 #endif
 		}
 	}
@@ -2021,7 +2074,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 // try to figure out what PCB is connected to the STM
 // PC0 and PF5
 void getpcb() {
-	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {	// floats high on SPLAT1, so this must be a lightningboard
+	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
 //		pcb = LIGHTNINGBOARD1;		// prototype
 		pcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
 	} else {
@@ -2074,7 +2127,7 @@ void StartDefaultTask(void const * argument)
 		}
 #ifndef TESTING
 		printf("************* REBOOTING **************\n");
-		rebootme();
+		rebootme(0);
 #endif
 	}
 
@@ -2120,16 +2173,15 @@ printf("*** TESTING BUILD USED ***\n");
 //		testeeprom();
 #endif
 
+#ifdef SPLAT1
+	initsplat();
+#endif
+
 	stat = setupneo();
 	if (stat != HAL_OK) {
 		printf("Neo7 setup returned HAL error\n\r");	// but don't reboot
 	}
 
-#ifdef SPLAT1
-
-	initsplat();
-
-#endif
 	printf("Setting up timers\n");
 
 	if ( xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
@@ -2213,7 +2265,7 @@ printf("*** TESTING BUILD USED ***\n");
 	while (1) {	//
 		startudp(uip);	// should never return
 		printf("UDP stream exited!!!\n\r");
-		rebootme();
+		rebootme(4);
 	}
 
   /* USER CODE END 5 */
@@ -2230,6 +2282,7 @@ void StarLPTask(void const * argument)
 {
   /* USER CODE BEGIN StarLPTask */
 	static uint32_t lastpretrigcnt, trigs = 0;
+	static int gpsbadcount = 0;
 	uint32_t ip, reqtimer = 8000;
 	uint16_t tenmstimer = 0;
 	uint16_t onesectimer = 0;
@@ -2554,7 +2607,13 @@ void StarLPTask(void const * argument)
 
 			if (gpsgood == 0) {	// gps is not talking to us
 				printf("GPS serial comms problem?\n");
-			}
+				if (gpsbadcount++ > 9) {
+					printf("GPS bad - rebooting...\n");
+					osDelay(3000);
+					rebootme(5);
+				}
+			} else
+				gpsbadcount = 0;
 			gpsgood = 0;			// reset the good flag
 
 #ifdef SPLAT1
