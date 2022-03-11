@@ -695,6 +695,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		return;
 	}
 
+	if (huart->Instance == USART2) {
+		uart2_rxdone();
+		return;
+	}
+
 	printf("USART unknown uart int\n");
 }
 

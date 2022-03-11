@@ -45,6 +45,7 @@
 #include "dhcp.h"
 #include "splat1.h"
 #include "lcd.h"
+#include <queue.h>
 
 //#define netif_dhcp_data(netif) ((struct dhcp*)netif_get_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP))
 
@@ -215,6 +216,8 @@ char gpsstr[64] = { "\"No GPS data\"" };
 uint16_t agc = 1;	// agc enable > 0
 uint32_t myip;
 uint32_t uip;		// udp target
+QueueHandle_t consolerxq;
+unsigned char  con_ch;	// console uart input char
 
 //char snstr[4] = {"No"};
 //char statstr[4] = {"No"};
@@ -2278,6 +2281,7 @@ printf("*** TESTING BUILD USED ***\n");
  * @retval None
  */
 /* USER CODE END Header_StarLPTask */
+
 void StarLPTask(void const * argument)
 {
   /* USER CODE BEGIN StarLPTask */
@@ -2291,10 +2295,20 @@ void StarLPTask(void const * argument)
 	uint32_t lasttrigcount = 0;
 	int16_t gainchanged;
 	int last3min = 0;
+	unsigned char inch;
+
 
 	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
 	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
+
+	consolerxq = xQueueCreate( 80, sizeof( unsigned char ) );		// set up a console rx buffer
+	if (consolerxq == NULL) {
+		printf("Console Rx Queue not created... rebooting...\n");
+		rebootme(0);
+	}
+
+HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
 #ifdef SPLAT1
 	lcduart_error = HAL_UART_ERROR_NONE;
@@ -2371,6 +2385,8 @@ void StarLPTask(void const * argument)
 // timer 4 used to generate audio monotone to splat speaker, but PCB fault prevents it working
 //HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// HAL_TIM_OC_Start (TIM_HandleTypeDef* htim, uint32_t Channel)
 
+
+
 	lptask_init_done = 1;		// this lp task has done its initialisation
 
 	for (;;) {							// The Low Priority Task forever loop
@@ -2383,6 +2399,28 @@ void StarLPTask(void const * argument)
 		tenmstimer++;
 		globaladcnoise = abs(meanwindiff);
 		pretrigthresh = 4 + (globaladcnoise >> 7);		// set the pretrigger level
+
+		while (xQueueReceive(consolerxq, &inch, 0)) {
+			if (inch == 0x03)	{		// control C
+				agc = (agc) ? 0 : 1;
+				printf("AGC is ");
+				if (agc)
+					printf("ON\n");
+				else
+					printf("OFF\n");
+			}
+			if ((isdigit(inch)) && (agc == 0)) {
+				setpgagain(inch - '0');
+				printf("Manually setting PGA gain to %c\n", inch);
+
+			}
+			else
+			{
+			__io_putchar(inch); // putchar(inch);	// echo console rx to tx
+			}
+		}
+
+
 
 #ifdef SPLAT1
 		if (!(ledsenabled)) {
@@ -2656,6 +2694,14 @@ void StarLPTask(void const * argument)
 
   /* USER CODE END StarLPTask */
 }
+
+// console Rx char
+uart2_rxdone() {
+
+	xQueueSendToBackFromISR(consolerxq, &con_ch, NULL);
+	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
+}
+
 
 /* Callback01 function */
 void Callback01(void const * argument)
