@@ -63,8 +63,8 @@ uint32_t logampmode = 0;	// log amp mode flag
 
 // Programmable gain amplifier
 
-extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
-extern const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
+const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
+const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
 
 //////////////////////////////////////////////
 //
@@ -639,7 +639,7 @@ void test_esp() {
 	}
 }
 
-printfromesp() {
+void printfromesp() {
 	while (espoutindex != esprxindex) {
 		putchar(esprxdatabuf[espoutindex++]);
 		if (espoutindex > sizeof(esprxdatabuf))

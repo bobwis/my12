@@ -31,8 +31,6 @@
 #define LCD_GOTRX 6
 #define LCDXPIXELS 480
 
-static int lcd_state = LCD_IDLE;	// state variable
-
 uint8_t lcdrxbuffer[LCDRXBUFSIZE] = { "" };
 uint8_t dmarxbuffer[DMARXBUFSIZE] = { "" };
 
@@ -752,7 +750,7 @@ void lcd_date() {
 }
 
 // populate the page2 vars
-lcd_showvars() {
+void lcd_showvars() {
 	unsigned char str[96];
 	unsigned long board;
 	static uint16_t toggle = 0;
@@ -809,7 +807,7 @@ lcd_showvars() {
 }
 
 // display / refresh  the entire trigger and noise chart
-lcd_trigcharts() {
+void lcd_trigcharts() {
 	int i, buffi;
 	unsigned char str[32];
 
@@ -855,7 +853,7 @@ for (i=0; i<LCDXPIXELS; i++) {
 // called at regular intervals to add a point to the display
 // update lcd trigger and noise plot memory,
 // the page display may not be showing  ( 120 pix height)
-lcd_trigplot() {
+void lcd_trigplot() {
 	int val;
 	static uint32_t lasttrig;
 	unsigned char str[32];
@@ -909,7 +907,7 @@ lcd_trigplot() {
 
 /// PRESSURE //////////////
 // display / refresh  the entire pressure chart
-lcd_presscharts() {
+void lcd_presscharts() {
 	int i, buffi;
 	unsigned char str[32];
 
@@ -941,7 +939,7 @@ lcd_presscharts() {
 // called at regular intervals to add a point to the display
 // update lcd pressure memory,
 // the page display may not be showing  (240 pix height)
-lcd_pressplot() {
+void lcd_pressplot() {
 	volatile int p, pf, val;
 	unsigned char str[32];
 

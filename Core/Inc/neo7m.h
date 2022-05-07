@@ -9,6 +9,7 @@
 #define NEO7M_H_
 
 #include "stm32f7xx_hal.h"
+#include <time.h>
 
 /*
  * neo7m.h
@@ -28,7 +29,7 @@
 
 //const unsigned char UBXGPS_HEADER[] = { 0xB5, 0x62 };
 
-struct statpkt {
+extern struct statpkt {
 	uint32_t udppknum;		// udp packet sent index (24 bits, other 8 bits are packet type)
 
 	struct UbxGpsNavPvt {
@@ -86,13 +87,13 @@ struct statpkt {
 	uint32_t epochsecs;
 	//  bconf is board configuration
 	// bits 0..2 are Splat revision present (0 == no Spalt board fitted)
-	// bits 3..4 are Poressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
+	// bits 3..4 are Pressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
 	uint32_t bconf;			// the board configuration
 	uint32_t reserved2;
 	uint32_t telltale1;		// end of packet marker
+} __attribute__((aligned(4),packed))  volatile statuspkt;
 
-}volatile statuspkt;
-__attribute__((aligned(4),packed)) CHALLENGE;
+//extern __attribute__((aligned(4),packed)) CHALLENGE;
 
 extern uint8_t gpslocked;		// Gps locked flag;
 extern uint8_t epochvalid;		// have we have worked out the epoch seconds?;
@@ -117,7 +118,7 @@ extern struct netif gnetif;	// LWIP network interface status struc
 
 extern unsigned int gpsgood;	// GPS comms status
 extern unsigned int globalfreeze;	// freeze UDP streaming
-
+extern unsigned int pcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
 
 #endif /* NEO7M_H_ */
 

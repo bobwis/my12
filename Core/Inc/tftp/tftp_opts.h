@@ -1,3 +1,13 @@
+/*
+ * tftp_opts.h
+ *
+ *  Created on: 4 May 2022
+ *      Author: bob
+ */
+
+#ifndef INC_TFTP_TFTP_OPTS_H_
+#define INC_TFTP_TFTP_OPTS_H_
+
 /**
  *
  * @file tftp_opts.h
@@ -11,7 +21,7 @@
  *
  */
 
-/* 
+/*
  * Redistribution and use in source and binary forms, with or without
  * modification,are permitted provided that the following conditions are met:
  *
@@ -96,11 +106,14 @@
  * Max. length of TFTP mode
  */
 #if !defined TFTP_MAX_MODE_LEN || defined __DOXYGEN__
-#define TFTP_MAX_MODE_LEN     7
+#define TFTP_MAX_MODE_LEN     10
 #endif
 
 /**
  * @}
  */
 
+
 #endif /* LWIP_HDR_APPS_TFTP_OPTS_H */
+
+#endif /* INC_TFTP_TFTP_OPTS_H_ */

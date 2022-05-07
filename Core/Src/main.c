@@ -139,6 +139,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 		64, 49, 50 };
 
 const unsigned int phaser_wav_len = 1792;
+unsigned int pcb;
 
 /* USER CODE END PD */
 
@@ -2233,6 +2234,12 @@ printf("*** TESTING BUILD USED ***\n");
 	ip_addr_t ip = { 0 };
 	ip = dhcp->offered_ip_addr;
 	myip = ip.addr;
+	if (myip ==  0) {
+		printf("***** DHCP Failed ******\n");
+		osDelay(200);
+		rebootme(1);
+	}
+
 	printf("*****************************************\n");
 	printf("This unit's IP address is %d:%d:%d:%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
 			(myip & 0xFF000000) >> 24);
@@ -2301,6 +2308,7 @@ void StarLPTask(void const * argument)
 	statuspkt.adcudpover = 0;		// debug use count overruns
 	statuspkt.trigcount = 0;		// debug use adc trigger count
 	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
+	gainchanged = 0;
 
 	consolerxq = xQueueCreate( 80, sizeof( unsigned char ) );		// set up a console rx buffer
 	if (consolerxq == NULL) {
@@ -2385,7 +2393,7 @@ HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 // timer 4 used to generate audio monotone to splat speaker, but PCB fault prevents it working
 //HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// HAL_TIM_OC_Start (TIM_HandleTypeDef* htim, uint32_t Channel)
 
-
+	tftp_example_init_client();
 
 	lptask_init_done = 1;		// this lp task has done its initialisation
 
@@ -2696,7 +2704,7 @@ HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 }
 
 // console Rx char
-uart2_rxdone() {
+void uart2_rxdone() {
 
 	xQueueSendToBackFromISR(consolerxq, &con_ch, NULL);
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
@@ -2722,7 +2730,6 @@ void Callback01(void const * argument)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-	static int counter = 0;
 
 #ifdef configGENERATE_RUN_TIME_STATS
 

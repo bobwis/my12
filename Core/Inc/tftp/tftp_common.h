@@ -1,6 +1,16 @@
+/*
+ * tftp_common.h
+ *
+ *  Created on: 4 May 2022
+ *      Author: bob
+ */
+
+#ifndef INC_TFTP_TFTP_COMMON_H_
+#define INC_TFTP_TFTP_COMMON_H_
+
 /**
  *
- * @file tftp_server.h
+ * @file tftp_common.h
  *
  * @author   Logan Gunthorpe <logang@deltatee.com>
  *
@@ -11,7 +21,7 @@
  *
  */
 
-/* 
+/*
  * Redistribution and use in source and binary forms, with or without
  * modification,are permitted provided that the following conditions are met:
  *
@@ -38,12 +48,13 @@
  *
  */
 
-#ifndef LWIP_HDR_APPS_TFTP_SERVER_H
-#define LWIP_HDR_APPS_TFTP_SERVER_H
+#ifndef LWIP_HDR_APPS_TFTP_COMMON_H
+#define LWIP_HDR_APPS_TFTP_COMMON_H
 
-#include "lwip/apps/tftp_opts.h"
+#include "tftp/tftp_opts.h"
 #include "lwip/err.h"
 #include "lwip/pbuf.h"
+#include "lwip/ip_addr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,7 +65,7 @@ extern "C" {
  */
 struct tftp_context {
   /**
-   * Open file for read/write.
+   * Open file for read/write (server mode only).
    * @param fname Filename
    * @param mode Mode string from TFTP RFC 1350 (netascii, octet, mail)
    * @param write Flag indicating read (0) or write (!= 0) access
@@ -63,12 +74,12 @@ struct tftp_context {
   void* (*open)(const char* fname, const char* mode, u8_t write);
   /**
    * Close file handle
-   * @param handle File handle returned by open()
+   * @param handle File handle returned by open()/tftp_put()/tftp_get()
    */
   void (*close)(void* handle);
   /**
-   * Read from file 
-   * @param handle File handle returned by open()
+   * Read from file
+   * @param handle File handle returned by open()/tftp_put()/tftp_get()
    * @param buf Target buffer to copy read data to
    * @param bytes Number of bytes to copy to buf
    * @returns &gt;= 0: Success; &lt; 0: Error
@@ -76,20 +87,34 @@ struct tftp_context {
   int (*read)(void* handle, void* buf, int bytes);
   /**
    * Write to file
-   * @param handle File handle returned by open()
+   * @param handle File handle returned by open()/tftp_put()/tftp_get()
    * @param pbuf PBUF adjusted such that payload pointer points
    *             to the beginning of write data. In other words,
    *             TFTP headers are stripped off.
    * @returns &gt;= 0: Success; &lt; 0: Error
    */
   int (*write)(void* handle, struct pbuf* p);
+  /**
+   * Error indication from client or response from server
+   * @param handle File handle set by open()/tftp_get()/tftp_put()
+   * @param err error code from client or server
+   * @param msg error message from client or server
+   * @param size size of msg
+   */
+  void (*error)(void* handle, int err, const char* msg, int size);
 };
 
-err_t tftp_init(const struct tftp_context* ctx);
+#define LWIP_TFTP_MODE_SERVER       0x01
+#define LWIP_TFTP_MODE_CLIENT       0x02
+#define LWIP_TFTP_MODE_CLIENTSERVER (LWIP_TFTP_MODE_SERVER | LWIP_TFTP_MODE_CLIENT)
+
+err_t tftp_init_common(u8_t mode, const struct tftp_context* ctx);
 void tftp_cleanup(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LWIP_HDR_APPS_TFTP_SERVER_H */
+#endif /* LWIP_HDR_APPS_TFTP_COMMON_H */
+
+#endif /* INC_TFTP_TFTP_COMMON_H_ */
