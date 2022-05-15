@@ -555,7 +555,7 @@ HAL_StatusTypeDef setupneo() {
 	}
 #endif
 
-	if (circuitboardpcb == LIGHTNINGBOARD2) {
+	if (pcb == LIGHTNINGBOARD2) {
 		HAL_UART_Abort_IT(&huart7);
 		HAL_UART_DeInit(&huart7);
 		huart7.Init.BaudRate = 9600;

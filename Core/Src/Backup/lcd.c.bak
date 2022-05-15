@@ -796,7 +796,7 @@ void lcd_showvars() {
 		break;
 
 	case 3:
-		sprintf(str, "Ver %d.%d Build:%d PCB=%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, circuitboardpcb,
+		sprintf(str, "Ver %d.%d Build:%d PCB=%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, pcb,
 		STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 //		sprintf(str, "Ver %d.%d, Build:%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, STM32_UUID[0],
 //				STM32_UUID[1], STM32_UUID[2]);

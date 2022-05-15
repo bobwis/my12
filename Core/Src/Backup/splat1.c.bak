@@ -202,7 +202,7 @@ int bumppga(int i) {
 	}
 	if (pgagain < 0)		// safety
 		pgagain = 0;
-	if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
+	if (pcb == SPLATBOARD1) {		/// this doesn't have the boost function
 		if (pgagain > 7) {
 			pgagain = 7;			// reached max gain
 		}
@@ -748,7 +748,7 @@ void initsplat(void) {
 	osDelay(500);
 	printf("Initsplat: LED cycle\n");
 
-	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
+	if (pcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");
 		initdualmux();
 		osDelay(500);
@@ -774,7 +774,7 @@ void initsplat(void) {
 	}
 	osDelay(500);
 
-	if ((circuitboardpcb == LIGHTNINGBOARD1) || (circuitboardpcb == LIGHTNINGBOARD2)) {
+	if ((pcb == LIGHTNINGBOARD1) || (pcb == LIGHTNINGBOARD2)) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
 		{

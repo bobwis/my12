@@ -248,7 +248,7 @@ send_data(const ip_addr_t *addr, u16_t port)
 }
 
 static void
-recv(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
+tftp_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
 {
   u16_t *sbuf = (u16_t *) p->payload;
   int opcode;
@@ -476,7 +476,7 @@ tftp_init_common(u8_t mode, const struct tftp_context *ctx)
   tftp_state.upcb      = pcb;
   tftp_state.tftp_mode = mode;
 
-  udp_recv(pcb, recv, NULL);
+  udp_recv(pcb, tftp_recv, NULL);
 
   return ERR_OK;
 }
@@ -527,21 +527,19 @@ mode_to_string(enum tftp_transfer_mode mode)
   return NULL;
 }
 
-err_t
-tftp_get(void* handle, const ip_addr_t *addr, u16_t port, const char* fname, enum tftp_transfer_mode mode)
+err_t tftp_get(void* basememptr, const ip_addr_t *addr, u16_t port, const char* fname, enum tftp_transfer_mode mode)
 {
   LWIP_ERROR("TFTP client is not enabled (tftp_init)", (tftp_state.tftp_mode & LWIP_TFTP_MODE_CLIENT) != 0, return ERR_VAL);
   LWIP_ERROR("tftp_get: invalid file name", fname != NULL, return ERR_VAL);
   LWIP_ERROR("tftp_get: invalid mode", mode <= TFTP_MODE_BINARY, return ERR_VAL);
 
-  tftp_state.handle = handle;
+  tftp_state.handle = basememptr;
   tftp_state.blknum = 1;
   tftp_state.mode_write = 1; /* We want to receive data */
   return send_request(addr, port, TFTP_RRQ, fname, mode_to_string(mode));
 }
 
-err_t
-tftp_put(void* handle, const ip_addr_t *addr, u16_t port, const char* fname, enum tftp_transfer_mode mode)
+err_t tftp_put(void* handle, const ip_addr_t *addr, u16_t port, const char* fname, enum tftp_transfer_mode mode)
 {
   LWIP_ERROR("TFTP client is not enabled (tftp_init)", (tftp_state.tftp_mode & LWIP_TFTP_MODE_CLIENT) != 0, return ERR_VAL);
   LWIP_ERROR("tftp_put: invalid file name", fname != NULL, return ERR_VAL);

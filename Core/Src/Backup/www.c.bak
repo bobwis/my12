@@ -19,7 +19,6 @@
 #include "udpstream.h"
 #include "splat1.h"
 #include "adcstream.h"
-
 //#include "httpd.h"
 
 // Support functions
@@ -238,94 +237,24 @@ init_httpd_ssi() {
 	http_set_ssi_handler(tag_callback, tagname, 21);	// was 32
 }
 
-///////////////////////////////////////////////////////
-/// parse p2 params
-//////////////////////////////////////////////////////
-int parsep2(char *buf, char *match, int type, void *value) {
-	int i, j;
-	char *pch;
-	uint32_t *val;
-
-	i = 0;
-	j = 0;
-	val = value;
-	while ((buf[i]) && (buf[i] != '}')) {
-		if (buf[i++] == match[j]) {
-			j++;
-		} else {
-			j = 0;
-		}
-		if (j > 0) {		// started matching something
-			if (buf[i] == ':') {		// end of match
-				i++;
-				if (type == 1) {		// looking for a string
-					j = 0;
-					pch = value;
-					while ((buf[i]) && (isalnum(buf[i]))) {
-						pch[j++] = buf[i++];
-					}
-					pch[j] = 0;
-					return ((j > 0) ? 0 : -1);
-				} else if (type == 2) { // uint32_t base 10 string
-					return ((sscanf(&buf[i], "%u", val) == 1) ? 0 : -1);
-				} else if (type == 3) { // uint32_t hex string
-					return ((sscanf(&buf[i], "%x", val) == 1) ? 0 : -1);
-				}
-			}
-		}
-	}
-	return (-1);
-}
-
 /* ---------------------------------------------- */
 // http client
 /* ---------------------------------------------- */
-
-/*
- p1 commands:-
- 1 == reboot
- 2 == freeze UDP streaming
- 3 == download new firmware if needed
- 4 ==
- 5 == null (do nothing)
-
- p2 operands (strings):-
- */
 
 // callback with the page
 void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *content, volatile u16_t charcount) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	int nconv, res;
-	volatile int p1;
-	volatile char p2[96];
-	volatile char filename[16];
-	volatile uint32_t crc;
+	int nconv;
+	volatile int p1, p2;
 
 	if (errorm == 0) {
 //		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
-		nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
+		nconv = sscanf(content, "%5u%48s%u%u", &sn, udp_target, &p1, &p2);
 		if (nconv != EOF) {
 			switch (nconv) {
 
 			case 4: 							// converted  4 fields
-				// this param is for a variable number of string tokens
-				if (p2[0] == '{') {		// its the start of enclosed params
-					res = 0;
-					res |= parsep2(&p2[1], "fw", 1, filename);
-					res |= parsep2(&p2[1], "bld", 2, &newbuild);
-					res |= parsep2(&p2[1], "crc", 3, &crc);
-
-					printf("filename=%s, build=%d, crc=0x%08x, res=%d\n", filename, newbuild, crc, res);
-
-					if (!(res)) {		// a valid firmware string recieved
-						if (newbuild != BUILDNO) {	// the version advertised is different to this one running now
-							printf("**************** Firmware: this build=%d, latest server build=%d *****************\n",BUILDNO,newbuild);
-							tftloader(filename,crc);
-						}
-					}
-
-				} // else ignore it
 
 			case 3: 							// converted  3 fields
 				if (p1 == 1) {		// reboot

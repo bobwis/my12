@@ -153,10 +153,8 @@
 #define LWIP_HTTPD_ABORT_ON_CLOSE_MEM_ERROR 1
 /*----- Value in opt.h for HTTPD_USE_CUSTOM_FSDATA: 0 -----*/
 #define HTTPD_USE_CUSTOM_FSDATA 1
-/*----- Default Value for LWIP_STATS: 0 ---*/
-#define LWIP_STATS 1
-/*----- Value in opt.h for MIB2_STATS: 0 or SNMP_LWIP_MIB2 -----*/
-#define MIB2_STATS 0
+/*----- Value in opt.h for LWIP_STATS: 1 -----*/
+#define LWIP_STATS 0
 /*----- Value in opt.h for CHECKSUM_GEN_UDP: 1 -----*/
 #define CHECKSUM_GEN_UDP 0
 /*----- Value in opt.h for CHECKSUM_GEN_ICMP6: 1 -----*/

@@ -5,6 +5,8 @@
  *      Author: bob
  */
 
+#include <stdio.h>
+
 // emulate eeprom using STM32 flash memory
 // based on http://www.sonic2kworld.com/blog/using-stm32f-flash-as-eeprom-the-easy-way (also derived from elsewhere)
 // Included headers
@@ -110,5 +112,172 @@ void testeeprom(void) {
 
 	while (1)
 		;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///   GENERAL FLASH MEMORY WRITE ROUTINES (used by TFTP)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static FLASH_EraseInitTypeDef EraseInitStruct;
+static FLASH_OBProgramInitTypeDef OBInitStruct;
+
+// display the error
+void printflasherr() {
+	char *msg;
+	uint32_t err;
+
+	err = HAL_FLASH_GetError();
+
+	switch (err) {
+	case FLASH_ERROR_ERS:
+		msg = "Erasing Sequence";
+		break;
+	case FLASH_ERROR_PGP:
+		msg = "Programming Parallelism";
+		break;
+	case FLASH_ERROR_PGA:
+		msg = "Programming alignment";
+		break;
+	case FLASH_ERROR_WRP:
+		msg = "Write Protected";
+		break;
+	case FLASH_ERROR_OPERATION:
+		msg = "Operation";
+		break;
+	default:
+		msg = NULL;
+		sprintf(msg, "Unknown err 0x%0x", err);
+		break;
+	}
+	if (msg == NULL) {
+		printf("Flash failed Unknown err 0x%0x\n", err);
+	} else {
+		printf("Flash operation failed: %s error\n", msg);
+	}
+}
+
+// flash unlock
+HAL_StatusTypeDef UnlockFlash() {
+	HAL_StatusTypeDef res;
+
+	printf("UnlockFlash:\n");
+	res = HAL_FLASH_Unlock();
+	if (res != HAL_OK) {
+		printf("UnlockFlash: failed to unlock 0x%x\n",res);
+		printflasherr();
+		return (res);
+	}
+	return(res);
+}
+
+HAL_StatusTypeDef LockFlash() {
+	HAL_StatusTypeDef res;
+
+	printf("lockFlash:\n");
+	res = HAL_FLASH_Lock();
+	if (res != HAL_OK) {
+		printf("LockFlash: failed to lock\n");
+		printflasherr();
+		return (res);
+	}
+	return(res);
+}
+
+// erase flash sector(s)
+// (start at sector corresponding to memptr, fixed erase of 512K)
+HAL_StatusTypeDef EraseFlash(void* memptr) {
+	HAL_StatusTypeDef res;
+	uint32_t SectorError;
+
+	if (((uint32_t)memptr & 0x8100000) == 0x8000000)	// the lower 512K
+	{
+		EraseInitStruct.Sector = FLASH_SECTOR_0;
+		EraseInitStruct.NbSectors = 5;
+	} else	// the upper 512M starting at 1M
+	{
+		EraseInitStruct.Sector = FLASH_SECTOR_8;
+		EraseInitStruct.NbSectors = 2;
+	}
+
+	printf("Erasing Flash for %d sector(d) from %d\n",EraseInitStruct.NbSectors,EraseInitStruct.Sector);
+
+	EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
+	EraseInitStruct.Banks = FLASH_BANK_1;
+	EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+	if ((res = UnlockFlash()) != HAL_OK) {
+		printf("EraseFlash: unlock failed\n");
+		printflasherr();
+	}
+
+#if 1
+	res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
+	if (res != HAL_OK) {
+		printf("EraseFlash: failed\n");
+		printflasherr();
+	} else
+	{
+		printf("Flash probably erased\n");
+	}
+#endif
 
 }
+
+// write 32 bits
+int WriteFlashWord(uint32_t address, uint32_t data) {
+	HAL_StatusTypeDef res;
+	int trys;
+
+	if ((address < FLASH_START_ADDRESS) || (address > (FLASH_END_ADDRESS))) {
+		printf("WriteFlash: failed address check\n");
+		return -1;
+	}
+
+	trys = 0;
+	while ((res = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data) != HAL_OK)) {
+		printflasherr();		// deleteme
+		if (res == HAL_BUSY) {
+			if (trys > 3) {
+				printf("WriteFlashWord: failed write trys\n");
+				return (-1);
+			}
+			trys++;
+			osDelay(0);
+			continue;
+		} // if busy
+		if (res != HAL_OK) {
+			printflasherr();
+			printf("WriteFlashWord: failed write at 0x%0x err=0x%x\n", address, res);
+
+			return (res);
+		}
+	}
+	return (0);
+}
+
+// write sector of 32k bytes
+// datablock must be 32k bytes even if valid data is not filling all
+int WriteFlash32k(void *startadd, uint32_t *datablock) {
+	HAL_StatusTypeDef res;
+	int i;
+
+	printf("progflash32k: \n");
+	if (UnlockFlash() != HAL_OK) {
+		return (-1);
+	}
+	if (((unsigned long) startadd & 0x7FFF) > 0) {
+		printf("progflash32k: failed 32k boundary\n");
+		return (-1);
+	}
+	for (i = 0; i < 0x2000; i++) {		// 0x2000 words is 0x8000 bytes
+		if (res = WriteFlashWord(startadd + i, datablock[i])) {
+			printf("WriteEE Failed at %d\n", startadd + i);
+			return (-1);
+		}
+	}
+	if (LockFlash() != HAL_OK) {
+		return (-1);
+		return (0);
+	}
+}
+
