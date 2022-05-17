@@ -119,7 +119,33 @@ void testeeprom(void) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static FLASH_EraseInitTypeDef EraseInitStruct;
-static FLASH_OBProgramInitTypeDef OBInitStruct;
+
+// flash unlock
+HAL_StatusTypeDef UnlockFlash() {
+	HAL_StatusTypeDef res;
+
+//	printf("UnlockFlash:\n");
+	res = HAL_FLASH_Unlock();
+	if (res != HAL_OK) {
+		printf("UnlockFlash: failed to unlock 0x%x\n", res);
+		printflasherr();
+		return (res);
+	}
+	return (res);
+}
+
+HAL_StatusTypeDef LockFlash() {
+	HAL_StatusTypeDef res;
+
+//	printf("lockFlash:\n");
+	res = HAL_FLASH_Lock();
+	if (res != HAL_OK) {
+		printf("LockFlash: failed to lock\n");
+		printflasherr();
+		return (res);
+	}
+	return (res);
+}
 
 // display the error
 void printflasherr() {
@@ -154,43 +180,23 @@ void printflasherr() {
 	} else {
 		printf("Flash operation failed: %s error\n", msg);
 	}
-}
-
-// flash unlock
-HAL_StatusTypeDef UnlockFlash() {
-	HAL_StatusTypeDef res;
-
-	printf("UnlockFlash:\n");
-	res = HAL_FLASH_Unlock();
-	if (res != HAL_OK) {
-		printf("UnlockFlash: failed to unlock 0x%x\n",res);
-		printflasherr();
-		return (res);
-	}
-	return(res);
-}
-
-HAL_StatusTypeDef LockFlash() {
-	HAL_StatusTypeDef res;
-
-	printf("lockFlash:\n");
-	res = HAL_FLASH_Lock();
-	if (res != HAL_OK) {
-		printf("LockFlash: failed to lock\n");
-		printflasherr();
-		return (res);
-	}
-	return(res);
+	LockFlash();		// for safety
 }
 
 // erase flash sector(s)
 // (start at sector corresponding to memptr, fixed erase of 512K)
-HAL_StatusTypeDef EraseFlash(void* memptr) {
+HAL_StatusTypeDef EraseFlash(void *memptr) {
 	HAL_StatusTypeDef res;
-	uint32_t SectorError;
+	uint32_t SectorError, *ptr;
+	int dirty;
 
-	if (((uint32_t)memptr & 0x8100000) == 0x8000000)	// the lower 512K
-	{
+	if ((res = UnlockFlash()) != HAL_OK) {
+		printf("EraseFlash: unlock failed\n");
+		printflasherr();
+	}
+
+	if (((uint32_t) memptr & 0x8100000) == 0x8000000)	// the lower 512K
+			{
 		EraseInitStruct.Sector = FLASH_SECTOR_0;
 		EraseInitStruct.NbSectors = 5;
 	} else	// the upper 512M starting at 1M
@@ -199,28 +205,31 @@ HAL_StatusTypeDef EraseFlash(void* memptr) {
 		EraseInitStruct.NbSectors = 2;
 	}
 
-	printf("Erasing Flash for %d sector(d) from %d\n",EraseInitStruct.NbSectors,EraseInitStruct.Sector);
-
-	EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
-	EraseInitStruct.Banks = FLASH_BANK_1;
-	EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
-
-	if ((res = UnlockFlash()) != HAL_OK) {
-		printf("EraseFlash: unlock failed\n");
-		printflasherr();
+	dirty = 0;
+	for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
+		if (*ptr != 0xffffffff) {
+			dirty = 1;
+			break;
+		}
 	}
 
-#if 1
-	res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
-	if (res != HAL_OK) {
-		printf("EraseFlash: failed\n");
-		printflasherr();
-	} else
-	{
-		printf("Flash probably erased\n");
-	}
-#endif
+	if (dirty) {
+		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
 
+		EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
+		EraseInitStruct.Banks = FLASH_BANK_1;
+		EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+		res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
+		if (res != HAL_OK) {
+			printf("EraseFlash: failed\n");
+			printflasherr();
+		} else {
+			printf("Flash successfully erased\n");
+		}
+	} else {
+		printf("Flash erase unnecessary\n");
+	}
 }
 
 // write 32 bits
@@ -228,16 +237,19 @@ int WriteFlashWord(uint32_t address, uint32_t data) {
 	HAL_StatusTypeDef res;
 	int trys;
 
-	if ((address < FLASH_START_ADDRESS) || (address > (FLASH_END_ADDRESS))) {
+	if (((int) address < FLASH_START_ADDRESS) || ((int) address > (FLASH_END_ADDRESS))) {
 		printf("WriteFlash: failed address check\n");
 		return -1;
 	}
 
 	trys = 0;
+	__HAL_FLASH_ART_DISABLE();
 	while ((res = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data) != HAL_OK)) {
 		printflasherr();		// deleteme
 		if (res == HAL_BUSY) {
 			if (trys > 3) {
+				__HAL_FLASH_ART_RESET();
+				__HAL_FLASH_ART_ENABLE();
 				printf("WriteFlashWord: failed write trys\n");
 				return (-1);
 			}
@@ -245,12 +257,20 @@ int WriteFlashWord(uint32_t address, uint32_t data) {
 			osDelay(0);
 			continue;
 		} // if busy
+
 		if (res != HAL_OK) {
 			printflasherr();
 			printf("WriteFlashWord: failed write at 0x%0x err=0x%x\n", address, res);
-
+			__HAL_FLASH_ART_RESET();
+			__HAL_FLASH_ART_ENABLE();
 			return (res);
 		}
+	}
+	__HAL_FLASH_ART_RESET();
+	__HAL_FLASH_ART_ENABLE();
+
+	if (*(uint32_t*) address != data) {
+		printf("WriteFlashWord: Failed at 0x%08x with data=%08x, read=0x%08x\n", address, data, *(uint32_t*) address);
 	}
 	return (0);
 }
@@ -279,5 +299,32 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 		return (-1);
 		return (0);
 	}
+}
+
+/// fix up the boot vectors in the option flash
+void fixboot() {
+	HAL_StatusTypeDef res;
+	FLASH_OBProgramInitTypeDef OBInitStruct;
+
+	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
+
+	HAL_FLASH_OB_Unlock();
+
+	OBInitStruct.BootAddr0 = 0x2000;		// corresponds to 0x8000000  (flash)
+	OBInitStruct.BootAddr1 = 0x2040;		// corresponds to 0x8100000  (flash)
+
+	res = HAL_FLASHEx_OBProgram(&OBInitStruct);
+	if (res != HAL_OK) {
+		printf("fixboot: failed to OBProgram %d\n", res);
+	}
+
+	res = HAL_FLASH_OB_Launch();
+	if (res != HAL_OK) {
+		printf("fixboot: failed to OBLaunch %d\n", res);
+	}
+	printf("fixing boot....\n");
+	HAL_FLASH_OB_Lock();
+
+	printf("fixboot ran\n");
 }
 

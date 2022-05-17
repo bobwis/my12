@@ -296,14 +296,15 @@ int parsep2(char *buf, char *match, int type, void *value) {
 void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *content, volatile u16_t charcount) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	int nconv, res;
+	int nconv, res, res2;
 	volatile int p1;
 	volatile char p2[96];
-	volatile char filename[16];
-	volatile uint32_t crc;
+	volatile char filename[32], s1[16];
+	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
 
 	if (errorm == 0) {
 //		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
+		s1[0] = '\0';
 		nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
 		if (nconv != EOF) {
 			switch (nconv) {
@@ -312,16 +313,23 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 				// this param is for a variable number of string tokens
 				if (p2[0] == '{') {		// its the start of enclosed params
 					res = 0;
+					res2 = 0;
 					res |= parsep2(&p2[1], "fw", 1, filename);
 					res |= parsep2(&p2[1], "bld", 2, &newbuild);
-					res |= parsep2(&p2[1], "crc", 3, &crc);
+					res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
+					res |= parsep2(&p2[1], "crc2", 3, &crc2);
+					res2 |= parsep2(&p2[1], "n1", 3, &n1);
+					res2 |= parsep2(&p2[1], "n2", 3, &n2);
+					res2 |= parsep2(&p2[1], "s1", 1, s1);
 
-					printf("filename=%s, build=%d, crc=0x%08x, res=%d\n", filename, newbuild, crc, res);
+					printf("server filename=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n", filename,
+							newbuild, crc1, crc2, n1, n2, s1, res);
 
-					if (!(res)) {		// a valid firmware string recieved
+					if (!(res)) {		// a valid firmware string received
 						if (newbuild != BUILDNO) {	// the version advertised is different to this one running now
-							printf("**************** Firmware: this build=%d, latest server build=%d *****************\n",BUILDNO,newbuild);
-							tftloader(filename,crc);
+							printf("Firmware: this build is %d, the server build is %d\n",
+							BUILDNO, newbuild);
+							tftloader(filename, crc1, crc2);
 						}
 					}
 

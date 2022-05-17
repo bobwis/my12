@@ -141,6 +141,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
+uint32_t filecrc;
 
 /* USER CODE END PD */
 
@@ -1831,6 +1832,7 @@ static void MX_GPIO_Init(void) {
 
 /* USER CODE BEGIN 4 */
 
+// find the crc for the running firmware (printout needed for server)
 crc_rom()
 {
 	unsigned char *base;
@@ -1839,7 +1841,7 @@ crc_rom()
 	extern uint32_t _edata, _sdata;
 
 	uint32_t xinit = 0xffffffff;
-	uint32_t length, xcrc;
+	uint32_t length, romcrc;
 
 	if ((unsigned long) MX_NVIC_Init < 0x8100000) {
 		base = 0x8000000;
@@ -1848,8 +1850,8 @@ crc_rom()
 	}
 
 	length = (uint32_t)&__fini_array_end - (uint32_t)base + ((uint32_t) &_edata - (uint32_t) &_sdata);
-	xcrc = xcrc32(base, length, xinit);
-	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", xcrc,base,length);
+	romcrc = xcrc32(base, length, xinit);
+	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", romcrc,base,length);
 }
 
 err_leds(int why) {
@@ -2049,6 +2051,10 @@ void StartDefaultTask(void const *argument) {
 	int i;
 	HAL_StatusTypeDef stat;
 //		uint16_t dacdata[64];
+
+	if ((i=HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
+			fixboot();	// zzz reset the boot vectors
+	}
 
 	getboardpcb();		// find our daughterboard
 	printf("\n\n----------------------------------------------------------------------------\n");
