@@ -261,7 +261,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
 				if (type == 1) {		// looking for a string
 					j = 0;
 					pch = value;
-					while ((buf[i]) && (isalnum(buf[i]))) {
+					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.'))) {
 						pch[j++] = buf[i++];
 					}
 					pch[j] = 0;
@@ -301,6 +301,7 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 	volatile char p2[96];
 	volatile char filename[32], s1[16];
 	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
+	char tftphostip[17] = "192.168.0.248";
 
 	if (errorm == 0) {
 //		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
@@ -318,18 +319,18 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 					res |= parsep2(&p2[1], "bld", 2, &newbuild);
 					res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
 					res |= parsep2(&p2[1], "crc2", 3, &crc2);
-					res2 |= parsep2(&p2[1], "n1", 3, &n1);
+					res2 |= parsep2(&p2[1], "srv", 1, &tftphostip);
 					res2 |= parsep2(&p2[1], "n2", 3, &n2);
 					res2 |= parsep2(&p2[1], "s1", 1, s1);
 
-					printf("server filename=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n", filename,
-							newbuild, crc1, crc2, n1, n2, s1, res);
+					printf("server filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n", filename,
+							tftphostip, newbuild, crc1, crc2, n1, n2, s1, res);
 
 					if (!(res)) {		// a valid firmware string received
 						if (newbuild != BUILDNO) {	// the version advertised is different to this one running now
 							printf("Firmware: this build is %d, the server build is %d\n",
 							BUILDNO, newbuild);
-							tftloader(filename, crc1, crc2);
+							tftloader(filename, tftphostip, crc1, crc2);
 						}
 					}
 

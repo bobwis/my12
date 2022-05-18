@@ -42,21 +42,10 @@
 
 #include <string.h>
 #include "neo7m.h"
+#include "eeprom.h"
 
 #if LWIP_UDP
 
-/* Define this to a file to get via tftp client */
-#ifndef LWIP_TFTP_EXAMPLE_CLIENT_FILENAME
-#define LWIP_TFTP_EXAMPLE_CLIENT_FILENAME "test.bin"
-#endif
-
-/* Define this to a server IP string */
-#ifndef LWIP_TFTP_EXAMPLE_CLIENT_REMOTEIP
-#define LWIP_TFTP_EXAMPLE_CLIENT_REMOTEIP "10.10.201.122"
-#endif
-
-#define TFTP_BASE_MEM1	0x8000000			// 1st 1M Flash
-#define TFTP_BASE_MEM2	0x8100000			// 2nd 1M Flash
 
 extern void EraseFlash(void *memptr);
 extern xcrc32(const unsigned char *buf, int len, unsigned int init);
@@ -65,6 +54,8 @@ static void *memptr = (void*) 0;
 static int filelength = 0;
 static int tftabort = 0;
 static uint32_t load_address = TFTP_BASE_MEM1;
+
+int notflashed = 1;		// 1 == not flashed,  0 = flashed
 
 // calculate the crc over a range of memory
 uint32_t findcrc(void *base, int length) {
@@ -85,6 +76,7 @@ static void* memclose() {
 		tftabort = 0;
 		return;
 	}
+
 	printf("tftp memclose: filelength=%d, memptr=0x%0x\n", filelength, (unsigned int) memptr);
 	osDelay(1000);
 	if (LockFlash() != HAL_OK) {
@@ -99,8 +91,8 @@ static void* memclose() {
 		HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 
 		HAL_FLASH_OB_Unlock();
-		OBInitStruct.BootAddr0 = ((memptr - filelength) == 0x8000000) ? 0x2000 : 0x2040;
-		OBInitStruct.BootAddr1 = ((memptr - filelength) == 0x8000000) ? 0x2040 : 0x2000;
+		OBInitStruct.BootAddr0 = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x2000 : 0x2040;
+		OBInitStruct.BootAddr1 = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x2040 : 0x2000;
 
 		res = HAL_FLASHEx_OBProgram(&OBInitStruct);
 		if (res != HAL_OK) {
@@ -112,7 +104,7 @@ static void* memclose() {
 			printf("memclose: failed to OBLaunch %d\n", res);
 		}
 
-//		*(uint32_t *)(0x1FFF0010) = ((memptr - filelength) == 0x8000000) ? 0x0080 : 0x00c0;
+//		*(uint32_t *)(0x1FFF0010) = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x0080 : 0x00c0;
 		HAL_FLASH_OB_Lock();
 		printf("New FLASH image loaded; rebooting please wait...\n");
 		osDelay(50);
@@ -122,14 +114,14 @@ static void* memclose() {
 	{
 		uint32_t *mem1, *mem2, d1, d2, i;
 
-		xcrc = findcrc(0x8000000, filelength);		// debug
-		printf("0x8000000 CRC=0x%x\n", xcrc);
+		xcrc = findcrc(TFTP_BASE_MEM1, filelength);		// debug
+		printf("TFTP_BASE_MEM1 CRC=0x%x\n", xcrc);
 
-		xcrc = findcrc(0x8100000, filelength);		// debug
-		printf("0x8100000 CRC=0x%x\n", xcrc);
+		xcrc = findcrc(TFTP_BASE_MEM2, filelength);		// debug
+		printf("TFTP_BASE_MEM2 CRC=0x%x\n", xcrc);
 
-		mem1 = 0x8000000;
-		mem2 = 0x8100000;
+		mem1 = TFTP_BASE_MEM1;
+		mem2 = TFTP_BASE_MEM2;
 		for (i = 0; i < filelength; i += 4) {
 			d1 = *mem1++;
 			d2 = *mem2++;
@@ -157,6 +149,7 @@ static int memwrite(const uint8_t buf[], size_t size, size_t len, volatile void 
 	int i, j, res;
 	volatile uint32_t data;
 
+
 	filelength += (int) len;
 
 #if 0
@@ -173,6 +166,12 @@ printf("memwrite: count=%d, memptr=0x%x, totlen=%d, len=%d\n",count, memptr, tot
 //	printf("\n");
 //////////////////////////////////////////////////////
 #endif
+
+	if ((!(tftabort)) && (notflashed)) {
+		EraseFlash(memptr);
+		notflashed = 0;
+	}
+
 	for (i = 0; i < len;) {		// avoid read buffer overflow
 		data = 0;
 		for (j = 0; j < 4; j++) {
@@ -201,8 +200,8 @@ static void* tftp_open_mem(const unsigned int memaddress, u8_t is_write) {
 	uint32_t myaddr;
 
 	if (is_write) {
-		myaddr = (uint32_t) tftp_open_mem & 0x8100000;				// find which 1M segment we are now running in
-		if ((memaddress & 0x8100000) != myaddr) {	// dont allow write to this segment!
+		myaddr = (uint32_t) tftp_open_mem & TFTP_BASE_MEM2;				// find which 1M segment we are now running in
+		if ((memaddress & TFTP_BASE_MEM2) != myaddr) {	// dont allow write to this segment!
 			basememptr = (void*) memaddress;
 			return (basememptr);		// write
 		} else
@@ -252,7 +251,7 @@ static void tftp_error(void *memptr, int err, const char *msg, int size) {
 	memset(message, 0, sizeof(message));
 	MEMCPY(message, msg, LWIP_MIN(sizeof(message)-1, (size_t)size));
 
-	printf("TFTP error: %d (%s)", err, message);
+	printf("TFTP host error: %d (%s)\n", err, message);
 	tftabort = 1;
 }
 
@@ -263,15 +262,15 @@ void tftp_example_init_server(void) {
 	tftp_init_server(&tftp);
 }
 
-void tftp_client(char *filename) {
+void tftp_client(char *filename, char *hostip) {
 	void *mptr;
 	err_t err;
 	ip_addr_t srv;
 
-//	printf("+++++++++++++ tftp_init_client: start\n");
+	printf("+++++++++++++ tftp_init_client: start, host=%s\n",hostip);
 
 	tftabort = 0;
-	int ret = ipaddr_aton(LWIP_TFTP_EXAMPLE_CLIENT_REMOTEIP, &srv);
+	int ret = ipaddr_aton(hostip, &srv);
 	LWIP_ASSERT("ipaddr_aton failed", ret == 1);
 
 	err = tftp_init_client(&tftp);
@@ -284,7 +283,6 @@ void tftp_client(char *filename) {
 	memptr = mptr;
 	filelength = 0;
 
-	EraseFlash(memptr);
 	err = tftp_get(mptr, &srv, TFTP_PORT, filename, TFTP_MODE_OCTET);
 	LWIP_ASSERT("tftp_get failed", err == ERR_OK);
 
@@ -292,7 +290,7 @@ void tftp_client(char *filename) {
 }
 
 // attempt to load new firmware
-void tftloader(char filename[], uint32_t crc1, uint32_t crc2) {
+void tftloader(char filename[], char hostip[], uint32_t crc1, uint32_t crc2) {
 	static char newfilename[24];
 	int i;
 	volatile uint32_t addr;
@@ -300,15 +298,15 @@ void tftloader(char filename[], uint32_t crc1, uint32_t crc2) {
 
 	filecrc = 0;
 
-	addr = (uint32_t)tftloader & 0x8100000; 	// where are we running this code?
+	addr = (uint32_t)tftloader & TFTP_BASE_MEM2; 	// where are we running this code?
 	load_address = (addr == TFTP_BASE_MEM1) ? TFTP_BASE_MEM2 : TFTP_BASE_MEM1; // find the other segment
 
 	switch (load_address) {		// assign a code letter for the load address filename
-	case 0x8000000:
+	case TFTP_BASE_MEM1:
 		segment = 'A';
 		filecrc = crc1;
 		break;
-	case 0x8100000:
+	case TFTP_BASE_MEM2:
 		segment = 'I';
 		filecrc = crc2;
 		break;
@@ -320,7 +318,7 @@ void tftloader(char filename[], uint32_t crc1, uint32_t crc2) {
 	sprintf(newfilename, "%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
 	printf("*** Attempting to download new firmware %s : do not switch off ***\n", newfilename);
 
-	tftp_client(newfilename);
+	tftp_client(newfilename, hostip);
 }
 
 #endif /* LWIP_UDP */

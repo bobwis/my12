@@ -71,7 +71,8 @@
  * TFTP server port
  */
 #if !defined TFTP_PORT || defined __DOXYGEN__
-#define TFTP_PORT             LWIP_IANA_PORT_TFTP
+//#define TFTP_PORT             LWIP_IANA_PORT_TFTP
+#define TFTP_PORT             1075
 #endif
 
 /**

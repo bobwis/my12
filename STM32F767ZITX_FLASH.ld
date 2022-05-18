@@ -40,9 +40,7 @@ MEMORY
 
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
 
-/*
-  FLASH    (rx)    : ORIGIN = 0x8100000,   LENGTH = 1024K
-*/  
+
 }
 
 /* Sections */

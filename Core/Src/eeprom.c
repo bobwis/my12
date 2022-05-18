@@ -195,6 +195,8 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 		printflasherr();
 	}
 
+	EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;		// should this be 2???
+
 	if (((uint32_t) memptr & 0x8100000) == 0x8000000)	// the lower 512K
 			{
 		EraseInitStruct.Sector = FLASH_SECTOR_0;
@@ -213,7 +215,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 		}
 	}
 
-	if (dirty) {
+	if ((dirty) && (notflashed)) {
 		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
 
 		EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
@@ -221,12 +223,30 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 		EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
 
 		res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
+		if (SectorError != 0xffffffff) {
+			printf("Flash Erase failed sectorerror 0x%08x\n", SectorError);
+		}
 		if (res != HAL_OK) {
 			printf("EraseFlash: failed\n");
 			printflasherr();
 		} else {
 			printf("Flash successfully erased\n");
+			notflashed = 0;
+
+			// check the erasure
+			dirty = 0;
+			for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
+				if (*ptr != 0xffffffff) {
+					dirty = 1;
+					break;
+				}
+			}
+			if (dirty) {
+				notflashed = 1;
+				printf("*** ERROR: Flash was erased but bits still dirty\n");
+			}
 		}
+
 	} else {
 		printf("Flash erase unnecessary\n");
 	}
@@ -305,13 +325,22 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 void fixboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
+	uint32_t *newadd, options;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 
 	HAL_FLASH_OB_Unlock();
 
-	OBInitStruct.BootAddr0 = 0x2000;		// corresponds to 0x8000000  (flash)
-	OBInitStruct.BootAddr1 = 0x2040;		// corresponds to 0x8100000  (flash)
+	// swap boot address (maybe)
+
+	newadd = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;	// toggle boot segment start add
+	if (*newadd != 0xffffffff) {	// if new area is not an empty region
+		OBInitStruct.BootAddr0 = newadd;	// change boot address
+	}
+	OBInitStruct.BootAddr1 = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;// flip alternate (this is only used if boot pin inverted)
+
+	OBInitStruct.USERConfig |= FLASH_OPTCR_nDBOOT;		// disable mirrored flash dual boot
+	OBInitStruct.USERConfig |= FLASH_OPTCR_nDBANK;
 
 	res = HAL_FLASHEx_OBProgram(&OBInitStruct);
 	if (res != HAL_OK) {
