@@ -8,14 +8,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include "stm32f7xx_hal.h"
-#include "neo7m.h"
 #include "adcstream.h"
 #include "version.h"
 #include "main.h"
 #include "mydebug.h"
 #include "FreeRTOS.h"
 #include "task.h"
-
+#include "neo7m.h"
 #include "splat1.h"
 #include "mydebug.h"
 

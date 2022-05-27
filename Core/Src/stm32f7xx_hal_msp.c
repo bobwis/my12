@@ -94,15 +94,9 @@ void HAL_MspInit(void)
   /* Peripheral interrupt init */
   /* RCC_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(RCC_IRQn, 6, 0);
-  /* RCC_IRQn interrupt configuration */
-  HAL_NVIC_EnableIRQ(RCC_IRQn);
-  /* RCC_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(RCC_IRQn, 6, 0);
-  /* RCC_IRQn interrupt configuration */
   HAL_NVIC_EnableIRQ(RCC_IRQn);
   /* FPU_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(FPU_IRQn, 6, 0);
-  /* FPU_IRQn interrupt configuration */
   HAL_NVIC_EnableIRQ(FPU_IRQn);
 
   /* USER CODE BEGIN MspInit 1 */
@@ -456,7 +450,6 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
   /* USER CODE BEGIN I2C1_MspInit 0 */
 
   /* USER CODE END I2C1_MspInit 0 */
-
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
@@ -1201,7 +1194,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
   /* USER CODE BEGIN UART4_MspInit 0 */
 
   /* USER CODE END UART4_MspInit 0 */
-
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_UART4;
@@ -1758,3 +1750,4 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
+

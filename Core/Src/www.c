@@ -19,7 +19,6 @@
 #include "udpstream.h"
 #include "splat1.h"
 #include "adcstream.h"
-
 //#include "httpd.h"
 
 // Support functions
@@ -238,103 +237,24 @@ init_httpd_ssi() {
 	http_set_ssi_handler(tag_callback, tagname, 21);	// was 32
 }
 
-///////////////////////////////////////////////////////
-/// parse p2 params
-//////////////////////////////////////////////////////
-int parsep2(char *buf, char *match, int type, void *value) {
-	int i, j;
-	char *pch;
-	uint32_t *val;
-
-	i = 0;
-	j = 0;
-	val = value;
-	while ((buf[i]) && (buf[i] != '}')) {
-		if (buf[i++] == match[j]) {
-			j++;
-		} else {
-			j = 0;
-		}
-		if (j > 0) {		// started matching something
-			if (buf[i] == ':') {		// end of match
-				i++;
-				if (type == 1) {		// looking for a string
-					j = 0;
-					pch = value;
-					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.'))) {
-						pch[j++] = buf[i++];
-					}
-					pch[j] = 0;
-					return ((j > 0) ? 0 : -1);
-				} else if (type == 2) { // uint32_t base 10 string
-					return ((sscanf(&buf[i], "%u", val) == 1) ? 0 : -1);
-				} else if (type == 3) { // uint32_t hex string
-					return ((sscanf(&buf[i], "%x", val) == 1) ? 0 : -1);
-				}
-			}
-		}
-	}
-	return (-1);
-}
-
 /* ---------------------------------------------- */
 // http client
 /* ---------------------------------------------- */
-
-/*
- p1 commands:-
- 1 == reboot
- 2 == freeze UDP streaming
- 3 == download new firmware if needed
- 4 ==
- 5 == null (do nothing)
-
- p2 operands (strings):-
- */
 
 // callback with the page
 void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *content, volatile u16_t charcount) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	int nconv, res, res2;
-	volatile int p1;
-	volatile char p2[96];
-	volatile char filename[32], s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
-	char tftphostip[17] = "192.168.0.248";
+	int nconv;
+	volatile int p1, p2;
 
 	if (errorm == 0) {
 //		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
-		s1[0] = '\0';
-		nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
+		nconv = sscanf(content, "%5u%48s%u%u", &sn, udp_target, &p1, &p2);
 		if (nconv != EOF) {
 			switch (nconv) {
 
 			case 4: 							// converted  4 fields
-				// this param is for a variable number of string tokens
-				if (p2[0] == '{') {		// its the start of enclosed params
-					res = 0;
-					res2 = 0;
-					res |= parsep2(&p2[1], "fw", 1, filename);
-					res |= parsep2(&p2[1], "bld", 2, &newbuild);
-					res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
-					res |= parsep2(&p2[1], "crc2", 3, &crc2);
-					res2 |= parsep2(&p2[1], "srv", 1, &tftphostip);
-					res2 |= parsep2(&p2[1], "n2", 3, &n2);
-					res2 |= parsep2(&p2[1], "s1", 1, s1);
-
-					printf("server filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n", filename,
-							tftphostip, newbuild, crc1, crc2, n1, n2, s1, res);
-
-					if (!(res)) {		// a valid firmware string received
-						if (newbuild != BUILDNO) {	// the version advertised is different to this one running now
-							printf("Firmware: this build is %d, the server build is %d\n",
-							BUILDNO, newbuild);
-							tftloader(filename, tftphostip, crc1, crc2);
-						}
-					}
-
-				} // else ignore it
 
 			case 3: 							// converted  3 fields
 				if (p1 == 1) {		// reboot
@@ -377,7 +297,6 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 	}
 }
 
-// sends a URL request to a http server
 void httpclient(char Page[64]) {
 	volatile int result;
 	uint32_t ip;
@@ -391,14 +310,16 @@ void httpclient(char Page[64]) {
 	ip = remoteip.addr;
 	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-#if 0
+
 	result = hc_open(remoteip, Page, Postvars, returnpage);
-#endif
-	initfilehttpclient();
 //	printf("result=%d\n", result);
 
 }
 
+void apisn() {
+	sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+	httpclient(stmuid);		// get sn and targ
+}
 
 // get the serial number and udp target for this device
 // reboot if fails
@@ -406,15 +327,12 @@ void initialapisn() {
 	int i;
 
 	i = 1;
-	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
+	while (statuspkt.uid == BUILDNO)		// not yet found new S/N from server
 	{
 		printf("getting S/N and UDP target using http. Try=%d\n", i);
-		sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
-		httpclient(stmuid);		// get sn and targ
-#if 1
-		statuspkt.uid = 3;		// zzz
-#endif
+		apisn();
 		osDelay(5000);
+
 		i++;
 		if (i > 10) {
 			printf("************* ABORTED **************\n");
@@ -427,7 +345,3 @@ void requestapisn() {
 	printf("updating S/N and UDP target using http\n");
 	httpclient(stmuid);		// get sn and targ
 }
-
-
-
-

@@ -1708,7 +1708,7 @@
  * sending for each netif (0 = disabled)
  */
 #if !defined LWIP_LOOPBACK_MAX_PBUFS || defined __DOXYGEN__
-#define LWIP_LOOPBACK_MAX_PBUFS	2
+#define LWIP_LOOPBACK_MAX_PBUFS         0
 #endif
 
 /**
@@ -3515,6 +3515,5 @@
 /**
  * @}
  */
-
 
 #endif /* LWIP_HDR_OPT_H */

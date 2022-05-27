@@ -37,30 +37,23 @@ _Min_Stack_Size = 0x6800 ;	/* required amount of stack */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 512K
-
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
-
-
 }
 
 /* Sections */
 SECTIONS
 {
-
   /* The startup code into "FLASH" Rom type memory */
   .isr_vector :
   {
-    FILL(0xffff)
-    _progstart = .;  
     . = ALIGN(4);
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
-  } >FLASH = 0xffff
+  } >FLASH
 
   /* The program code and other data into "FLASH" Rom type memory */
   .text :
   {
-
     . = ALIGN(4);
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
@@ -73,65 +66,59 @@ SECTIONS
 
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
-  } >FLASH =0xffff
+  } >FLASH
 
   /* Constant data into "FLASH" Rom type memory */
   .rodata :
   {
-    FILL(0xffff)
     . = ALIGN(4);
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
 
   .ARM.extab   : { 
-    FILL(0xff)
     . = ALIGN(4);
     *(.ARM.extab* .gnu.linkonce.armextab.*)
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
   
   .ARM : {
-    FILL(0xffff)
     . = ALIGN(4);
     __exidx_start = .;
     *(.ARM.exidx*)
     __exidx_end = .;
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
 
   .preinit_array     :
   {
-    FILL(0xffff)
     . = ALIGN(4);
     PROVIDE_HIDDEN (__preinit_array_start = .);
     KEEP (*(.preinit_array*))
     PROVIDE_HIDDEN (__preinit_array_end = .);
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
   
   .init_array :
   {
-    FILL(0xffff)
     . = ALIGN(4);
     PROVIDE_HIDDEN (__init_array_start = .);
     KEEP (*(SORT(.init_array.*)))
     KEEP (*(.init_array*))
     PROVIDE_HIDDEN (__init_array_end = .);
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
   
   .fini_array :
   {
-    FILL(0xffff)
     . = ALIGN(4);
     PROVIDE_HIDDEN (__fini_array_start = .);
     KEEP (*(SORT(.fini_array.*)))
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
     . = ALIGN(4);
-  } >FLASH =0xffff
+  } >FLASH
 
   /* Used by the startup to initialize data */
   _sidata = LOADADDR(.data);

@@ -19,7 +19,7 @@ extern uint32_t pressure, pressfrac, temperature, tempfrac;
 
 extern uint32_t logampmode;
 
-//extern time_t epochtime;	// gps time updated every second
+extern time_t epochtime;	// gps time updated every second
 extern char trigtimestr[];	// last trig time as a string
 extern char nowtimestr[];		// current time as as string
 extern char pressstr[];	// current pressure as a string

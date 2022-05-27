@@ -9,7 +9,6 @@
 #define NEO7M_H_
 
 #include "stm32f7xx_hal.h"
-#include <time.h>
 
 /*
  * neo7m.h
@@ -29,7 +28,7 @@
 
 //const unsigned char UBXGPS_HEADER[] = { 0xB5, 0x62 };
 
-extern struct statpkt {
+struct statpkt {
 	uint32_t udppknum;		// udp packet sent index (24 bits, other 8 bits are packet type)
 
 	struct UbxGpsNavPvt {
@@ -81,19 +80,19 @@ extern struct statpkt {
 	uint32_t adcudpover;	// adc -> udp send overruns
 	uint32_t trigcount;		// adc trigger count
 	uint32_t udpsent;		// udp sample packets sent
-	uint16_t build; //reserved3;		// build number from build 1028, originally was peak trig level
+	uint16_t reserved3;		// unused, was peak trig level
 	uint16_t jabcnt;		// jabber counter
 	uint32_t temppress;		// temperature top 12 bits, pressure bottom 20 bits
 	uint32_t epochsecs;
 	//  bconf is board configuration
 	// bits 0..2 are Splat revision present (0 == no Spalt board fitted)
-	// bits 3..4 are Pressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
+	// bits 3..4 are Poressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
 	uint32_t bconf;			// the board configuration
 	uint32_t reserved2;
 	uint32_t telltale1;		// end of packet marker
-} __attribute__((aligned(4),packed))  volatile statuspkt;
 
-//extern __attribute__((aligned(4),packed)) CHALLENGE;
+}volatile statuspkt;
+__attribute__((aligned(4),packed)) CHALLENGE;
 
 extern uint8_t gpslocked;		// Gps locked flag;
 extern uint8_t epochvalid;		// have we have worked out the epoch seconds?;
@@ -118,10 +117,7 @@ extern struct netif gnetif;	// LWIP network interface status struc
 
 extern unsigned int gpsgood;	// GPS comms status
 extern unsigned int globalfreeze;	// freeze UDP streaming
-extern unsigned int circuitboardpcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
-extern unsigned int newbuild;	// the new firmware build number from the server
 
-extern uint32_t filecrc;
 
 #endif /* NEO7M_H_ */
 

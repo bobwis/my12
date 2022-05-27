@@ -51,12 +51,9 @@ static const unsigned char UBXGPS_HEADER2[] = { 0xB5, 0x62, 0x0a, 0x04 };
 
 unsigned char PACKETstore[128];  //TODO, whats the max size of packet?
 
-struct statpkt __attribute__((aligned(4),packed))  volatile statuspkt;
-
 int flag = 0;
 int neoispresent = 0;		// result of 1st polling
 uint8_t data;
-
 
 unsigned char lastGoodPacket[92];
 int IsPacketReady(unsigned char c);
@@ -555,7 +552,7 @@ HAL_StatusTypeDef setupneo() {
 	}
 #endif
 
-	if (circuitboardpcb == LIGHTNINGBOARD2) {
+	if (pcb == LIGHTNINGBOARD2) {
 		HAL_UART_Abort_IT(&huart7);
 		HAL_UART_DeInit(&huart7);
 		huart7.Init.BaudRate = 9600;
