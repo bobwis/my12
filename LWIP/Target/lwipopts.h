@@ -171,8 +171,13 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
-#define MEMP_NUM_SYS_TIMEOUT 	8
+#define MEMP_NUM_SYS_TIMEOUT 	(LWIP_NUM_SYS_TIMEOUT_INTERNAL)+1
 #define MEMP_NUM_UDP_PCB        8
+#define IP_REASS_MAX_PBUFS     20
+#define TCPIP_MBOX_SIZE 20
+#define DEFAULT_TCP_RECVMBOX_SIZE 550
+#define DEFAULT_RAW_RECVMBOX_SIZE 550
+
 #ifdef TESTING
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(x) do {printf x;} while(0)
@@ -180,6 +185,7 @@
 #define LWIP_DEBUG
 #define LWIP_STATS_DISPLAY 1
 #define LWIP_SO_RCVTIMEO                  1              // default is 0
+
  /**
   * TCP_SND_BUF: TCP sender buffer space (bytes).
   * To achieve good performance, this should be at least 2 * TCP_MSS.

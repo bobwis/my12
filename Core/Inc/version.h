@@ -28,7 +28,7 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10026
+#define BUILD 10028
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -49,7 +49,7 @@
 #define LOCALTIME
 #endif
 
-// Time between sending timesd status packets (seconds)
+// Time between sending timed status packets (seconds)
 #ifdef TESTING
 #define STAT_TIME 2
 #else

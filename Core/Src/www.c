@@ -377,6 +377,7 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 	}
 }
 
+// sends a URL request to a http server
 void httpclient(char Page[64]) {
 	volatile int result;
 	uint32_t ip;
@@ -390,16 +391,14 @@ void httpclient(char Page[64]) {
 	ip = remoteip.addr;
 	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-
+#if 0
 	result = hc_open(remoteip, Page, Postvars, returnpage);
+#endif
+	initfilehttpclient();
 //	printf("result=%d\n", result);
 
 }
 
-void apisn() {
-	sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
-	httpclient(stmuid);		// get sn and targ
-}
 
 // get the serial number and udp target for this device
 // reboot if fails
@@ -407,12 +406,15 @@ void initialapisn() {
 	int i;
 
 	i = 1;
-	while (statuspkt.uid == BUILDNO)		// not yet found new S/N from server
+	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
 		printf("getting S/N and UDP target using http. Try=%d\n", i);
-		apisn();
+		sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+		httpclient(stmuid);		// get sn and targ
+#if 1
+		statuspkt.uid = 3;		// zzz
+#endif
 		osDelay(5000);
-
 		i++;
 		if (i > 10) {
 			printf("************* ABORTED **************\n");
@@ -425,3 +427,7 @@ void requestapisn() {
 	printf("updating S/N and UDP target using http\n");
 	httpclient(stmuid);		// get sn and targ
 }
+
+
+
+

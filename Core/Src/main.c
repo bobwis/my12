@@ -2045,6 +2045,8 @@ void StartDefaultTask(void const *argument) {
 
 	/* init code for LWIP */
 	MX_LWIP_Init();
+
+
 	/* USER CODE BEGIN 5 */
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
@@ -2087,9 +2089,10 @@ void StartDefaultTask(void const *argument) {
 
 	t2cap[0] = 44444444;
 
-	statuspkt.uid = BUILDNO;		// 16 bits
+	statuspkt.uid = 0xFEED;		// 16 bits - this value gets replaced by data from the server
 	statuspkt.majorversion = MAJORVERSION;
 	statuspkt.minorversion = MINORVERSION;
+	statuspkt.build = BUILDNO;		// from build 10028 onwards
 	statuspkt.udppknum = 0;
 	statuspkt.sysuptime = 0;
 	statuspkt.netuptime = 0;
@@ -2192,9 +2195,13 @@ printf("*** TESTING BUILD USED ***\n");
 
 	initialapisn();	// get initial s/n and UDP target; reboots if fails
 
-	osDelay(1000);
+
+	osDelay(2200);
+
 	printf("Starting httpd web server\n");
+
 	httpd_init();		// start the www server
+
 	init_httpd_ssi();	// set up the embedded tag handler
 
 // tim7 drives DAC
@@ -2264,6 +2271,9 @@ void StarLPTask(void const *argument) {
 		printf("Console Rx Queue not created... rebooting...\n");
 		rebootme(0);
 	}
+
+	strcpy(udp_target,SERVER_DESTINATION);
+
 
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
