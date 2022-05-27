@@ -5,6 +5,8 @@
  *      Author: bob
  */
 
+#include <stdio.h>
+
 // emulate eeprom using STM32 flash memory
 // based on http://www.sonic2kworld.com/blog/using-stm32f-flash-as-eeprom-the-easy-way (also derived from elsewhere)
 // Included headers
@@ -110,5 +112,248 @@ void testeeprom(void) {
 
 	while (1)
 		;
-
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///   GENERAL FLASH MEMORY WRITE ROUTINES (used by TFTP)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static FLASH_EraseInitTypeDef EraseInitStruct;
+
+// flash unlock
+HAL_StatusTypeDef UnlockFlash() {
+	HAL_StatusTypeDef res;
+
+//	printf("UnlockFlash:\n");
+	res = HAL_FLASH_Unlock();
+	if (res != HAL_OK) {
+		printf("UnlockFlash: failed to unlock 0x%x\n", res);
+		printflasherr();
+		return (res);
+	}
+	return (res);
+}
+
+HAL_StatusTypeDef LockFlash() {
+	HAL_StatusTypeDef res;
+
+//	printf("lockFlash:\n");
+	res = HAL_FLASH_Lock();
+	if (res != HAL_OK) {
+		printf("LockFlash: failed to lock\n");
+		printflasherr();
+		return (res);
+	}
+	return (res);
+}
+
+// display the error
+void printflasherr() {
+	char *msg;
+	uint32_t err;
+
+	err = HAL_FLASH_GetError();
+
+	switch (err) {
+	case FLASH_ERROR_ERS:
+		msg = "Erasing Sequence";
+		break;
+	case FLASH_ERROR_PGP:
+		msg = "Programming Parallelism";
+		break;
+	case FLASH_ERROR_PGA:
+		msg = "Programming alignment";
+		break;
+	case FLASH_ERROR_WRP:
+		msg = "Write Protected";
+		break;
+	case FLASH_ERROR_OPERATION:
+		msg = "Operation";
+		break;
+	default:
+		msg = NULL;
+		sprintf(msg, "Unknown err 0x%0x", err);
+		break;
+	}
+	if (msg == NULL) {
+		printf("Flash failed Unknown err 0x%0x\n", err);
+	} else {
+		printf("Flash operation failed: %s error\n", msg);
+	}
+	LockFlash();		// for safety
+}
+
+// erase flash sector(s)
+// (start at sector corresponding to memptr, fixed erase of 512K)
+HAL_StatusTypeDef EraseFlash(void *memptr) {
+	HAL_StatusTypeDef res;
+	uint32_t SectorError, *ptr;
+	int dirty;
+
+	if ((res = UnlockFlash()) != HAL_OK) {
+		printf("EraseFlash: unlock failed\n");
+		printflasherr();
+	}
+
+	EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;		// should this be 2???
+
+	if (((uint32_t) memptr & 0x8100000) == 0x8000000)	// the lower 512K
+			{
+		EraseInitStruct.Sector = FLASH_SECTOR_0;
+		EraseInitStruct.NbSectors = 5;
+	} else	// the upper 512M starting at 1M
+	{
+		EraseInitStruct.Sector = FLASH_SECTOR_8;
+		EraseInitStruct.NbSectors = 2;
+	}
+
+	dirty = 0;
+	for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
+		if (*ptr != 0xffffffff) {
+			dirty = 1;
+			break;
+		}
+	}
+
+	if ((dirty) && (notflashed)) {
+		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
+
+		EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
+		EraseInitStruct.Banks = FLASH_BANK_1;
+		EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+		res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
+		if (SectorError != 0xffffffff) {
+			printf("Flash Erase failed sectorerror 0x%08x\n", SectorError);
+		}
+		if (res != HAL_OK) {
+			printf("EraseFlash: failed\n");
+			printflasherr();
+		} else {
+			printf("Flash successfully erased\n");
+			notflashed = 0;
+
+			// check the erasure
+			dirty = 0;
+			for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
+				if (*ptr != 0xffffffff) {
+					dirty = 1;
+					break;
+				}
+			}
+			if (dirty) {
+				notflashed = 1;
+				printf("*** ERROR: Flash was erased but bits still dirty\n");
+			}
+		}
+
+	} else {
+		printf("Flash erase unnecessary\n");
+	}
+}
+
+// write 32 bits
+int WriteFlashWord(uint32_t address, uint32_t data) {
+	HAL_StatusTypeDef res;
+	int trys;
+
+	if (((int) address < FLASH_START_ADDRESS) || ((int) address > (FLASH_END_ADDRESS))) {
+		printf("WriteFlash: failed address check\n");
+		return -1;
+	}
+
+	trys = 0;
+	__HAL_FLASH_ART_DISABLE();
+	while ((res = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data) != HAL_OK)) {
+		printflasherr();		// deleteme
+		if (res == HAL_BUSY) {
+			if (trys > 3) {
+				__HAL_FLASH_ART_RESET();
+				__HAL_FLASH_ART_ENABLE();
+				printf("WriteFlashWord: failed write trys\n");
+				return (-1);
+			}
+			trys++;
+			osDelay(0);
+			continue;
+		} // if busy
+
+		if (res != HAL_OK) {
+			printflasherr();
+			printf("WriteFlashWord: failed write at 0x%0x err=0x%x\n", address, res);
+			__HAL_FLASH_ART_RESET();
+			__HAL_FLASH_ART_ENABLE();
+			return (res);
+		}
+	}
+	__HAL_FLASH_ART_RESET();
+	__HAL_FLASH_ART_ENABLE();
+
+	if (*(uint32_t*) address != data) {
+		printf("WriteFlashWord: Failed at 0x%08x with data=%08x, read=0x%08x\n", address, data, *(uint32_t*) address);
+	}
+	return (0);
+}
+
+// write sector of 32k bytes
+// datablock must be 32k bytes even if valid data is not filling all
+int WriteFlash32k(void *startadd, uint32_t *datablock) {
+	HAL_StatusTypeDef res;
+	int i;
+
+	printf("progflash32k: \n");
+	if (UnlockFlash() != HAL_OK) {
+		return (-1);
+	}
+	if (((unsigned long) startadd & 0x7FFF) > 0) {
+		printf("progflash32k: failed 32k boundary\n");
+		return (-1);
+	}
+	for (i = 0; i < 0x2000; i++) {		// 0x2000 words is 0x8000 bytes
+		if (res = WriteFlashWord(startadd + i, datablock[i])) {
+			printf("WriteEE Failed at %d\n", startadd + i);
+			return (-1);
+		}
+	}
+	if (LockFlash() != HAL_OK) {
+		return (-1);
+		return (0);
+	}
+}
+
+/// fix up the boot vectors in the option flash
+void fixboot() {
+	HAL_StatusTypeDef res;
+	FLASH_OBProgramInitTypeDef OBInitStruct;
+	uint32_t *newadd, options;
+
+	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
+
+	HAL_FLASH_OB_Unlock();
+
+	// swap boot address (maybe)
+
+	newadd = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;	// toggle boot segment start add
+	if (*newadd != 0xffffffff) {	// if new area is not an empty region
+		OBInitStruct.BootAddr0 = newadd;	// change boot address
+	}
+	OBInitStruct.BootAddr1 = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;// flip alternate (this is only used if boot pin inverted)
+
+	OBInitStruct.USERConfig |= FLASH_OPTCR_nDBOOT;		// disable mirrored flash dual boot
+	OBInitStruct.USERConfig |= FLASH_OPTCR_nDBANK;
+
+	res = HAL_FLASHEx_OBProgram(&OBInitStruct);
+	if (res != HAL_OK) {
+		printf("fixboot: failed to OBProgram %d\n", res);
+	}
+
+	res = HAL_FLASH_OB_Launch();
+	if (res != HAL_OK) {
+		printf("fixboot: failed to OBLaunch %d\n", res);
+	}
+	printf("fixing boot....\n");
+	HAL_FLASH_OB_Lock();
+
+	printf("fixboot ran\n");
+}
+

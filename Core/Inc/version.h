@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 14
+#define MINORVERSION 15
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,7 +28,7 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10025
+#define BUILD 10028
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -49,7 +49,7 @@
 #define LOCALTIME
 #endif
 
-// Time between sending timesd status packets (seconds)
+// Time between sending timed status packets (seconds)
 #ifdef TESTING
 #define STAT_TIME 2
 #else
@@ -60,7 +60,6 @@
 #if 1
 #define HARDWARE_WATCHDOG 1
 #endif
-#endif
 
 
 #define SPLATBOARD1	11
@@ -69,12 +68,12 @@
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0
 
-
-unsigned int pcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
 /*
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);
 */
+#endif
+
 
 
 

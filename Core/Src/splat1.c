@@ -63,8 +63,8 @@ uint32_t logampmode = 0;	// log amp mode flag
 
 // Programmable gain amplifier
 
-extern const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
-extern const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
+const int pgamult[] = { 1, 2, 4, 5, 8, 10, 16, 32, 48, 96 };		// maps from 0..9 gain control to the PGA
+const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 gain control to the PGA
 
 //////////////////////////////////////////////
 //
@@ -202,7 +202,7 @@ int bumppga(int i) {
 	}
 	if (pgagain < 0)		// safety
 		pgagain = 0;
-	if (pcb == SPLATBOARD1) {		/// this doesn't have the boost function
+	if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
 		if (pgagain > 7) {
 			pgagain = 7;			// reached max gain
 		}
@@ -639,7 +639,7 @@ void test_esp() {
 	}
 }
 
-printfromesp() {
+void printfromesp() {
 	while (espoutindex != esprxindex) {
 		putchar(esprxdatabuf[espoutindex++]);
 		if (espoutindex > sizeof(esprxdatabuf))
@@ -748,7 +748,7 @@ void initsplat(void) {
 	osDelay(500);
 	printf("Initsplat: LED cycle\n");
 
-	if (pcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
+	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");
 		initdualmux();
 		osDelay(500);
@@ -774,7 +774,7 @@ void initsplat(void) {
 	}
 	osDelay(500);
 
-	if ((pcb == LIGHTNINGBOARD1) || (pcb == LIGHTNINGBOARD2)) {
+	if ((circuitboardpcb == LIGHTNINGBOARD1) || (circuitboardpcb == LIGHTNINGBOARD2)) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
 		{
