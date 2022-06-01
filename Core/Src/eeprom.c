@@ -14,6 +14,15 @@
 #include "eeprom.h"
 #include "stm32f7xx_hal.h"
 
+uint32_t flash_load_address = LOADER_BASE_MEM1;
+void *flash_memptr = (void*) 0;
+int flash_filelength = 0;
+int flash_abort = 0;		// 1 == abort
+uint32_t dl_filecrc = 0;
+int notflashed = 1;		// 1 == not flashed,  0 = flashed
+uint32_t q_bytes[4];	// memwrite buffer between calls
+int q_index = 0;	// number of bytes queued for next memwrite
+uint32_t *p, patt = 0x80010000;	// used for teting only zzz
 // Functions
 //-----------------------------------
 
@@ -253,13 +262,13 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 }
 
 // write 32 bits
-int WriteFlashWord(uint32_t address, uint32_t data) {
+HAL_StatusTypeDef WriteFlashWord(uint32_t address, uint32_t data) {
 	HAL_StatusTypeDef res;
 	int trys;
 
 	if (((int) address < FLASH_START_ADDRESS) || ((int) address > (FLASH_END_ADDRESS))) {
 		printf("WriteFlash: failed address check\n");
-		return -1;
+		return (HAL_ERROR);
 	}
 
 	trys = 0;
@@ -271,7 +280,7 @@ int WriteFlashWord(uint32_t address, uint32_t data) {
 				__HAL_FLASH_ART_RESET();
 				__HAL_FLASH_ART_ENABLE();
 				printf("WriteFlashWord: failed write trys\n");
-				return (-1);
+				return (HAL_ERROR);
 			}
 			trys++;
 			osDelay(0);
@@ -291,8 +300,9 @@ int WriteFlashWord(uint32_t address, uint32_t data) {
 
 	if (*(uint32_t*) address != data) {
 		printf("WriteFlashWord: Failed at 0x%08x with data=%08x, read=0x%08x\n", address, data, *(uint32_t*) address);
+		return (HAL_ERROR);
 	}
-	return (0);
+	return (HAL_OK);
 }
 
 // write sector of 32k bytes
@@ -321,14 +331,46 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 	}
 }
 
+// make sure the boot vector points to this running program
+void stampboot() {
+	HAL_StatusTypeDef res;
+	FLASH_OBProgramInitTypeDef OBInitStruct;
+	uint32_t *newadd, options, addr;
+
+	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
+
+	addr = (uint32_t) stampboot & LOADER_BASE_MEM2; 	// where are we running this code?
+	newadd = (addr == LOADER_BASE_MEM1) ? 0x2000 : 0x2040;
+
+	if (OBInitStruct.BootAddr0 != newadd) {
+		HAL_FLASH_OB_Unlock();
+
+		OBInitStruct.BootAddr0 = newadd;	// stamp the running boot address
+		OBInitStruct.BootAddr1 = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;// flip alternate (this is only used if boot pin inverted)
+
+		OBInitStruct.USERConfig |= FLASH_OPTCR_nDBOOT;		// disable mirrored flash dual boot
+		OBInitStruct.USERConfig |= FLASH_OPTCR_nDBANK;
+
+		res = HAL_FLASHEx_OBProgram(&OBInitStruct);
+		if (res != HAL_OK) {
+			printf("swapboot: failed to OBProgram %d\n", res);
+		}
+
+		res = HAL_FLASH_OB_Launch();
+		if (res != HAL_OK) {
+			printf("swapboot: failed to OBLaunch %d\n", res);
+		}
+		printf("....re-stamped boot vector\n");
+	}
+}
+
 /// fix up the boot vectors in the option flash
-void fixboot() {
+void swapboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
 	uint32_t *newadd, options;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
-
 	HAL_FLASH_OB_Unlock();
 
 	// swap boot address (maybe)
@@ -344,16 +386,234 @@ void fixboot() {
 
 	res = HAL_FLASHEx_OBProgram(&OBInitStruct);
 	if (res != HAL_OK) {
-		printf("fixboot: failed to OBProgram %d\n", res);
+		printf("swapboot: failed to OBProgram %d\n", res);
 	}
 
 	res = HAL_FLASH_OB_Launch();
 	if (res != HAL_OK) {
-		printf("fixboot: failed to OBLaunch %d\n", res);
+		printf("swapboot: failed to OBLaunch %d\n", res);
 	}
 	printf("fixing boot....\n");
 	HAL_FLASH_OB_Lock();
 
-	printf("fixboot ran\n");
+	printf("swapboot ran\n");
+}
+
+// not implemented
+static void* memread() {
+
+}
+
+// write tp flash with data at memptr
+int flash_writeword(uint32_t worddata) {
+	HAL_StatusTypeDef res;
+
+	if ((res = WriteFlashWord(flash_memptr, worddata)) != 0) {
+		printf("memwrite: WriteFlash error\n");
+		return (-1);
+	}
+	if (*(uint32_t*) flash_memptr != worddata) {
+		printf("memwrite: Readback error at %08x\n", flash_memptr);
+		return (-1);
+	}
+	return (0);
+}
+
+// flash_memwrite - this writes an unspecified block size to Flash (with verification)
+// assume mem is pointing at byte array
+int flash_memwrite(const uint8_t buf[], size_t size, size_t len, volatile void *mem) {
+	volatile int i, j, k;
+	volatile uint32_t data;
+	HAL_StatusTypeDef res;
+	static int lastbyte = 0;
+
+	flash_filelength += (int) len;
+
+#if 0
+////////////////////////////////////////////////
+	static int totlen = 0, count = 0;
+
+totlen += len;
+count++;
+printf("memwrite: count=%d, memptr=0x%x, totlen=%d, len=%d\n",count, flash_memptr, totlen, len);
+
+//	for (i = 0; i < len; i++) {
+//		printf(" %02x", buf[i]);
+//	}
+//	printf("\n");
+//////////////////////////////////////////////////////
+#endif
+
+	if ((!(flash_abort)) && (notflashed)) {
+		res = EraseFlash(flash_memptr);
+		notflashed = 0;
+	}
+
+	if (len % 4 != 0) {
+		printf("memwrite: len %d chunk not multiple of 4 at %u\n", len, flash_filelength);
+	}
+	if (len % 2 != 0) {
+		printf("memwrite: len %d chunk not multiple of 2 at %u\n", len, flash_filelength);
+	}
+	if (len == 0) {
+		printf("memwrite: len %d at %u\n", len, flash_filelength);
+	}
+
+	data = 0xffffffff;		// the 32 bit word we will write
+
+	lastbyte = 0;
+	if (q_index > 0) {		// some residual data from last time through here
+		for (i = 0; i < q_index;) {
+			data >>= 8;
+			data |= (q_bytes[i++] << 24);
+			lastbyte++;
+		}
+	}
+
+	k = len % 4;		// see if buf fits full into 32 bit words
+
+	for (i = 0; (i + q_index) < (len - k);) {		// take full words, avoid read buffer overflow
+		for (j = lastbyte; j < 4; j++) {
+			data >>= 8;
+			data |= buf[i++] << 24;
+		}
+#if 0
+		if (patt != data) {				///  zzz debug
+			printf("memwrite: expected 0x%08x, found 0x%08x\n", flash_memptr, data);
+		}
+		patt += 4;
+#endif
+		lastbyte = 0;	// no more residual
+
+		//		printf("memptr=%08x, data[%d]=%08x\n", (uint32_t) memptr, i, data);
+		flash_writeword(data);
+
+		flash_memptr += 4;
+	}
+
+	for (q_index = 0; i < len;) {
+		q_bytes[q_index++] = buf[i++];		// put extra odd bytes in queue
+	}
+
+///	memptr += len;
+//	printf("memwrite: buf=0x%0x, size=%d, size_=%d, memptr=0x%x\n",(uint32_t)buf,size,len,(uint32_t)mem);
+	return ((int) len);
+}
+
+// close memory 'handle'
+void* memclose() {
+	uint32_t xcrc, residual;
+	static FLASH_OBProgramInitTypeDef OBInitStruct;
+	HAL_StatusTypeDef res;
+	int i;
+
+	notflashed = 1;		// now assumed dirty
+	if (flash_abort) {
+		flash_abort = 0;
+		return;
+	}
+
+	if (q_index > 0) {			// unfinished residual write still needed
+		residual = 0;
+		for (i = 0; i < 4; i++) {
+			residual >>= 8;
+			residual |= (q_bytes[i] << 24);
+		}
+		flash_writeword(residual);
+	}
+
+	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%0x mytot=%d\n", flash_load_address,
+			flash_filelength, (unsigned int) flash_memptr, mytot);
+	osDelay(1000);
+	if (LockFlash() != HAL_OK) {
+		printf("eeprom: flash2 failed\n");
+		return ((void*) 0);
+	}
+
+	xcrc = flash_findcrc(flash_load_address, flash_filelength);
+	if ((dl_filecrc != xcrc) && (dl_filecrc != 0xffffffff)) {
+		printf(
+				"\n****************** Downloaded file/ROM CRC check failed ourcrc=0x%08x, filecrc=0x%08x mytot=%d **********\n",
+				xcrc, dl_filecrc, mytot);
+#if 0
+////////////////////////////		// test debug zzz
+		{
+			int count = 0;
+
+			patt = 0x80010000;
+			for (i = 0; i < flash_filelength; i += 4) {
+				p = (uint32_t*) (flash_load_address + i);
+				if (*p != patt) {
+					if (count < 8) {
+						printf("patt failed at 0x%08x, read 0x%08x, should be 0x%0x8\n", (uint32_t) p, *p, patt);
+					}
+					count++;
+				}
+				patt += 4;
+			}
+		}
+////////////////////////////////////////////
+#endif
+	} else {
+
+		//if !(check firmwarsatckpointer)
+
+		HAL_FLASHEx_OBGetConfig(&OBInitStruct);
+
+		HAL_FLASH_OB_Unlock();
+		OBInitStruct.BootAddr0 = (flash_load_address == LOADER_BASE_MEM1) ? 0x2000 : 0x2040;
+		OBInitStruct.BootAddr1 = (flash_load_address == LOADER_BASE_MEM1) ? 0x2040 : 0x2000;
+
+		res = HAL_FLASHEx_OBProgram(&OBInitStruct);
+		if (res != HAL_OK) {
+			printf("memclose: failed to OBProgram %d\n", res);
+		}
+
+		res = HAL_FLASH_OB_Launch();
+		if (res != HAL_OK) {
+			printf("memclose: failed to OBLaunch %d\n", res);
+		}
+
+//		*(uint32_t *)(0x1FFF0010) = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x0080 : 0x00c0;
+		HAL_FLASH_OB_Lock();
+		printf("New FLASH image loaded; rebooting please wait...\n");
+		osDelay(50);
+		rebootme(0);
+	}
+#if 0
+	{
+		uint32_t *mem1, *mem2, d1, d2, i;
+
+		xcrc = flash_findcrc(LOADER_BASE_MEM1, flash_filelength);		// debug
+		printf("LOADER_BASE_MEM1 CRC=0x%x\n", xcrc);
+
+		xcrc = flash_findcrc(TFTP_BASE_MEM2, flash_filelength);		// debug
+		printf("LOADER_BASE_MEM2 CRC=0x%x\n", xcrc);
+
+		mem1 = LOADER_BASE_MEM1;
+		mem2 = TFTP_BASE_MEM2;
+		for (i = 0; i < flash_filelength; i += 4) {
+			d1 = *mem1++;
+			d2 = *mem2++;
+			if (d1 != d2) {
+				mem1--;
+				mem2--;
+				printf("memclose1: 0x%08x[0x%08x], 0x%08x[0x%08x], d1=0x%08x, d2=0x%08x\n", mem1, *mem1, mem2, *mem2,
+						d1, d2);
+				mem1++;
+				mem2++;
+			}
+		}
+	}
+#endif
+}
+
+// calculate the crc over a range of memory
+uint32_t flash_findcrc(void *base, int length) {
+	uint32_t crc, xinit = 0xffffffff;
+
+	crc = xcrc32(base, length, xinit);
+	printf("findcrc: crc=0x%08x, base=0x%08x, len=%d\n", crc, base, length);
+	return (crc);
 }
 

@@ -141,7 +141,6 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
-uint32_t filecrc;
 
 /* USER CODE END PD */
 
@@ -1833,10 +1832,9 @@ static void MX_GPIO_Init(void) {
 /* USER CODE BEGIN 4 */
 
 // find the crc for the running firmware (printout needed for server)
-crc_rom()
-{
+crc_rom() {
 	unsigned char *base;
-	extern xcrc32 (const unsigned char *buf, int len, unsigned int init);
+	extern xcrc32(const unsigned char *buf, int len, unsigned int init);
 	extern uint32_t __fini_array_end;
 	extern uint32_t _edata, _sdata;
 
@@ -1849,9 +1847,9 @@ crc_rom()
 		base = 0x8100000;
 	}
 
-	length = (uint32_t)&__fini_array_end - (uint32_t)base + ((uint32_t) &_edata - (uint32_t) &_sdata);
+	length = (uint32_t) &__fini_array_end - (uint32_t) base + ((uint32_t) &_edata - (uint32_t) &_sdata);
 	romcrc = xcrc32(base, length, xinit);
-	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", romcrc,base,length);
+	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
 }
 
 err_leds(int why) {
@@ -2046,7 +2044,6 @@ void StartDefaultTask(void const *argument) {
 	/* init code for LWIP */
 	MX_LWIP_Init();
 
-
 	/* USER CODE BEGIN 5 */
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
@@ -2054,8 +2051,10 @@ void StartDefaultTask(void const *argument) {
 	HAL_StatusTypeDef stat;
 //		uint16_t dacdata[64];
 
-	if ((i=HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
-			fixboot();	// zzz reset the boot vectors
+	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
+		swapboot();	//  swap the boot vector
+	} else {
+		stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
 	}
 
 	getboardpcb();		// find our daughterboard
@@ -2093,6 +2092,7 @@ void StartDefaultTask(void const *argument) {
 	statuspkt.majorversion = MAJORVERSION;
 	statuspkt.minorversion = MINORVERSION;
 	statuspkt.build = BUILDNO;		// from build 10028 onwards
+	newbuild = BUILDNO;				// init to the same
 	statuspkt.udppknum = 0;
 	statuspkt.sysuptime = 0;
 	statuspkt.netuptime = 0;
@@ -2136,7 +2136,7 @@ printf("*** TESTING BUILD USED ***\n");
 	printf("Setting up timers\n");
 
 	if ( xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
-	/*printf("Initial semaphoregive failed\n")*/
+		/*printf("Initial semaphoregive failed\n")*/
 		;	// expect this to fail as part of the normal setup
 	}
 
@@ -2194,7 +2194,6 @@ printf("*** TESTING BUILD USED ***\n");
 	printf("*****************************************\n");
 
 	initialapisn();	// get initial s/n and UDP target; reboots if fails
-
 
 	osDelay(2200);
 
@@ -2272,8 +2271,7 @@ void StarLPTask(void const *argument) {
 		rebootme(0);
 	}
 
-	strcpy(udp_target,SERVER_DESTINATION);
-
+	strcpy(udp_target, SERVER_DESTINATION);
 
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 

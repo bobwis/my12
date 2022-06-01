@@ -68,6 +68,17 @@
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0
 
+
+#ifdef TESTING
+//#define SERVER_DESTINATION "lightning.local"
+//#define SERVER_DESTINATION "10.10.201.240"
+#define SERVER_DESTINATION "lightning.vk4ya.com"
+#else
+#define SERVER_DESTINATION "10.10.201.182"
+#define SERVER_DESTINATION "lightning.vk4ya.com"
+#endif
+
+
 /*
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);

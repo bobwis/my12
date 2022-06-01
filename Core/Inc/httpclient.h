@@ -49,6 +49,6 @@ struct hc_state {
 };
 
 // Public function
-int hc_open(ip_addr_t, char*, char*, void (*)(u8_t, hc_errormsg, char*, u16_t));
+int hc_open(char*, char*, char*, void (*)(u8_t, hc_errormsg, char*, u16_t));
 
 #endif //  __HTTPCLIENT_H

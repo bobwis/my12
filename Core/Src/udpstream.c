@@ -15,6 +15,8 @@
 #include "lwip/dns.h"
 #include "lwip/prot/dns.h"
 
+#define pbuf_free pbuf_free_callback
+
 extern uint32_t t1sec;
 uint8_t gpslocked = 0;
 uint8_t epochvalid = 0;
@@ -319,6 +321,3 @@ void startudp(uint32_t ip) {
 
 	} // forever while
 }
-
-//       pbuf_free(p1); //De-allocate packet buffer
-

@@ -57,6 +57,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "eeprom.h"
 
 #if LWIP_TCP && LWIP_CALLBACK_API
 
@@ -87,8 +88,7 @@
 #define HTTPC_POLL_INTERVAL     1
 #define HTTPC_POLL_TIMEOUT      30 /* 15 seconds */
 
-
-#define pbuf_free pbuf_free_callback
+//#define pbuf_free pbuf_free_callback
 #define HTTPC_CONTENT_LEN_INVALID 0xFFFFFFFF
 
 /* GET request basic */
@@ -186,6 +186,7 @@ static err_t httpc_free_state(httpc_state_t *req) {
 
 /** Close the connection: call finished callback and free the state */
 static err_t httpc_close(httpc_state_t *req, httpc_result_t result, u32_t server_response, err_t err) {
+//	flash_memptr = 0;		// zzz
 	if (req != NULL) {
 		if (req->conn_settings != NULL) {
 			if (req->conn_settings->result_fn != NULL) {
@@ -345,7 +346,7 @@ static err_t httpc_tcp_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, er
 static void httpc_tcp_err(void *arg, err_t err) {
 	httpc_state_t *req = (httpc_state_t*) arg;
 
-	printf("httpc_tcp_err: %d",err);
+	printf("httpc_tcp_err: %d", err);
 
 	if (req != NULL) {
 		/* pcb has already been deallocated */
@@ -573,6 +574,7 @@ static err_t httpc_init_connection_common(httpc_state_t **connection, const http
  */
 static err_t httpc_init_connection(httpc_state_t **connection, const httpc_connection_t *settings,
 		const char *server_name, u16_t server_port, const char *uri, altcp_recv_fn recv_fn, void *callback_arg) {
+
 	return httpc_init_connection_common(connection, settings, server_name, server_port, uri, recv_fn, callback_arg, 1);
 }
 
@@ -879,29 +881,28 @@ httpc_get_file_dns_to_disk(const char* server_name, u16_t port, const char* uri,
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-httpc_state_t conn, *connection;
-httpc_connection_t set, *settings;
+httpc_state_t conn1, conn2, *connection1, *connection2;
+httpc_connection_t set1, set2, *settings1, *settings2;
 
-static int mytot = 0;
+int mytot = 0;
 
-
-static const char *lerr_strerr[] = { "Ok.", 		/* ERR_OK          0  */
-"Out of memory error.",							 /* ERR_MEM        -1  */
-"Buffer error.", 								/* ERR_BUF        -2  */
-"Timeout.", 									/* ERR_TIMEOUT    -3  */
-"Routing problem.",								 /* ERR_RTE        -4  */
-"Operation in progress.", 							/* ERR_INPROGRESS -5  */
-"Illegal value.", 								/* ERR_VAL        -6  */
-"Operation would block.", 						/* ERR_WOULDBLOCK -7  */
-"Address in use.", 									/* ERR_USE        -8  */
-"Already connecting.", 									/* ERR_ALREADY    -9  */
-"Already connected.", 								/* ERR_ISCONN     -10 */
-"Not connected.",							 /* ERR_CONN       -11 */
-"Low-level netif error.", 						/* ERR_IF         -12 */
-"Connection aborted.", 								/* ERR_ABRT       -13 */
-"Connection reset.", 							/* ERR_RST        -14 */
-"Connection closed.", 							/* ERR_CLSD       -15 */
-"Illegal argument." 							/* ERR_ARG        -16 */
+static const char *lerr_strerr[] = { "Ok.", /* ERR_OK          0  */
+"Out of memory error.", /* ERR_MEM        -1  */
+"Buffer error.", /* ERR_BUF        -2  */
+"Timeout.", /* ERR_TIMEOUT    -3  */
+"Routing problem.", /* ERR_RTE        -4  */
+"Operation in progress.", /* ERR_INPROGRESS -5  */
+"Illegal value.", /* ERR_VAL        -6  */
+"Operation would block.", /* ERR_WOULDBLOCK -7  */
+"Address in use.", /* ERR_USE        -8  */
+"Already connecting.", /* ERR_ALREADY    -9  */
+"Already connected.", /* ERR_ISCONN     -10 */
+"Not connected.", /* ERR_CONN       -11 */
+"Low-level netif error.", /* ERR_IF         -12 */
+"Connection aborted.", /* ERR_ABRT       -13 */
+"Connection reset.", /* ERR_RST        -14 */
+"Connection closed.", /* ERR_CLSD       -15 */
+"Illegal argument." /* ERR_ARG        -16 */
 };
 
 /**
@@ -921,7 +922,7 @@ void printlwiperr(err_t err) {
 /* print http_client errors
  *
  */
-char *clientresult(httpc_result_t err) {
+char* clientresult(httpc_result_t err) {
 	char *msg;
 
 	switch (err) {
@@ -959,17 +960,12 @@ char *clientresult(httpc_result_t err) {
 		msg = "Unknown http client error";
 		break;
 	}
-//	printf("httpclient error: %s\n", msg);
-	return(msg);
+	printf("clientresult: %s\n", msg);
+	return (msg);
 }
 
-/* httpc_init_connection(httpc_state_t **connection, const httpc_connection_t *settings, const char* server_name,
- u16_t server_port, const char* uri, altcp_recv_fn recv_fn, void* callback_arg)
- */
-
-
-
-char url[80];
+uint32_t http_content_len = 0;
+char rxbuffer[540];
 char domain_name[30];
 err_t error;
 
@@ -980,41 +976,56 @@ err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *
 	printf("RecvHttpHeaderCallback: len=%u, content len=%lu\n", hdr_len, content_len);
 	printf("header=");
 	buf = hdr->payload;
-	for (i = 0; i < hdr_len; i++) {
-		putchar(buf[i]);
-	}
-#if 0
-	printf("\ncontent=");
-	buf = hdr->payload;
-	for (i = 0; i < content_len; i++) {
-		putchar(buf[i]);
-	}
-#endif
+	http_content_len = content_len;
+//	for (i = 0; i < hdr_len; i++) {
+//		putchar(buf[i]);
+//	}
 	printf("\n");
 	return ERR_OK;
 }
 
-
-
-void HttpClientResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res, err_t err) {
-	printf("HttpClientResultCallback: mytot=%u\n",mytot);
+//
+// received file has finished
+void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
+		err_t err) {
+	printf("HttpClientFileResultCallback: mytot=%u\n", mytot);
 	if (httpc_result != HTTPC_RESULT_OK) {
-		printf("HttpClientResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
+		printf("HttpClientFileResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
+		flash_memptr = 0;
+	}
+	if (err != ERR_OK) {
+		printlwiperr(err);
+		flash_memptr = 0;
+	}
+	if (flash_memptr != 0) {
+		memclose();
+	}
+
+	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+}
+
+//
+// receive page has finished
+void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
+		err_t err) {
+	printf("HttpClientPageResultCallback: mytot=%u\n", mytot);
+	if (httpc_result != HTTPC_RESULT_OK) {
+		printf("HttpClientPageResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 	}
 	if (err != ERR_OK) {
 		printlwiperr(err);
 	}
-	printf("srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+
+	printf("HttpClientPageResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+	returnpage(rxbuffer, mytot, err);
 }
 
-
-void HttpClientReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
-	int i;
+int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
 	char *buf;
 	struct pbuf *q;
 	int count = 0, tlen = 0, len = 0;
 
-//	printf("HttpClientReceiveCallback:\n");
+//	printf("HttpClientFileReceiveCallback:\n");
 
 	LWIP_ASSERT("p != NULL", p != NULL);
 	if (err != ERR_OK) {
@@ -1023,19 +1034,61 @@ void HttpClientReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p,
 		return;
 	}
 
+	for (q = p; q != NULL; q = q->next) {
+		count += q->len;
+		tlen = q->tot_len;
+		len = q->len;
+#if 1
+		putchar('.');
+#endif
+		if ((flash_abort == 0) && (flash_memptr != 0)) { // we need to write this data to flash
+			if (flash_memwrite(q->payload, 1, q->len, flash_memptr) != (size_t) len) {
+				flash_abort = 1;
+				flash_memptr = 0;
+				printf("Flash Write failed from http client\n");
+				return (-1);
+			}
+		}
+		mytot += q->len;
+		altcp_recved(pcb, p->tot_len);
+		pbuf_free(p);
+
+//		p = p->next;
+//		printf("HttpClientFileReceiveCallback: chunk=%d, tlen=%d, len=%d, mytot=%d\n", count, tlen, len, mytot);
+	}
+	return (0);
+}
+
+// build a webpage from pbufs
+void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
+	int i;
+	char *buf;
+	struct pbuf *q;
+	int count = 0, tlen = 0, len = 0;
+
+	printf("HttpClientPageReceiveCallback:\n");
+
+	LWIP_ASSERT("p != NULL", p != NULL);
+	if (err != ERR_OK) {
+		putchar('#');
+		printlwiperr(err);
+		return;
+	}
 
 	for (q = p; q != NULL; q = q->next) {
 		count += q->len;
 		tlen = q->tot_len;
 		len = q->len;
 
-//		buf = q->payload;
-//		for (i = 0; i < q->len; i++) {
+		buf = q->payload;
+		for (i = 0; i < q->len; i++) {
 //			putchar(buf[i]);
-//		}
-		putchar('.');
-
-		mytot += q->len;
+			if (mytot < (sizeof(rxbuffer) - 1)) {
+				rxbuffer[mytot++] = buf[i];		// add recvd page data into buffer
+			} else {
+				rxbuffer[(sizeof(rxbuffer) - 1)] = 0;
+			}
+		}
 
 		altcp_recved(pcb, p->tot_len);
 		err = pbuf_free(p);
@@ -1043,42 +1096,76 @@ void HttpClientReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p,
 			putchar('!');
 			printlwiperr(err);
 		}
-
-//sys_restart_timeouts();
-//		printf("HttpClientReceiveCallback: chunk=%d, tlen=%d, len=%d, mytot=%d\n", count, tlen, len, mytot);
+//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, mytot=%d\n", count, tlen, len, mytot);
 	}
-
-//	altcp_recved(pcb, p->tot_len);
-//	pbuf_free_callback(p);
-	//pbuf_free(p);
 }
 
-void initfilehttpclient() {
+// download a file
+void http_dlclient(char *filename, char *host, void *flash_memptr) {
 	err_t error;
-	connection = &conn;	// point to static
-	settings = &set;		// point to static
-	memset(&set, 0, sizeof(set));
-	memset(&conn, 0, sizeof(conn));
 
-	settings->use_proxy = 0;
-	settings->headers_done_fn = RecvHttpHeaderCallback;
-	settings->result_fn = HttpClientResultCallback;
+	connection1 = &conn1;	// point to static
+	settings1 = &set1;		// point to static
+	memset(settings1, 0, sizeof(set1));
+	memset(connection1, 0, sizeof(conn1));
 
-	connection->timeout_ticks = 1;
+	settings1->use_proxy = 0;
+	settings1->headers_done_fn = RecvHttpHeaderCallback;
+	settings1->result_fn = HttpClientFileResultCallback;
+
+	connection1->timeout_ticks = 1;
 
 //	strcpy(domain_name, "xen.local");
-//	strcpy(url, "/firmware/my12.bin");
+//	strcpy(rxbuffer, "/firmware/my12.bin");
 
-	strcpy(domain_name, "lightning.vk4ya.com");
-	strcpy(url, "/firmware/my12.bin");
+	strcpy(domain_name, host);
+	strcpy(rxbuffer, filename);
 
-	printf("domain:%s, url:%s\n", domain_name, url);
+	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
 	mytot = 0;
-	error = httpc_get_file_dns(domain_name, 8082, url, settings, HttpClientReceiveCallback, HttpClientResultCallback,&connection);
+	expectedapage = 0;
+	error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings1, HttpClientFileReceiveCallback,
+			HttpClientFileResultCallback, &connection1);
 	if (error != HTTPC_RESULT_OK) {
 		printf("httpc_get_file_dns: returned, err=%d\n", error);
 	}
+}
+
+// request a webpage
+int hc_open(char *servername, char *page, char Postvars, void *returpage) {
+	err_t error;
+
+	connection2 = &conn2;	// point to static
+	settings2 = &set2;		// point to static
+	memset(settings2, 0, sizeof(set2));
+	memset(connection2, 0, sizeof(conn2));
+
+	settings2->use_proxy = 0;
+	settings2->headers_done_fn = RecvHttpHeaderCallback;
+	settings2->result_fn = HttpClientPageResultCallback;
+
+	connection2->timeout_ticks = 1;
+
+	if ((isalnum(*servername) || (*servername == '/'))) {
+		strcpy(domain_name, servername);
+	} else {
+		strcpy(domain_name, SERVER_DESTINATION);
+	}
+
+	if ((isalnum(*page) || (*page == '/'))) {
+		strcpy(rxbuffer, page);			// rxbuffer has url
+	} else {
+		strcpy(rxbuffer, "/");
+	}
+
+	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
+
+	mytot = 0;
+    expectedapage = 1;
+	error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings2, HttpClientPageReceiveCallback,
+			HttpClientPageResultCallback, &connection2);
+	return (error);
 }
 
 #endif /* LWIP_TCP && LWIP_CALLBACK_API */

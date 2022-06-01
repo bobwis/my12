@@ -32,6 +32,7 @@ extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
 char stmuid[64] = { 0 };	// STM UUID
 ip_addr_t remoteip = { 0 };
+int expectedapage = 0;
 
 // The cgi handler is called when the user changes something on the webpage
 void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params,
@@ -53,7 +54,7 @@ void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **
 
 		case 10:			// reboot button
 			printf("Reboot command from wwww\n");
-			osDelay(1000);
+			osDelay(500);
 			__NVIC_SystemReset();   // reboot
 			break;
 		case 11:				// LED1
@@ -293,7 +294,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
  */
 
 // callback with the page
-void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *content, volatile u16_t charcount) {
+void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
 	int nconv, res, res2;
@@ -301,104 +302,115 @@ void returnpage(volatile u8_t Num, volatile hc_errormsg errorm, volatile char *c
 	volatile char p2[96];
 	volatile char filename[32], s1[16];
 	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
-	char tftphostip[17] = "192.168.0.248";
+	char host[17] = "192.168.0.248";
+	int newfirmware = 0;
 
-	if (errorm == 0) {
-//		printf("returnpage: Num=%d, errorm=%d, charcount=%d, content=%s\n", Num, errorm, charcount,	content);
-		s1[0] = '\0';
-		nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
-		if (nconv != EOF) {
-			switch (nconv) {
+//	printf("returnpage:\n");
+	if (expectedapage) {
+		if (errorm == 0) {
+			printf("returnpage: errorm=%d, charcount=%d, content=%s\n", errorm, charcount, content);
+			s1[0] = '\0';
+			nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
+			if (nconv != EOF) {
+				switch (nconv) {
 
-			case 4: 							// converted  4 fields
-				// this param is for a variable number of string tokens
-				if (p2[0] == '{') {		// its the start of enclosed params
-					res = 0;
-					res2 = 0;
-					res |= parsep2(&p2[1], "fw", 1, filename);
-					res |= parsep2(&p2[1], "bld", 2, &newbuild);
-					res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
-					res |= parsep2(&p2[1], "crc2", 3, &crc2);
-					res2 |= parsep2(&p2[1], "srv", 1, &tftphostip);
-					res2 |= parsep2(&p2[1], "n2", 3, &n2);
-					res2 |= parsep2(&p2[1], "s1", 1, s1);
+				case 4: 							// converted  4 fields
+					// this param is for a variable number of string tokens
+					if (p2[0] == '{') {		// its the start of enclosed params
+						res = 0;
+						res2 = 0;
+						res |= parsep2(&p2[1], "fw", 1, filename);
+						res |= parsep2(&p2[1], "bld", 2, &newbuild);
+						res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
+						res |= parsep2(&p2[1], "crc2", 3, &crc2);
+						res2 |= parsep2(&p2[1], "srv", 1, &host);
+						res2 |= parsep2(&p2[1], "n2", 3, &n2);
+						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
-					printf("server filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n", filename,
-							tftphostip, newbuild, crc1, crc2, n1, n2, s1, res);
+						printf(
+								"returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",
+								filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
-					if (!(res)) {		// a valid firmware string received
-						if (newbuild != BUILDNO) {	// the version advertised is different to this one running now
-							printf("Firmware: this build is %d, the server build is %d\n",
-							BUILDNO, newbuild);
-							tftloader(filename, tftphostip, crc1, crc2);
+						if (!(res)) {		// a valid firmware string received
+							newfirmware = 1;
+
 						}
+
+					} // else ignore it
+					  // fall through
+
+				case 3: 							// converted  3 fields
+					if (p1 == 1) {		// reboot
+						printf("Server -> commands a reboot...\n");
+						osDelay(500);
+						rebootme(6);
 					}
 
-				} // else ignore it
+					if (p1 == 2) {		// freeze the UDP streaming
+						globalfreeze = 1;
+						printf("Server -> commands a streaming freeze\n");
+					} else
+						globalfreeze = 0;
+					// falls through
 
-			case 3: 							// converted  3 fields
-				if (p1 == 1) {		// reboot
-					printf("Server -> commands a reboot...\n");
-					osDelay(2000);
-					rebootme(6);
-				}
-
-				if (p1 == 2) {		// freeze the UDP streaming
-					globalfreeze = 1;
-					printf("Server -> commands a streaming freeze\n");
-				} else
-					globalfreeze = 0;
-				// falls through
-
-			case 2: 							// converted  2 fields
+				case 2: 							// converted  2 fields
 #ifdef TESTING
 				strcpy(udp_target, SERVER_DESTINATION);
 #endif
-				if (strlen(udp_target) < 7) {					// bad url or ip address
-					strcpy(udp_target, SERVER_DESTINATION);		// default it
-				}
-				printf("Server -> Target UDP host: %s\n", udp_target);
-				// falls through
+					if (strlen(udp_target) < 7) {					// bad url or ip address
+						strcpy(udp_target, SERVER_DESTINATION);		// default it
+					}
+					printf("Server -> Target UDP host: %s\n", udp_target);
+					// falls through
 
-			case 1: 							// converted the first field which is the serial number
-				if (statuspkt.uid != sn) {
-					statuspkt.uid = sn;
-					printf("Server -> Serial Number: %lu\n", statuspkt.uid);
-				}
-				break;
+				case 1: 							// converted the first field which is the serial number
+					if (statuspkt.uid != sn) {
+						statuspkt.uid = sn;
+						printf("Server -> Serial Number: %lu\n", statuspkt.uid);
+					}
+					break;
 
-			default:
-				printf("Wrong number of params from Server -> %d\n", nconv);
-				break;
+				default:
+					printf("Wrong number of params from Server -> %d\n", nconv);
+					break;
+				}
+			} else {
+				printf("returnpage: (error returned) errno=%d\n", errorm);
 			}
-		} else {
-			printf("returnpage: (error returned) Num=%d, errno=%d, error=%s\n", Num, errorm, errormsg[errorm]);
+			// this has to happen last
+			printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
+			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
+
+//			tftloader(filename, host, crc1, crc2);
+				osDelay(5000);
+				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
+			}
 		}
 	}
+	expectedapage = 0;
 }
 
 // sends a URL request to a http server
-void httpclient(char Page[64]) {
+void getpage(char page[64]) {
 	volatile int result;
-	uint32_t ip;
+	ip_addr_t ip;
 	int err;
 
-	static char *Postvars = NULL;
+	static char *postvars = NULL;
 
-	err = dnslookup(SERVER_DESTINATION, &remoteip);		// find serial number and udp target IP address
+	printf("getpage: %s\n", page);
+
+	err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
 	if (err != ERR_OK)
 		rebootme(7);
-	ip = remoteip.addr;
-	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
-			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-#if 0
-	result = hc_open(remoteip, Page, Postvars, returnpage);
-#endif
-	initfilehttpclient();
-//	printf("result=%d\n", result);
+	ip.addr = remoteip.addr;
+	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
+			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
+	expectedapage = 1;
+	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
+	printf("httpclient: result=%d\n", result);
 
 }
-
 
 // get the serial number and udp target for this device
 // reboot if fails
@@ -409,25 +421,19 @@ void initialapisn() {
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
 		printf("getting S/N and UDP target using http. Try=%d\n", i);
-		sprintf(stmuid, "api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
-		httpclient(stmuid);		// get sn and targ
-#if 1
-		statuspkt.uid = 3;		// zzz
-#endif
+		sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+		getpage(stmuid);		// get sn and targ
 		osDelay(5000);
 		i++;
 		if (i > 10) {
 			printf("************* ABORTED **************\n");
-			rebootme(8);
+//			rebootme(8);
 		}
 	}
 }
 
 void requestapisn() {
 	printf("updating S/N and UDP target using http\n");
-	httpclient(stmuid);		// get sn and targ
+	getpage(stmuid);		// get sn and targ
 }
-
-
-
 

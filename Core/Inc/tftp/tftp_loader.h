@@ -1,5 +1,5 @@
 /*
- * tftploader.h
+ * tftp_loader.h
  *
  *  Created on: 4 May 2022
  *      Author: bob
@@ -12,8 +12,8 @@
 extern "C" {
 #endif
 
-void tftp_example_init_server(void);
-void tftp_example_init_client(void);
+
+
 
 #ifdef __cplusplus
 }

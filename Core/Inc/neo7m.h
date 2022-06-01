@@ -121,7 +121,7 @@ extern unsigned int globalfreeze;	// freeze UDP streaming
 extern unsigned int circuitboardpcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
 extern unsigned int newbuild;	// the new firmware build number from the server
 
-extern uint32_t filecrc;
+extern uint32_t dl_filecrc;
 
 #endif /* NEO7M_H_ */
 
