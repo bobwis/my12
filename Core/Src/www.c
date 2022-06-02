@@ -241,6 +241,7 @@ init_httpd_ssi() {
 
 ///////////////////////////////////////////////////////
 /// parse p2 params
+// return 0 for success
 //////////////////////////////////////////////////////
 int parsep2(char *buf, char *match, int type, void *value) {
 	int i, j;
@@ -308,7 +309,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 //	printf("returnpage:\n");
 	if (expectedapage) {
 		if (errorm == 0) {
-			printf("returnpage: errorm=%d, charcount=%d, content=%s\n", errorm, charcount, content);
+			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
@@ -378,7 +379,9 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 				printf("returnpage: (error returned) errno=%d\n", errorm);
 			}
 			// this has to happen last
-			printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
+			if (!res) {		// build changed?
+				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
+			}
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
 
 //			tftloader(filename, host, crc1, crc2);
