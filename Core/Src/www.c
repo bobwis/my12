@@ -385,7 +385,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
 
 //			tftloader(filename, host, crc1, crc2);
-				osDelay(5000);
+				osDelay(1000);
 				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
 			}
 		}
@@ -411,7 +411,7 @@ void getpage(char page[64]) {
 			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
 	expectedapage = 1;
 	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
-	printf("httpclient: result=%d\n", result);
+//	printf("httpclient: result=%d\n", result);
 
 }
 
@@ -430,7 +430,7 @@ void initialapisn() {
 		i++;
 		if (i > 10) {
 			printf("************* ABORTED **************\n");
-//			rebootme(8);
+			rebootme(8);
 		}
 	}
 }

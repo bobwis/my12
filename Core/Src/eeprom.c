@@ -209,7 +209,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 	if (((uint32_t) memptr & 0x8100000) == 0x8000000)	// the lower 512K
 			{
 		EraseInitStruct.Sector = FLASH_SECTOR_0;
-		EraseInitStruct.NbSectors = 5;
+		EraseInitStruct.NbSectors = 6;
 	} else	// the upper 512M starting at 1M
 	{
 		EraseInitStruct.Sector = FLASH_SECTOR_8;
@@ -238,6 +238,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 		if (res != HAL_OK) {
 			printf("EraseFlash: failed\n");
 			printflasherr();
+			dirty = 1;
 		} else {
 			printf("Flash successfully erased\n");
 			notflashed = 0;
@@ -252,7 +253,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 			}
 			if (dirty) {
 				notflashed = 1;
-				printf("*** ERROR: Flash was erased but bits still dirty\n");
+				printf("*** ERROR: Flash was erased but bits still dirty at 0x%08x\n",ptr);
 			}
 		}
 
@@ -360,7 +361,7 @@ void stampboot() {
 		if (res != HAL_OK) {
 			printf("swapboot: failed to OBLaunch %d\n", res);
 		}
-		printf("....re-stamped boot vector\n");
+		printf(".......re-stamped boot vector.......\n");
 	}
 }
 
@@ -449,15 +450,18 @@ printf("memwrite: count=%d, memptr=0x%x, totlen=%d, len=%d\n",count, flash_mempt
 		notflashed = 0;
 	}
 
+#if 0
 	if (len % 4 != 0) {
 		printf("memwrite: len %d chunk not multiple of 4 at %u\n", len, flash_filelength);
 	}
 	if (len % 2 != 0) {
 		printf("memwrite: len %d chunk not multiple of 2 at %u\n", len, flash_filelength);
 	}
+#endif
 	if (len == 0) {
 		printf("memwrite: len %d at %u\n", len, flash_filelength);
 	}
+
 
 	data = 0xffffffff;		// the 32 bit word we will write
 
@@ -556,7 +560,8 @@ void* memclose() {
 #endif
 	} else {
 
-		//if !(check firmwarsatckpointer)
+		//if !(check firmwarsatckpointer)  check integrity
+		osDelay(5);
 
 		HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 
@@ -576,7 +581,7 @@ void* memclose() {
 
 //		*(uint32_t *)(0x1FFF0010) = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x0080 : 0x00c0;
 		HAL_FLASH_OB_Lock();
-		printf("New FLASH image loaded; rebooting please wait...\n");
+		printf("New FLASH image loaded; rebooting please wait 45 secs...\n");
 		osDelay(50);
 		rebootme(0);
 	}

@@ -42,7 +42,7 @@
 #define PNONE 0
 
 #endif	/* SPLAT1 */
-#endif /* VERSION_H_ */
+#endif
 
 // If we want localtime (+10H) not UTC, define LOCALTIME
 #if 1
@@ -83,8 +83,7 @@
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);
 */
-#endif
 
-
+#endif /* VERSION_H_ */
 
 

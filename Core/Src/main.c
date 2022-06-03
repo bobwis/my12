@@ -2064,6 +2064,12 @@ void StartDefaultTask(void const *argument) {
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
+	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
+		swapboot();	//  swap the boot vector
+	} else {
+		stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
+	}
+
 	crc_rom();
 
 	if (!(netif_is_link_up(&gnetif))) {
@@ -2193,7 +2199,9 @@ printf("*** TESTING BUILD USED ***\n");
 			(myip & 0xFF000000) >> 24);
 	printf("*****************************************\n");
 
+	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 	initialapisn();	// get initial s/n and UDP target; reboots if fails
+	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 
 	osDelay(2200);
 

@@ -648,8 +648,7 @@ altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
  * @return ERR_OK if starting the request succeeds (callback_fn will be called later)
  *         or an error code
  */
-err_t httpc_get_file_dns(const char *server_name, u16_t port, const char *uri, const httpc_connection_t *settings,
-altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
+err_t httpc_get_file_dns(const char *server_name, u16_t port, const char *uri, const httpc_connection_t *settings, altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
 	err_t err;
 	httpc_state_t *req;
 
@@ -913,7 +912,7 @@ static const char *lerr_strerr[] = { "Ok.", /* ERR_OK          0  */
  */
 void printlwiperr(err_t err) {
 	if ((err > 0) || (-err >= (err_t) LWIP_ARRAYSIZE(lerr_strerr))) {
-		printf("LWIP: Unknown error");
+		printf("LWIP: Unknown error\n");
 	} else
 		printf("LWIP error %d: mytot=%d, %s\n", -err, mytot, lerr_strerr[-err]);
 	stats_display();
@@ -973,14 +972,14 @@ err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *
 	int i;
 	char *buf;
 
-	printf("RecvHttpHeaderCallback: len=%u, content len=%lu\n", hdr_len, content_len);
-	printf("header=");
+//	printf("RecvHttpHeaderCallback: len=%u, content len=%lu\n", hdr_len, content_len);
+//	printf("header=");
 	buf = hdr->payload;
 	http_content_len = content_len;
 //	for (i = 0; i < hdr_len; i++) {
 //		putchar(buf[i]);
 //	}
-	printf("\n");
+//	printf("\n");
 	return ERR_OK;
 }
 
@@ -1008,7 +1007,7 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 // receive page has finished
 void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-	printf("HttpClientPageResultCallback: mytot=%u\n", mytot);
+//	printf("HttpClientPageResultCallback: mytot=%u\n", mytot);
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientPageResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 	}
@@ -1016,7 +1015,7 @@ void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 		printlwiperr(err);
 	}
 
-	printf("HttpClientPageResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+//	printf("HttpClientPageResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
 	returnpage(rxbuffer, mytot, err);
 }
 
@@ -1066,7 +1065,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 	struct pbuf *q;
 	int count = 0, tlen = 0, len = 0;
 
-	printf("HttpClientPageReceiveCallback:\n");
+//	printf("HttpClientPageReceiveCallback:\n");
 
 	LWIP_ASSERT("p != NULL", p != NULL);
 	if (err != ERR_OK) {
@@ -1121,7 +1120,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 	strcpy(domain_name, host);
 	strcpy(rxbuffer, filename);
 
-	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
+//	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
 	mytot = 0;
 	expectedapage = 0;
@@ -1159,13 +1158,12 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
 		strcpy(rxbuffer, "/");
 	}
 
-	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
+//	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
 
 	mytot = 0;
     expectedapage = 1;
-	error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings2, HttpClientPageReceiveCallback,
-			HttpClientPageResultCallback, &connection2);
-	return (error);
+     error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings2, HttpClientPageReceiveCallback,
+    			HttpClientPageResultCallback, &connection2);
 }
 
 #endif /* LWIP_TCP && LWIP_CALLBACK_API */
