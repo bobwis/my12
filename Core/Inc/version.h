@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 15
+#define MINORVERSION 16
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses

@@ -24,6 +24,7 @@
 #include "eeprom.h"
 #include "tftp/tftp_loader.h"
 
+int http_downloading = 0;
 
 // attempt to load new firmware
 void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
@@ -56,9 +57,10 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 	flash_filelength = 0;
 
 	sprintf(newfilename, "/firmware/%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
-	printf("*** Attempting to download new firmware %s to 0x%08x from %s, do not switch off ***\n", newfilename, flash_memptr, host);
+	printf("Attempting to download new firmware %s to 0x%08x from %s, ******* DO NOT SWITCH OFF ******\n", newfilename, flash_memptr, host);
 
+	http_downloading = 1;
 	http_dlclient(newfilename, host, flash_memptr);
-	osDelay(1);
+	osDelay(5);
 }
 

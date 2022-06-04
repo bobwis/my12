@@ -45,6 +45,7 @@
 #include "dhcp.h"
 #include "splat1.h"
 #include "lcd.h"
+#include "eeprom.h"
 #include <queue.h>
 
 //#define netif_dhcp_data(netif) ((struct dhcp*)netif_get_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP))
@@ -2028,6 +2029,10 @@ void setupnotify() {
 	xTaskToNotify = xTaskGetCurrentTaskHandle();
 }
 
+void printaline(char *str) {
+	printf("%s----------------------------------------------------------------------------\n", str);
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -2058,7 +2063,7 @@ void StartDefaultTask(void const *argument) {
 	}
 
 	getboardpcb();		// find our daughterboard
-	printf("\n\n----------------------------------------------------------------------------\n");
+	printaline("\n\n");
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 	STM32_UUID[2],
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
@@ -2203,8 +2208,13 @@ printf("*** TESTING BUILD USED ***\n");
 	initialapisn();	// get initial s/n and UDP target; reboots if fails
 	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 
-	osDelay(2200);
-
+	osDelay(4000);
+	if (http_downloading) {
+		printf("Downloading...\n");
+		while (http_downloading) {
+			osDelay(1000);
+		}
+	}
 	printf("Starting httpd web server\n");
 
 	httpd_init();		// start the www server
@@ -2363,6 +2373,16 @@ void StarLPTask(void const *argument) {
 	for (;;) {							// The Low Priority Task forever loop
 		HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 		osDelay(10);		// 10mSec
+
+		if (http_downloading) {
+			printaline("\n");
+			printf("Downloading...\n");
+			printaline("");
+			while (http_downloading) {
+				osDelay(50);
+				HAL_IWDG_Refresh(&hiwdg);
+			}
+		}
 
 		/***********************  Every 10mSec   *******************************/
 //		tcp_tmr();

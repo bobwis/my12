@@ -165,7 +165,7 @@ void tftloader(char filename[], char hostip[], uint32_t crc1, uint32_t crc2) {
 	}
 
 	sprintf(newfilename, "%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
-	printf("*** Attempting to download new firmware %s : do not switch off ***\n", newfilename);
+	printf("Attempting to download new firmware %s : *******  do not switch off *******\n", newfilename);
 
 	tftp_client(newfilename, hostip);
 }

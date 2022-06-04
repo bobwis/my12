@@ -128,6 +128,7 @@ void testeeprom(void) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static FLASH_EraseInitTypeDef EraseInitStruct;
+#include "eeprom.h"
 
 // flash unlock
 HAL_StatusTypeDef UnlockFlash() {
@@ -225,6 +226,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 	}
 
 	if ((dirty) && (notflashed)) {
+		osDelay(1000);
 		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
 
 		EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
@@ -514,6 +516,7 @@ void* memclose() {
 	notflashed = 1;		// now assumed dirty
 	if (flash_abort) {
 		flash_abort = 0;
+		http_downloading = 0;
 		return;
 	}
 
@@ -526,8 +529,8 @@ void* memclose() {
 		flash_writeword(residual);
 	}
 
-	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%0x mytot=%d\n", flash_load_address,
-			flash_filelength, (unsigned int) flash_memptr, mytot);
+	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%0x total=%d\n", flash_load_address,
+			flash_filelength, (unsigned int) flash_memptr, down_total);
 	osDelay(1000);
 	if (LockFlash() != HAL_OK) {
 		printf("eeprom: flash2 failed\n");
@@ -537,8 +540,8 @@ void* memclose() {
 	xcrc = flash_findcrc(flash_load_address, flash_filelength);
 	if ((dl_filecrc != xcrc) && (dl_filecrc != 0xffffffff)) {
 		printf(
-				"\n****************** Downloaded file/ROM CRC check failed ourcrc=0x%08x, filecrc=0x%08x mytot=%d **********\n",
-				xcrc, dl_filecrc, mytot);
+				"\n****************** Downloaded file/ROM CRC check failed ourcrc=0x%08x, filecrc=0x%08x Total=%d **********\n",
+				xcrc, dl_filecrc, down_total);
 #if 0
 ////////////////////////////		// test debug zzz
 		{
@@ -611,6 +614,7 @@ void* memclose() {
 		}
 	}
 #endif
+	http_downloading = 0;
 }
 
 // calculate the crc over a range of memory

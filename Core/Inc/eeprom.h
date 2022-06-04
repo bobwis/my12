@@ -34,12 +34,13 @@ extern uint32_t flash_load_address;
 extern uint32_t http_content_len;
 extern int flash_abort;
 extern int expectedapage;
+extern int http_downloading;
 
 
 extern  HAL_StatusTypeDef EraseFlash(void *memptr);
 extern xcrc32(const unsigned char *buf, int len, unsigned int init);
 extern uint32_t flash_findcrc(void *base, int length);
 
-extern int mytot;
+extern int down_total;
 
 #endif /* EEPROM_H_ */

@@ -883,7 +883,7 @@ httpc_get_file_dns_to_disk(const char* server_name, u16_t port, const char* uri,
 httpc_state_t conn1, conn2, *connection1, *connection2;
 httpc_connection_t set1, set2, *settings1, *settings2;
 
-int mytot = 0;
+int down_total = 0;
 
 static const char *lerr_strerr[] = { "Ok.", /* ERR_OK          0  */
 "Out of memory error.", /* ERR_MEM        -1  */
@@ -912,9 +912,9 @@ static const char *lerr_strerr[] = { "Ok.", /* ERR_OK          0  */
  */
 void printlwiperr(err_t err) {
 	if ((err > 0) || (-err >= (err_t) LWIP_ARRAYSIZE(lerr_strerr))) {
-		printf("LWIP: Unknown error\n");
+		printf("LWIP: Unknown error: total=%d\n",down_total);
 	} else
-		printf("LWIP error %d: mytot=%d, %s\n", -err, mytot, lerr_strerr[-err]);
+		printf("LWIP error %d: total=%d, %s\n", -err, down_total, lerr_strerr[-err]);
 	stats_display();
 }
 
@@ -987,7 +987,7 @@ err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *
 // received file has finished
 void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-	printf("HttpClientFileResultCallback: mytot=%u\n", mytot);
+//	printf("HttpClientFileResultCallback: total=%u\n", mytot);
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientFileResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 		flash_memptr = 0;
@@ -1000,14 +1000,14 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 		memclose();
 	}
 
-	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+//	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
 }
 
 //
 // receive page has finished
 void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-//	printf("HttpClientPageResultCallback: mytot=%u\n", mytot);
+//	printf("HttpClientPageResultCallback: total=%u\n", mytot);
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientPageResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 	}
@@ -1016,7 +1016,7 @@ void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 	}
 
 //	printf("HttpClientPageResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
-	returnpage(rxbuffer, mytot, err);
+	returnpage(rxbuffer, down_total, err);
 }
 
 int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
@@ -1037,7 +1037,7 @@ int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf 
 		count += q->len;
 		tlen = q->tot_len;
 		len = q->len;
-#if 1
+#if 0
 		putchar('.');
 #endif
 		if ((flash_abort == 0) && (flash_memptr != 0)) { // we need to write this data to flash
@@ -1048,12 +1048,13 @@ int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf 
 				return (-1);
 			}
 		}
-		mytot += q->len;
+		down_total += q->len;
+
 		altcp_recved(pcb, p->tot_len);
 		pbuf_free(p);
 
 //		p = p->next;
-//		printf("HttpClientFileReceiveCallback: chunk=%d, tlen=%d, len=%d, mytot=%d\n", count, tlen, len, mytot);
+//		printf("HttpClientFileReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, mytot);
 	}
 	return (0);
 }
@@ -1082,20 +1083,20 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 		buf = q->payload;
 		for (i = 0; i < q->len; i++) {
 //			putchar(buf[i]);
-			if (mytot < (sizeof(rxbuffer) - 1)) {
-				rxbuffer[mytot++] = buf[i];		// add recvd page data into buffer
+			if (down_total < (sizeof(rxbuffer) - 1)) {
+				rxbuffer[down_total++] = buf[i];		// add recvd page data into buffer
 			} else {
 				rxbuffer[(sizeof(rxbuffer) - 1)] = 0;
 			}
 		}
 
 		altcp_recved(pcb, p->tot_len);
-		err = pbuf_free(p);
+		err = pbuf_free_callback(p);
 		if (err != ERR_OK) {
 			putchar('!');
 			printlwiperr(err);
 		}
-//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, mytot=%d\n", count, tlen, len, mytot);
+//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, mytot);
 	}
 }
 
@@ -1122,7 +1123,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 //	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
-	mytot = 0;
+	down_total = 0;
 	expectedapage = 0;
 	error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings1, HttpClientFileReceiveCallback,
 			HttpClientFileResultCallback, &connection1);
@@ -1160,7 +1161,7 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
 
 //	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
 
-	mytot = 0;
+	down_total = 0;
     expectedapage = 1;
      error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings2, HttpClientPageReceiveCallback,
     			HttpClientPageResultCallback, &connection2);

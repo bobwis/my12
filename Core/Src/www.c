@@ -298,7 +298,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
 void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	int nconv, res, res2;
+	volatile int nconv, res, res2;
 	volatile int p1;
 	volatile char p2[96];
 	volatile char filename[32], s1[16];
@@ -309,7 +309,8 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 //	printf("returnpage:\n");
 	if (expectedapage) {
 		if (errorm == 0) {
-			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
+//			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
+			printf("server returned page: %.*s\n", charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
@@ -328,13 +329,10 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res2 |= parsep2(&p2[1], "n2", 3, &n2);
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
-						printf(
-								"returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",
-								filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
+//						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
 						if (!(res)) {		// a valid firmware string received
 							newfirmware = 1;
-
 						}
 
 					} // else ignore it
@@ -397,19 +395,20 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 void getpage(char page[64]) {
 	volatile int result;
 	ip_addr_t ip;
-	int err;
+	int err = 0;
 
 	static char *postvars = NULL;
 
 	printf("getpage: %s\n", page);
 
-	err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
-	if (err != ERR_OK)
-		rebootme(7);
-	ip.addr = remoteip.addr;
-	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
-			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
-	expectedapage = 1;
+//    err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
+//	if (err != ERR_OK)
+//		rebootme(7);
+//	ip.addr = remoteip.addr;
+//	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
+//			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
+	printf("Control Server is %s\n",SERVER_DESTINATION);
+
 	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
 //	printf("httpclient: result=%d\n", result);
 
@@ -418,17 +417,22 @@ void getpage(char page[64]) {
 // get the serial number and udp target for this device
 // reboot if fails
 void initialapisn() {
-	int i;
+	int i, j;
 
-	i = 1;
+	j = 1;
+	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
-		printf("getting S/N and UDP target using http. Try=%d\n", i);
-		sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+		printf("getting S/N and UDP target using http. Try=%d\n", j);
 		getpage(stmuid);		// get sn and targ
-		osDelay(5000);
-		i++;
-		if (i > 10) {
+		for (i=0; i<5000; i++) {
+			if (statuspkt.uid != 0xfeed)
+				break;
+			osDelay(1);
+		}
+		j++;
+		if (j > 5) {
 			printf("************* ABORTED **************\n");
 			rebootme(8);
 		}

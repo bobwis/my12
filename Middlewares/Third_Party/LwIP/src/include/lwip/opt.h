@@ -521,7 +521,7 @@
  * (only needed if you use the sequential API, like api_lib.c)
  */
 #if !defined MEMP_NUM_NETBUF || defined __DOXYGEN__
-#define MEMP_NUM_NETBUF                 2
+#define MEMP_NUM_NETBUF                 4
 #endif
 
 /**
@@ -572,7 +572,7 @@
  * if DNS_LOCAL_HOSTLIST_IS_DYNAMIC==1.
  */
 #if !defined MEMP_NUM_LOCALHOSTLIST || defined __DOXYGEN__
-#define MEMP_NUM_LOCALHOSTLIST          1
+#define MEMP_NUM_LOCALHOSTLIST          4
 #endif
 
 /**
