@@ -122,6 +122,7 @@ extern unsigned int circuitboardpcb;		// run-time determination of what daughter
 extern unsigned int newbuild;	// the new firmware build number from the server
 
 extern uint32_t dl_filecrc;
+extern int lptask_init_done;		// zero when lptask is not finished its init
 
 #endif /* NEO7M_H_ */
 

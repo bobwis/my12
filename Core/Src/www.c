@@ -382,9 +382,14 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			}
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
 
+			if (lptask_init_done == 0)	{
 //			tftloader(filename, host, crc1, crc2);
 				osDelay(1000);
 				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
+			} else {
+				printf("Rebooting before loading new firmware, wait...\n");
+				rebootme(0);
+			}
 			}
 		}
 	}

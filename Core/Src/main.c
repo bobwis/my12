@@ -2018,7 +2018,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 void getboardpcb() {
 	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
 //		circuitboardpcb = LIGHTNINGBOARD1;		// prototype
-		circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
+        circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
 	} else {
 		circuitboardpcb = SPLATBOARD1;		// assumed
 	}

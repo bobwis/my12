@@ -774,7 +774,7 @@ void initsplat(void) {
 	}
 	osDelay(500);
 
-	if ((circuitboardpcb == LIGHTNINGBOARD1) || (circuitboardpcb == LIGHTNINGBOARD2)) {
+	if (circuitboardpcb == LIGHTNINGBOARD2) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
 		{
