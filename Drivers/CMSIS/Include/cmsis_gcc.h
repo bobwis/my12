@@ -876,7 +876,8 @@ __STATIC_FORCEINLINE void __ISB(void)
  */
 __STATIC_FORCEINLINE void __DSB(void)
 {
-  __ASM volatile ("dsb 0xF":::"memory");
+
+	__ASM volatile ("dsb 0xF":::"memory");
 }
 
 

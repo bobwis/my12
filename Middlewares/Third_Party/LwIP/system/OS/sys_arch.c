@@ -41,8 +41,10 @@
 
 #include "cmsis_os.h"
 
+#if 0
 #if defined(LWIP_PROVIDE_ERRNO)
 int errno;
+#endif
 #endif
 
 /*-----------------------------------------------------------------------------------*/

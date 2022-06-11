@@ -1,6 +1,6 @@
 ################################################################################
 # Automatically-generated file. Do not edit!
-# Toolchain: GNU Tools for STM32 (9-2020-q2-update)
+# Toolchain: GNU Tools for STM32 (10.3-2021.10)
 ################################################################################
 
 -include ../makefile.init
@@ -34,6 +34,7 @@ RM := rm -rf
 -include FATFS/App/subdir.mk
 -include Drivers/STM32F7xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
+-include Core/Src/tftp/subdir.mk
 -include Core/Src/subdir.mk
 -include objects.mk
 
@@ -66,6 +67,9 @@ BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ART
 EXECUTABLES += \
 my12.elf \
 
+MAP_FILES += \
+my12.map \
+
 SIZE_OUTPUT += \
 default.size.stdout \
 
@@ -83,7 +87,7 @@ all: main-build
 main-build: my12.elf secondary-outputs
 
 # Tool invocations
-my12.elf: $(OBJS) $(USER_OBJS) C:\projects\lightning\my12\STM32F767ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+my12.elf my12.map: $(OBJS) $(USER_OBJS) C:\projects\lightning\my12\STM32F767ZITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	arm-none-eabi-gcc -o "my12.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\projects\lightning\my12\STM32F767ZITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="my12.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
@@ -105,7 +109,7 @@ my12.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 
 # Other Targets
 clean:
-	-$(RM) default.size.stdout my12.bin my12.elf my12.list
+	-$(RM) default.size.stdout my12.bin my12.elf my12.list my12.map
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_BIN)

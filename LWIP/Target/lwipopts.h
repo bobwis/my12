@@ -153,10 +153,8 @@
 #define LWIP_HTTPD_ABORT_ON_CLOSE_MEM_ERROR 1
 /*----- Value in opt.h for HTTPD_USE_CUSTOM_FSDATA: 0 -----*/
 #define HTTPD_USE_CUSTOM_FSDATA 1
-/*----- Default Value for LWIP_STATS: 0 ---*/
-#define LWIP_STATS 1
-/*----- Value in opt.h for MIB2_STATS: 0 or SNMP_LWIP_MIB2 -----*/
-#define MIB2_STATS 0
+/*----- Value in opt.h for LWIP_STATS: 1 -----*/
+#define LWIP_STATS 0
 /*----- Value in opt.h for CHECKSUM_GEN_UDP: 1 -----*/
 #define CHECKSUM_GEN_UDP 0
 /*----- Value in opt.h for CHECKSUM_GEN_ICMP6: 1 -----*/
@@ -173,8 +171,14 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
-#define MEMP_NUM_SYS_TIMEOUT 	8
+#define MEMP_NUM_SYS_TIMEOUT 	(LWIP_NUM_SYS_TIMEOUT_INTERNAL)+1
 #define MEMP_NUM_UDP_PCB        8
+#define IP_REASS_MAX_PBUFS     20
+#define TCPIP_MBOX_SIZE 64
+#define DEFAULT_TCP_RECVMBOX_SIZE 64
+#define DEFAULT_RAW_RECVMBOX_SIZE 64
+#define MEMP_NUM_PBUF 32
+
 #ifdef TESTING
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(x) do {printf x;} while(0)
@@ -182,6 +186,7 @@
 #define LWIP_DEBUG
 #define LWIP_STATS_DISPLAY 1
 #define LWIP_SO_RCVTIMEO                  1              // default is 0
+
  /**
   * TCP_SND_BUF: TCP sender buffer space (bytes).
   * To achieve good performance, this should be at least 2 * TCP_MSS.

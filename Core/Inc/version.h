@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 14
+#define MINORVERSION 16
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,7 +28,7 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10025
+#define BUILD 10029
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -42,14 +42,14 @@
 #define PNONE 0
 
 #endif	/* SPLAT1 */
-#endif /* VERSION_H_ */
+#endif
 
 // If we want localtime (+10H) not UTC, define LOCALTIME
 #if 1
 #define LOCALTIME
 #endif
 
-// Time between sending timesd status packets (seconds)
+// Time between sending timed status packets (seconds)
 #ifdef TESTING
 #define STAT_TIME 2
 #else
@@ -60,7 +60,6 @@
 #if 1
 #define HARDWARE_WATCHDOG 1
 #endif
-#endif
 
 
 #define SPLATBOARD1	11
@@ -70,11 +69,21 @@
 #define UNKNOWNPCB 0
 
 
-unsigned int pcb;		// run-time determination of what daughterboard have we?   eg SPLATBOARD1
+#ifdef TESTING
+//#define SERVER_DESTINATION "lightning.local"
+//#define SERVER_DESTINATION "10.10.201.240"
+#define SERVER_DESTINATION "lightning.vk4ya.com"
+#else
+#define SERVER_DESTINATION "10.10.201.182"
+#define SERVER_DESTINATION "lightning.vk4ya.com"
+#endif
+
+
 /*
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);
 */
 
+#endif /* VERSION_H_ */
 
 
