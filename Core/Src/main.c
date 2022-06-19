@@ -2390,6 +2390,9 @@ void StarLPTask(void const *argument) {
 		tenmstimer++;
 		globaladcnoise = abs(meanwindiff);
 		pretrigthresh = 4 + (globaladcnoise >> 7);		// set the pretrigger level
+		if (sigsuppress) {
+			sigsuppress--;		// decrement trigger suppression counter
+		}
 
 		while (xQueueReceive(consolerxq, &inch, 0)) {
 			if (inch == 0x03) {		// control C

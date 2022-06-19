@@ -116,6 +116,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	uint16_t pgacmd[1];
 	HAL_StatusTypeDef stat;
 
+	sigsuppress = 10;		// prevent trigger for a while
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
 	osDelay(5);

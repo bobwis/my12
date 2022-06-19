@@ -8,6 +8,7 @@
 "./Core/Src/main.o"
 "./Core/Src/mydebug.o"
 "./Core/Src/neo7m.o"
+"./Core/Src/nextionloader.o"
 "./Core/Src/splat1.o"
 "./Core/Src/stm32f7xx_hal_msp.o"
 "./Core/Src/stm32f7xx_hal_timebase_tim.o"

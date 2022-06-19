@@ -63,6 +63,7 @@ extern int16_t meanwindiff;	// sliding mean of window differences
 extern uint16_t lastmeanwindiff;
 
 extern uint32_t pretrigcnt;	// counter of pretrigger detections
+extern int sigsuppress;		// countdown timer to suppress trigger
 
 extern volatile ADC_HandleTypeDef *globalhadc;	// dummy
 
