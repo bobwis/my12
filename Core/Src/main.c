@@ -2307,8 +2307,13 @@ void StarLPTask(void const *argument) {
 
 	osDelay(600);
 	lcduart_error = HAL_UART_ERROR_NONE;
+
 	writelcdcmd("page 0");
-	printf("LCD page 0\n");
+//	printf("LCD page 0\n");
+	lcd_getid();		// what display is connected?
+	lcd_getsys0();		// what version of our firmware is on the LCD?
+	lcd_putsys0();		// write new version
+	lcd_getsys0();		// what version of our firmware is on the LCD?
 
 	osDelay(600);
 	writelcdcmd("cls BLACK");
@@ -2317,6 +2322,8 @@ void StarLPTask(void const *argument) {
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
+
+
 #endif
 	i = 0;
 	while (main_init_done == 0) { // wait from main to complete the init {
@@ -2342,6 +2349,7 @@ void StarLPTask(void const *argument) {
 			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
 		}
 	}
+
 
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd("ref 0");		// refresh screen

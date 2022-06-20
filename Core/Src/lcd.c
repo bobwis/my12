@@ -34,7 +34,8 @@
 uint8_t lcdrxbuffer[LCDRXBUFSIZE] = { "" };
 uint8_t dmarxbuffer[DMARXBUFSIZE] = { "" };
 
-char buffer[40];		// lcd message building buffer
+char sbuffer[40];		// lcd message building buffer
+char lcdmodel[32];		// lcd model
 struct tm timeinfo;		// lcd time
 time_t localepochtime;	// lcd time
 
@@ -61,6 +62,9 @@ static int pressindex = 0; // index to next save data position for pressure char
 static unsigned char trigvec[LCDXPIXELS] = { 0 }, noisevec[LCDXPIXELS] = { 0 };
 static unsigned char pressvec[LCDXPIXELS] = { 0 };
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
+
+char nex_model[24];		// the Nextion model number read from the connected display
+volatile int  lcd_sys0;	// used to store our firmware number of the LCd
 
 inline int cycinc(int index, int limit) {
 	if (++index >= limit)
@@ -141,7 +145,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 void lcd_uart_init(int baud) {
 	volatile HAL_StatusTypeDef stat;
 
-	printf("lcd_uart_init: LCD %d ***\n", baud);
+//	printf("lcd_uart_init: LCD %d ***\n", baud);
 
 	lcdrxoutidx = 0;		// buffer consumer index
 #if 0
@@ -187,7 +191,7 @@ void lcd_init(int baud) {
 	int siz, page;
 	volatile char *cmd;
 
-	printf("lcd_init: baud=%d\n", baud);
+//	printf("lcd_init: baud=%d\n", baud);
 	if (!((baud == 9600) || (baud == 230400))) {
 		printf("lcd_init: ***** bad baud rate requested %d **** \n", baud);
 		return;
@@ -341,7 +345,7 @@ int lcd_getc() {
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// internal send a var string to the LCD (len max 255) - cant be blcoked
+// internal send a var string to the LCD (len max 255) - can't be blocked
 // terminate with three 0xff's
 // returns 0 if sent
 int intwritelcdcmd(char *str) {
@@ -407,7 +411,7 @@ void setlcddim(unsigned int level) {
 int getlcdpage(void) {
 	volatile int result;
 
-	printf("getlcdpage:\n");
+//	printf("getlcdpage:\n");
 
 	lcd_txblocked = 1;		// stop others sending to the LCD
 	osDelay(150);			// wait for Tx queue to clear and hopefully Rx queue
@@ -419,7 +423,7 @@ int getlcdpage(void) {
 	result = lcd_getlack();		// wait for a response
 //	printf("getlcdpage: returned %d\n\r",result);
 
-	while (result == 0xff) {	// try again
+	while (result == -1) {	// try again
 		result = intwritelcdcmd("sendme");
 		if (result == -1) {		// send err
 			printf("getlcdpage2: Cmd failed\n\r");
@@ -430,6 +434,71 @@ int getlcdpage(void) {
 	lcd_txblocked = 0;		// allow others sending to the LCD
 	return (result);
 }
+
+lcd_clearrxbuf() {
+	int result;
+
+	lcd_rxdma();			// clear the dma rx buffer
+	result = lcd_getc();
+	while (result != -1) {
+		result = lcd_getc();	// consume anything in the copied rx buffer
+	}
+}
+
+// find LCD model
+lcd_getid(void) {
+	int result;
+
+	lcd_txblocked = 0;
+	lcd_clearrxbuf();
+	lcdstatus = 0xff;
+	result = intwritelcdcmd("connect");
+	if (result == -1) {		// send err
+		printf("getid: Cmd failed\n\r");
+	}
+	result = lcd_getlack();		// wait for a response
+
+	lcd_txblocked = 0;		// allow others sending to the LCD
+	return (result);
+}
+
+// find LCD sys0 value
+lcd_getsys0(void) {
+	int result;
+
+	printf("Getting SYS0\n");
+	lcd_txblocked = 0;
+	lcd_clearrxbuf();
+	lcdstatus = 0xff;
+	result = intwritelcdcmd("get sys0");
+	if (result == -1) {		// send err
+		printf("getsys0: Cmd failed\n\r");
+	}
+	result = lcd_getlack();		// wait for a response
+
+	lcd_txblocked = 0;		// allow others sending to the LCD
+	printf("getsys0: returned value=0x%08x\n",lcd_sys0);
+	return (result);
+}
+
+// put LCD sys0 value
+lcd_putsys0(void) {
+	int value = 0x12345678;
+	char cmd[16];
+	int result;
+
+	lcd_txblocked = 0;
+	lcd_clearrxbuf();
+	lcdstatus = 0xff;
+	sprintf(cmd,"sys0=0x%08x",value);
+	printf("Putting: %s\n",cmd);
+	writelcdcmd(cmd);
+	result = lcd_getlack();		// wait for a response (none expected)
+	lcd_txblocked = 0;		// allow others sending to the LCD
+}
+
+
+
 
 // lcd page change event occurred
 // lcd_currentpage is the current LCD page displayed
@@ -491,7 +560,7 @@ int isnexpkt(unsigned char buffer[], uint8_t size) {
 			termcnt++;
 //			printf("isnexpkt: termcount=%d\n",termcnt);
 			if (termcnt == 3) {
-				printf(" # ");		// found terminator
+//				printf(" # ");		// found terminator
 				index = i;
 				i = 0;
 				termcnt = 0;
@@ -519,15 +588,62 @@ int isnexpkt(unsigned char buffer[], uint8_t size) {
 	return (-2);  // no char available
 }
 
+// try to extract LCD type from what could be the connect string response
+int decode_lcdtype(char *str) {
+	int i, j, k;
+	const char next[] = { "NX" };
+
+	i = 0;
+	j = 0;
+	k = 0;
+	nex_model[i] = '\0';
+
+	while ((str[i] != '\0') && (str[i] != 0xff)) {
+		if (str[i++] == next[j]) {
+			j++;
+			if (j >= 2) {		// found N...X
+				nex_model[k++] = 'M';
+				nex_model[k++] = 'X';
+				while ((str[i] != '\0') && (str[i] != 0xff) && (str[i] != ',')) {
+					nex_model[k++] = str[i++];
+				}
+				nex_model[i] = '\0';
+				return (i);
+			}
+		}
+	}
+	return (0);
+}
+
+// try to extract LCD integer response from a 'Get' command
+// eg 71 EC 5C BC 00 FF FF FF
+int decode_int(char *str) {
+	int i, number;
+
+	i = 0;
+	number = 0;
+
+	if ((str[0] == 0x71) && (str[5] = 0xff) && (str[6] == 0xff) && (str[7] == 0xff)) {
+		for (i = 1; i < 5; i++) {
+			number = number >> 8;
+			number = number | (str[i] << 24);
+		}
+		return (number);
+	} else {
+		return (0xffffffff);
+	}
+}
+
 // Try to build an LCD RX Event packet
 // returns: 0 nothing found (yet), > 0 good event decodes, -1 error
 int lcd_event_process(void) {
-	static unsigned char eventbuffer[32];
+	static unsigned char eventbuffer[96];
 	volatile int i, result;
+	char *str;
 
 	result = isnexpkt(eventbuffer, sizeof(eventbuffer));
 	if (result <= 0) {
-		return (result);		// 0 = nothing found, -1 = timeout
+		return (result);		// 0 = nothing found, -1 = timeout, -2=no char
 	} else // got a packet of something
 	{
 		lcdstatus = eventbuffer[0];
@@ -541,7 +657,7 @@ int lcd_event_process(void) {
 					break;
 				case 0x1A:
 					printf("Invalid variable\n");		// so we might be on the wrong LCD page?
-					getlcdpage();						// no point in waiting for result to come in the rx queue
+					getlcdpage();				// no point in waiting for result to come in the rx queue
 					break;
 				case 0x23:
 					printf("Variable name too long\n");
@@ -560,7 +676,7 @@ int lcd_event_process(void) {
 					break;
 				case 0x12:
 					printf("Invalid waveform ID\n");
-					getlcdpage();						// no point in waiting for result to come in the rx queue
+					getlcdpage();				// no point in waiting for result to come in the rx queue
 					break;
 				case 0x01:
 					printf("Successful execution\n");
@@ -583,6 +699,21 @@ int lcd_event_process(void) {
 				printf("Serial Buffer Overflow!\n");
 				return (1);
 				break;
+
+			case 0x63:	// This could be the start of the 'c' from "connect"
+				decode_lcdtype(eventbuffer);
+				if (nex_model[0] != '\0') {
+					printf("Nextion LCD Model: %s\n", nex_model);
+				}
+				break;
+
+			case 0x71:	// This is an integer variable from a "Get" command
+				lcd_sys0 = decode_int(eventbuffer);
+				if (nex_model[0] != '\0') {
+					printf("Nextion LCD Integer: %d\n", lcd_sys0);
+				}
+				break;
+
 			case NEX_ETOUCH:
 				printf("lcd_event_process: Got Touch event %0x %0x %0x\n", eventbuffer[1], eventbuffer[2],
 						eventbuffer[3]);
@@ -617,7 +748,7 @@ int lcd_event_process(void) {
 				}
 				break;
 
-			case NEX_EPAGE:
+			case NEX_EPAGE:		// got page change event
 //				printf("lcd_event_process: Got Page event, OldPage=%d, NewPage=%d\n", lcd_currentpage, eventbuffer[1]);
 				setlcddim(lcdbright);
 				if (((lcd_pagechange(eventbuffer[1]) < 0) || (lcd_pagechange(eventbuffer[1]) > 5)))	// page number limits
@@ -729,8 +860,8 @@ void lcd_time() {
 
 	localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
 	timeinfo = *localtime(&localepochtime);
-	strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
-	setlcdtext("t0.txt", buffer);
+	strftime(sbuffer, sizeof(sbuffer), "%H:%M:%S", &timeinfo);
+	setlcdtext("t0.txt", sbuffer);
 
 	if (gpslocked) {
 		writelcdcmd("vis t3,0");	// hide warning
@@ -745,8 +876,8 @@ void lcd_time() {
 void lcd_date() {
 
 	lastday = timeinfo.tm_yday;
-	strftime(buffer, sizeof(buffer), "%a %e %h %Y ", &timeinfo);
-	setlcdtext("t1.txt", buffer);
+	strftime(sbuffer, sizeof(sbuffer), "%a %e %h %Y ", &timeinfo);
+	setlcdtext("t1.txt", sbuffer);
 }
 
 // populate the page2 vars
@@ -997,3 +1128,4 @@ lcd_controls() {
 		setlcdtext("t3.txt", str);
 	}
 }
+

@@ -45,7 +45,7 @@ extern void processnex(void);
 // Application specific stuff
 void lcd_time(void);		// send the time
 void lcd_date(void);		// send the date
-
+void lcd_getid(void);			// get the LCD's ID
 
 extern struct tm timeinfo;		// lcd time
 extern time_t localepochtime;	// lcd time

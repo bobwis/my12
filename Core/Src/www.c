@@ -382,7 +382,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			}
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
 
-			if (lptask_init_done == 0)	{
+			if (lptask_init_done == 0)	{		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 				osDelay(1000);
 				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
