@@ -2069,10 +2069,10 @@ void StartDefaultTask(void const *argument) {
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
-	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
-		swapboot();	//  swap the boot vector
-	} else {
+	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_RESET) {		// blue button on stm board
 		stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
+	} else {
+		swapboot();		// swap boot vec
 	}
 
 	crc_rom();
@@ -2311,9 +2311,15 @@ void StarLPTask(void const *argument) {
 	writelcdcmd("page 0");
 //	printf("LCD page 0\n");
 	lcd_getid();		// what display is connected?
-	lcd_getsys0();		// what version of our firmware is on the LCD?
-	lcd_putsys0();		// write new version
-	lcd_getsys0();		// what version of our firmware is on the LCD?
+//	lcd_getsys0();		// what version of our firmware is on the LCD?
+//	lcd_putsys0();		// write new version
+//	lcd_getsys0();		// what version of our firmware is on the LCD?
+
+
+	nextionloader("test.tft", "lightning.vk4ya.com", 0);
+
+
+//	http_downloading = 0;		// mode == nextion download  ZZZ this is too early
 
 	osDelay(600);
 	writelcdcmd("cls BLACK");

@@ -331,7 +331,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
-						if (!(res)) {		// a valid firmware string received
+						if (!(res) && (http_downloading == NOT_LOADING)) {		// a valid firmware string received
 							newfirmware = 1;
 						}
 

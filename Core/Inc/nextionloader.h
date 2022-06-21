@@ -26,6 +26,7 @@
  */
 #include "stm32f7xx_hal.h"
 #include "Nextion.h"
+#include "httpclient.h"
 
 /**
  * @addtogroup CoreAPI
@@ -56,6 +57,8 @@ void sendCommand(const char *cmd);
 extern uint32_t _baudrate; /*nextion serail baudrate*/
 extern uint32_t _undownloadByte; /*undownload byte of tft file*/
 extern uint32_t _download_baudrate; /*download baudrate*/
-extern uint32_t _uploaded_bytes = 0; /*counter of uploaded bytes*/
+extern uint32_t _uploaded_bytes; /*counter of uploaded bytes*/
+
+extern int nxt_blocksacked;	// number of acks recieved by the LCD (every 4k bytes)
 
 #endif /* INC_NEXTIONLOADER_H_ */

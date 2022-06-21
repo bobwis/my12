@@ -21,6 +21,7 @@
 #include "lcd.h"
 #include "nextion.h"
 #include "splat1.h"
+#include "nextionloader.h"
 
 // lcd state machine
 #define LCD_IDLE 1
@@ -64,7 +65,7 @@ static unsigned char pressvec[LCDXPIXELS] = { 0 };
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
 
 char nex_model[24];		// the Nextion model number read from the connected display
-volatile int  lcd_sys0;	// used to store our firmware number of the LCd
+volatile int lcd_sys0;	// used to store our firmware number of the LCd
 
 inline int cycinc(int index, int limit) {
 	if (++index >= limit)
@@ -242,6 +243,25 @@ inline int lcd_putc(uint8_t ch) {
 	return (stat);
 }
 
+// send a binary block to the LCD
+int lcd_writeblock(uint8_t *buf, int len) {
+	HAL_StatusTypeDef stat;
+	volatile int i;
+	uint32_t reg;
+
+	if (wait_armtx() == -1)
+		return (-1);
+
+	printf("lcd_writeblock: %d\n", len);
+	txdmadone = 0;	// TX in progress
+
+	stat = HAL_UART_Transmit_DMA(&huart5, buf, len);
+	if (stat != HAL_OK) {
+		printf("lcd_writeblock: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
+	}
+	return (stat);
+}
+
 // put a null terminated string
 int lcd_puts(char *str) {
 	HAL_StatusTypeDef stat;
@@ -330,12 +350,15 @@ int lcd_rxdma() {
 // get the next char from the lcdrx buffer if there is one available
 // returns -1 if nothing
 int lcd_getc() {
-	static int lastidx = 0;
+	volatile static int lastidx = 0;
 	int ch;
 
 	ch = -1;
 	if (lastidx != lcdrxoutidx) {		// something there
 		ch = lcdrxbuffer[lastidx];
+		if (ch == 0x5) {
+			printf("5\n");
+		}
 		lastidx = cycinc(lastidx, LCDRXBUFSIZE);
 		rxtimeout = 100;
 //  printf("lcd_getc() got %02x\n", ch);
@@ -477,7 +500,7 @@ lcd_getsys0(void) {
 	result = lcd_getlack();		// wait for a response
 
 	lcd_txblocked = 0;		// allow others sending to the LCD
-	printf("getsys0: returned value=0x%08x\n",lcd_sys0);
+	printf("getsys0: returned value=0x%08x\n", lcd_sys0);
 	return (result);
 }
 
@@ -487,18 +510,33 @@ lcd_putsys0(void) {
 	char cmd[16];
 	int result;
 
-	lcd_txblocked = 0;
+	lcd_txblocked = 1;
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
-	sprintf(cmd,"sys0=0x%08x",value);
-	printf("Putting: %s\n",cmd);
+	sprintf(cmd, "sys0=0x%08x", value);
+	printf("lcd_putsys0: %s\n", cmd);
+	lcd_txblocked = 0;
 	writelcdcmd(cmd);
 	result = lcd_getlack();		// wait for a response (none expected)
 	lcd_txblocked = 0;		// allow others sending to the LCD
 }
 
+// Put the Nexttion LCD into download mode
+void lcd_startdl(int filesize) {
+	char cmd[32];
+	int result;
 
+	lcd_txblocked = 1;
+	lcd_clearrxbuf();
+	lcdstatus = 0xff;
+	sprintf(cmd, "whmi-wri %i,230400,Z", filesize);
+	printf("lcd_startdl: \"%s\"\n", cmd);
+	lcd_txblocked = 0;
+	writelcdcmd(cmd);
+	result = lcd_getlack();		// wait for a response
 
+	lcd_txblocked = 1;		// keep LCD sending blocked
+}
 
 // lcd page change event occurred
 // lcd_currentpage is the current LCD page displayed
@@ -556,6 +594,14 @@ int isnexpkt(unsigned char buffer[], uint8_t size) {
 #endif
 		ch = rawchar & 0xff;
 		buffer[i++] = ch;
+
+		if (http_downloading == NXT_LOADING) {		// LCD is in upload to Nextion mode
+			if (ch == 0x05) {
+				index = i;
+				return (index);
+			}
+		}
+
 		if (ch == 0xff) {
 			termcnt++;
 //			printf("isnexpkt: termcount=%d\n",termcnt);
@@ -686,6 +732,15 @@ int lcd_event_process(void) {
 					printf("Invalid Component ID\n");
 					return (0);
 					break;
+				case 0x05:
+					if (http_downloading == NXT_LOADING) {	// return code 0x05 is good - block rcv'd
+						printf("Nextion DL acked a block\n");
+						nxt_blocksacked++;
+					} else {
+						printf("NXT Error 0x05\n");
+					}
+					return (0);
+					break;
 				default:
 					printf("Error status 0x%02x\n\r", eventbuffer[0]);
 					break;
@@ -695,6 +750,7 @@ int lcd_event_process(void) {
 		} else  // this is either a touch event or a response to a query packet
 		{
 			switch (eventbuffer[0]) {
+
 			case 0x24:
 				printf("Serial Buffer Overflow!\n");
 				return (1);
@@ -710,8 +766,12 @@ int lcd_event_process(void) {
 			case 0x71:	// This is an integer variable from a "Get" command
 				lcd_sys0 = decode_int(eventbuffer);
 				if (nex_model[0] != '\0') {
-					printf("Nextion LCD Integer: %d\n", lcd_sys0);
+					printf("Nextion LCD Integer: 0x%0x\n", lcd_sys0);
 				}
+				break;
+
+			case 0x88:	// Return data notification that LCD is ready
+				printf("Nextion returned 0x88 - Ready!\n");
 				break;
 
 			case NEX_ETOUCH:

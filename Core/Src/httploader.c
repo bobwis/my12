@@ -20,11 +20,12 @@
 #include "udpstream.h"
 #include "splat1.h"
 #include "adcstream.h"
+#include "altcp.h"
 
 #include "eeprom.h"
 #include "tftp/tftp_loader.h"
 
-int http_downloading = 0;
+int http_downloading = NOT_LOADING;
 
 // attempt to load new firmware
 void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
@@ -59,8 +60,52 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 	sprintf(newfilename, "/firmware/%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
 	printf("Attempting to download new firmware %s to 0x%08x from %s, ******* DO NOT SWITCH OFF ******\n", newfilename, flash_memptr, host);
 
-	http_downloading = 1;
+	http_downloading = FLASH_LOADING;
 	http_dlclient(newfilename, host, flash_memptr);
 	osDelay(5);
+}
+
+
+// http callback for stm firmware download
+// this gets called for each downloaded chunk received
+//
+int stm_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
+	char *buf;
+	struct pbuf *q;
+	int count = 0, tlen = 0, len = 0;
+
+//	printf("stm_rx_callback:\n");
+
+	LWIP_ASSERT("p != NULL", p != NULL);
+	if (err != ERR_OK) {
+		putchar('#');
+		printlwiperr(err);
+		return;
+	}
+
+	for (q = p; q != NULL; q = q->next) {
+		count += q->len;
+		tlen = q->tot_len;
+		len = q->len;
+#if 0
+		putchar('.');
+#endif
+		if ((flash_abort == 0) && (flash_memptr != 0)) { // we need to write this data to flash
+			if (flash_memwrite(q->payload, 1, q->len, flash_memptr) != (size_t) len) {
+				flash_abort = 1;
+				flash_memptr = 0;
+				printf("Flash Write failed from http client\n");
+				return (-1);
+			}
+		}
+		down_total += q->len;
+
+		altcp_recved(pcb, p->tot_len);
+		pbuf_free(p);
+
+//		p = p->next;
+//		printf("stm_rx_callback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, tlen);
+	}
+	return (0);
 }
 
