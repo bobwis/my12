@@ -59,6 +59,7 @@
 #include <string.h>
 #include "eeprom.h"
 #include "httpclient.h"
+#include "nextionloader.h"
 
 #if LWIP_TCP && LWIP_CALLBACK_API
 
@@ -86,8 +87,8 @@
 #define HTTPC_DEBUG_WARN_STATE   (HTTPC_DEBUG | LWIP_DBG_LEVEL_WARNING | LWIP_DBG_STATE)
 #define HTTPC_DEBUG_SERIOUS      (HTTPC_DEBUG | LWIP_DBG_LEVEL_SERIOUS)
 
-#define HTTPC_POLL_INTERVAL     1
-#define HTTPC_POLL_TIMEOUT      30 /* 15 seconds */
+#define HTTPC_POLL_INTERVAL     3
+#define HTTPC_POLL_TIMEOUT      100 /* 15 seconds */
 
 //#define pbuf_free pbuf_free_callback
 #define HTTPC_CONTENT_LEN_INVALID 0xFFFFFFFF
@@ -989,10 +990,10 @@ err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *
 // received file has finished
 void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-//	printf("HttpClientFileResultCallback: total=%u\n", tlen);
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientFileResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 		flash_memptr = 0;
+		nxt_abort = 1;
 	}
 	if (err != ERR_OK) {
 		printlwiperr(err);
@@ -1002,7 +1003,7 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 		memclose();
 	}
 
-//	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
 }
 
 //
@@ -1046,7 +1047,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 
 	LWIP_ASSERT("p != NULL", p != NULL);
 	if (err != ERR_OK) {
-		putchar('#');
+		putchar('^');
 		printlwiperr(err);
 		return;
 	}
@@ -1091,13 +1092,10 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 	connection1->timeout_ticks = 1;
 
-//	strcpy(domain_name, "xen.local");
-//	strcpy(rxbuffer, "/firmware/my12.bin");
-
 	strcpy(domain_name, host);
 	strcpy(rxbuffer, filename);
 
-//	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
+	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
 	down_total = 0;
 	expectedapage = 0;

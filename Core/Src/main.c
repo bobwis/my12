@@ -2018,7 +2018,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 void getboardpcb() {
 	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
 //		circuitboardpcb = LIGHTNINGBOARD1;		// prototype
-        circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
+		circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
 	} else {
 		circuitboardpcb = SPLATBOARD1;		// assumed
 	}
@@ -2068,12 +2068,6 @@ void StartDefaultTask(void const *argument) {
 	STM32_UUID[2],
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
-
-	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_RESET) {		// blue button on stm board
-		stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
-	} else {
-		swapboot();		// swap boot vec
-	}
 
 	crc_rom();
 
@@ -2205,16 +2199,18 @@ printf("*** TESTING BUILD USED ***\n");
 	printf("*****************************************\n");
 
 	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
-	initialapisn();	// get initial s/n and UDP target; reboots if fails
+	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
 	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 
-	osDelay(4000);
+	nextionloader("test", "lightning.vk4ya.com", 0);
+
 	if (http_downloading) {
 		printf("Downloading...\n");
 		while (http_downloading) {
 			osDelay(1000);
 		}
 	}
+
 	printf("Starting httpd web server\n");
 
 	httpd_init();		// start the www server
@@ -2315,12 +2311,6 @@ void StarLPTask(void const *argument) {
 //	lcd_putsys0();		// write new version
 //	lcd_getsys0();		// what version of our firmware is on the LCD?
 
-
-	nextionloader("test.tft", "lightning.vk4ya.com", 0);
-
-
-//	http_downloading = 0;		// mode == nextion download  ZZZ this is too early
-
 	osDelay(600);
 	writelcdcmd("cls BLACK");
 	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
@@ -2329,9 +2319,9 @@ void StarLPTask(void const *argument) {
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
 
-
 #endif
 	i = 0;
+#if 0
 	while (main_init_done == 0) { // wait from main to complete the init {
 		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
 		switch (i & 3) {
@@ -2354,8 +2344,12 @@ void StarLPTask(void const *argument) {
 		if (!(netif_is_link_up(&gnetif))) {
 			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
 		}
-	}
+#endif
 
+	for (;;) {
+		osDelay(5000);
+		HAL_IWDG_Refresh(&hiwdg);
+	}
 
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd("ref 0");		// refresh screen
@@ -2367,9 +2361,9 @@ void StarLPTask(void const *argument) {
 
 #if 1
 #ifdef TESTING
-	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
-	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
-			udp_target, udp_ips);
+		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
+				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
+				udp_target, udp_ips);
 #else
 	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
 	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
@@ -2387,16 +2381,6 @@ void StarLPTask(void const *argument) {
 	for (;;) {							// The Low Priority Task forever loop
 		HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
 		osDelay(10);		// 10mSec
-
-		if (http_downloading) {
-			printaline("\n");
-			printf("Downloading...\n");
-			printaline("");
-			while (http_downloading) {
-				osDelay(50);
-				HAL_IWDG_Refresh(&hiwdg);
-			}
-		}
 
 		/***********************  Every 10mSec   *******************************/
 //		tcp_tmr();
@@ -2557,7 +2541,8 @@ void StarLPTask(void const *argument) {
 				HAL_GPIO_WritePin(GPIOD, LED_D2_Pin, GPIO_PIN_RESET);
 #if 1
 
-			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
+			while (!(xSemaphoreTake(
+					ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
 				printf("sem wait 1b\n");
 			}
 
@@ -2596,7 +2581,8 @@ void StarLPTask(void const *argument) {
 					printf("semaphore take failed\n");
 				}
 #endif
-			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
+			while (!(xSemaphoreTake(
+					ssicontentHandle, (TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
 				printf("sem wait 1c\n");
 			}
 
@@ -2678,7 +2664,7 @@ void StarLPTask(void const *argument) {
 					nowtimestr);
 
 #else
-			printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
+				printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
 #endif
 		} // end if 30 second timer
 
@@ -2686,15 +2672,15 @@ void StarLPTask(void const *argument) {
 		if (((onesectimer + 21) % 180 == 0) && (last3min != onesectimer)) {
 			last3min = onesectimer;	// prevent multiple calls while inside this second
 
-			if (boosttrys > 0)		// timer for boost gain oscillating
+			if (boosttrys > 0)	// timer for boost gain oscillating
 				boosttrys--;
-			lcd_pressplot();		// add a point to the pressure plot
+			lcd_pressplot();	// add a point to the pressure plot
 		}
 
 		/**********************  Every 15 minutes  *******************************/
 		if (onesectimer > 900) {			// 15 mins
 			onesectimer = 0;
-			requestapisn();	//update s/n and udp target (reboot on fail)
+			requestapisn();			//update s/n and udp target (reboot on fail)
 		}
 	}
 

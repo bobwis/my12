@@ -304,7 +304,6 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile char filename[32], s1[16];
 	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
 	char host[17] = "192.168.0.248";
-	int newfirmware = 0;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
@@ -330,10 +329,6 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
-
-						if (!(res) && (http_downloading == NOT_LOADING)) {		// a valid firmware string received
-							newfirmware = 1;
-						}
 
 					} // else ignore it
 					  // fall through
@@ -380,16 +375,15 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			if (!res) {		// build changed?
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
-			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
-
-			if (lptask_init_done == 0)	{		// if running, reboot before trying to load
+			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the version advertised is different to this one running now
+				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
-				osDelay(1000);
-				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
-			} else {
-				printf("Rebooting before loading new firmware, wait...\n");
-				rebootme(0);
-			}
+					osDelay(1000);
+					httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
+				} else {
+					printf("Rebooting before loading new firmware, wait...\n");
+					rebootme(0);
+				}
 			}
 		}
 	}
@@ -412,7 +406,7 @@ void getpage(char page[64]) {
 //	ip.addr = remoteip.addr;
 //	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
 //			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
-	printf("Control Server is %s\n",SERVER_DESTINATION);
+	printf("Control Server is %s\n", SERVER_DESTINATION);
 
 	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
 //	printf("httpclient: result=%d\n", result);
@@ -431,7 +425,7 @@ void initialapisn() {
 	{
 		printf("getting S/N and UDP target using http. Try=%d\n", j);
 		getpage(stmuid);		// get sn and targ
-		for (i=0; i<5000; i++) {
+		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
 				break;
 			osDelay(1);

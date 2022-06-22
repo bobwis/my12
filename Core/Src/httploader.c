@@ -29,7 +29,7 @@ int http_downloading = NOT_LOADING;
 
 // attempt to load new firmware
 void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
-	static char newfilename[24];
+	static char newfilename[48];
 	volatile uint32_t addr;
 	char segment;
 

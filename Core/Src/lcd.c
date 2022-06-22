@@ -248,12 +248,14 @@ int lcd_writeblock(uint8_t *buf, int len) {
 	HAL_StatusTypeDef stat;
 	volatile int i;
 	uint32_t reg;
+	uint8_t by;
 
 	if (wait_armtx() == -1)
 		return (-1);
-
-	printf("lcd_writeblock: %d\n", len);
+//	printf("lcd_writeblock: %d\n", len);
 	txdmadone = 0;	// TX in progress
+
+//	myhexDump("NXT:", buf, len);
 
 	stat = HAL_UART_Transmit_DMA(&huart5, buf, len);
 	if (stat != HAL_OK) {
@@ -356,9 +358,6 @@ int lcd_getc() {
 	ch = -1;
 	if (lastidx != lcdrxoutidx) {		// something there
 		ch = lcdrxbuffer[lastidx];
-		if (ch == 0x5) {
-			printf("5\n");
-		}
 		lastidx = cycinc(lastidx, LCDRXBUFSIZE);
 		rxtimeout = 100;
 //  printf("lcd_getc() got %02x\n", ch);
@@ -529,7 +528,7 @@ void lcd_startdl(int filesize) {
 	lcd_txblocked = 1;
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
-	sprintf(cmd, "whmi-wri %i,230400,Z", filesize);
+	sprintf(cmd, "whmi-wri %i,230400,0", filesize);
 	printf("lcd_startdl: \"%s\"\n", cmd);
 	lcd_txblocked = 0;
 	writelcdcmd(cmd);
@@ -734,7 +733,7 @@ int lcd_event_process(void) {
 					break;
 				case 0x05:
 					if (http_downloading == NXT_LOADING) {	// return code 0x05 is good - block rcv'd
-						printf("Nextion DL acked a block\n");
+						printf("Nextion DL acked block %d\n", nxt_blocksacked);
 						nxt_blocksacked++;
 					} else {
 						printf("NXT Error 0x05\n");

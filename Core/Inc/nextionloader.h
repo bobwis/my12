@@ -60,5 +60,6 @@ extern uint32_t _download_baudrate; /*download baudrate*/
 extern uint32_t _uploaded_bytes; /*counter of uploaded bytes*/
 
 extern int nxt_blocksacked;	// number of acks recieved by the LCD (every 4k bytes)
+extern int nxt_abort;			// 1 == abort
 
 #endif /* INC_NEXTIONLOADER_H_ */
