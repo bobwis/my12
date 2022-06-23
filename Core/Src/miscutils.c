@@ -129,3 +129,21 @@ inline void gpioeclr(uint32_t clrbits) {
 
 }
 
+
+// moving avg, used by:-
+// clktrim
+uint32_t movavg(uint32_t new) {
+	static uint32_t data[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	int i;
+	uint32_t sum = 0;
+
+	for (i = 0; i < 15; i++) {
+		data[i] = data[i + 1];		// old data is low index
+		sum += data[i];
+	}
+	data[15] = new;		// new data at the end
+	sum += new;
+
+	return (sum >> 4);
+}
+

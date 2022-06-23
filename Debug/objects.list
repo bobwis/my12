@@ -6,7 +6,7 @@
 "./Core/Src/httploader.o"
 "./Core/Src/lcd.o"
 "./Core/Src/main.o"
-"./Core/Src/mydebug.o"
+"./Core/Src/miscutils.o"
 "./Core/Src/neo7m.o"
 "./Core/Src/nextionloader.o"
 "./Core/Src/splat1.o"

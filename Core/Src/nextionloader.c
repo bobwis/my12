@@ -33,15 +33,15 @@
 
 #include "eeprom.h"
 #include "tftp/tftp_loader.h"
-
+#include "lcd.h"
 #include "Nextionloader.h"
 
 int nxt_abort = 0;			// 1 == abort
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
-char nxtbuffer[NXDL_BUFF_SIZE];
+int tftfilesize = 0;
 
 // attempt to load new LCD user firmware
-void nextionloader(char filename[], char host[], uint32_t crc) {
+void nxt_loader(char filename[], char host[], uint32_t crc) {
 	static char newfilename[48];
 
 	dl_filecrc = 0;
@@ -55,10 +55,11 @@ void nextionloader(char filename[], char host[], uint32_t crc) {
 	http_downloading = NXT_LOADING;		// mode == nextion download
 	nxt_abort = 0;
 
-#define TFTSIZE 1971204
+#define TFTSIZE 1972916
+	tftfilesize = TFTSIZE;
 
 	nxt_blocksacked = 0;
-	lcd_startdl(TFTSIZE);		// put LCD into upload firmware mode	ZZZ filesize
+	lcd_startdl(tftfilesize);		// put LCD into upload firmware mode	ZZZ filesize
 	osDelay(600);				// wait half a second for LCD to Ack
 	if (nxt_blocksacked) {		// LCD acks the start, its now in DL mode
 		nxt_blocksacked = 0;		// reset counter
@@ -70,8 +71,6 @@ void nextionloader(char filename[], char host[], uint32_t crc) {
 
 	// wait for transfer to complete
 	// unblock http client
-	osDelay(5);
-	printf("nextionloader: exit\n");
 }
 
 //#define lcd_writeblock(nxtbuffer, residual) printf("%d ",residual)
@@ -85,6 +84,7 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 	volatile int i, pktlen, res, tlen = 0, len = 0, ch;
 	static int residual, blockssent = 0;
 	static int bytesinblocksent = 0, qlentot = 0, tot_sent = 0;
+	static char nxtbuffer[NXDL_BUFF_SIZE];
 
 //	printf("nxt_rx_callback:\n");
 
@@ -127,22 +127,26 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 					return (-1);
 				}
 				bytesinblocksent += residual;
+				residual = 0;
+				while (txdmadone == 0)		// tx in progress
+					osDelay(1);
 			}
 
 			pktlen = q->len;
-			residual = 0;
+
+			for (i = 0; i < sizeof(nxtbuffer); i++)
+				nxtbuffer[i] = 0xAA;
 
 			if ((pktlen + bytesinblocksent) > 4096) {	// will we will overflow the 4096 boundary?
-				len = 4096 - bytesinblocksent;		// we only have to send 0.. len this time
+				len = 4096 - bytesinblocksent;		// we only have to send len this time
 
 				buf = q->payload;
 				for (i = len; i < pktlen; i++) {		// copy the extra bytes we cant send into a buffer
 					nxtbuffer[residual++] = buf[i];		// keep the rest back until next time
 				}
-				len = pktlen - residual;		// work out how many we can send now
 
 			} else {
-				len = pktlen;		// just send what we have got
+				len = pktlen;		// just try to send what we have got
 			}
 
 			tot_sent += len;
@@ -151,18 +155,24 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 				nxt_abort = 1;
 				return (-1);
 			}
+			while (txdmadone == 0)		// tx in progress
+				osDelay(1);
 
 			bytesinblocksent += len;
 
+			if (bytesinblocksent > 4096) {
+				printf("BLOCK OVERRUN\n");
+			}
+
 			if (bytesinblocksent == 4096) {
-//				printf("nxt_rx_3: blk=%d, down_total=%d, tot_sent=%d\n",blockssent,down_total,tot_sent);
+				printf("nxt_rx_3: blk=%d, down_total=%d, tot_sent=%d\n", blockssent, down_total, tot_sent);
 
 				lcd_rxdma();		// get any new characters received
 				for (i = 0; i < 2000; i++) {
 					ch = lcd_getc();
 					if (ch >= 0) {
 						if (ch == 0x05) {
-							printf("ACK\n");
+//							printf("ACK\n");
 							break;
 						} else {
 							printf("Not Ack, was %d\n", ch);		// ignore it otherwise
@@ -171,13 +181,11 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 					osDelay(1);
 					lcd_rxdma();		// get any new characters received
 					if (i == 1999) {
-						printf("AMISSED ACK\n");
+						printf("MISSED ACK\n");
 						ch = -1;
 					}
-
-					bytesinblocksent = 0;		// start new block
-					blockssent++;
 				}
+
 				if (ch < 0) {		// error
 					nxt_abort = 1;
 					printf("ABORT ERR ON ACK\n");
@@ -185,9 +193,11 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 				} else {
 					nxt_blocksacked++;
 				}
+				bytesinblocksent = 0;		// start new block
+				blockssent++;
 			}
 		}
-		printf("nxt_rx_5: blk=%d, down_total=%d, tot_sent=%d, qlentot=%d\n", blockssent, down_total, tot_sent, qlentot);
+//		printf("nxt_rx_5: blk=%d, down_total=%d, tot_sent=%d, qlentot=%d\n", blockssent, down_total, tot_sent, qlentot);
 		down_total += q->len;			// downloaded but not necessarily all sent to lcd
 		altcp_recved(pcb, p->tot_len);
 		pbuf_free(p);
@@ -196,5 +206,48 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 //		printf("nxt_rx_4: len=%d, tot=%d qlentot=%d\n",  len, down_total, qlentot);
 	}
 	return (0);
+}
+
+// Get Nextion version and see if we are current
+int nxt_check() {
+	int model;
+
+	if (nex_model[0] == '\0') {
+		printf("LCD Model number invalid\n)");
+		return (0);
+	}
+
+	// find LCD sys0 value
+	if ((lcd_sys0 == -1) || (lcd_sys0 == 0)) {		// invalid build no  // ZZZ needs fixing for consistency with -1
+		printf("LCD Buildno was invalid\n");
+		return (0);
+	}
+	return (lcd_sys0);
+}
+
+///  Check if LCD needs updating and update it if so
+nxt_update() {
+	int lcdbuildno;
+
+	if (nxt_check() != 0) {		// we identified okay
+		if (lcdbuildno != BUILDNO) {
+			// do the load
+			lcd_putsys0(BUILDNO);		// its volatile inside the LCD
+			nxt_loader("my12", "lightning.vk4ya.com", 0);
+			while ((http_downloading) && (nxt_abort == 0)) {
+				HAL_IWDG_Refresh(&hiwdg);
+				osDelay(5);
+			}
+			osDelay(5000);
+			printf("Attempting LCD re-sync\n");
+			nxt_baud();		// resync hardware
+			lcd_txblocked = 0;		// unblock LCD sending blocked
+
+		} else {
+			printf("LCD firmware matched stm firmware\n");
+		}
+	} else {
+		printf("LCD not identified\n");
+	}
 }
 

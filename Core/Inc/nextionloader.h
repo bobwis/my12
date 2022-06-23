@@ -54,6 +54,8 @@ void sendCommand(const char *cmd);
  *
  */
 
+extern IWDG_HandleTypeDef hiwdg;
+
 extern uint32_t _baudrate; /*nextion serail baudrate*/
 extern uint32_t _undownloadByte; /*undownload byte of tft file*/
 extern uint32_t _download_baudrate; /*download baudrate*/

@@ -1950,20 +1950,7 @@ void netif_link_callbk_fn(struct netif *netif) {
 	}
 }
 
-uint32_t movavg(uint32_t new) {
-	static uint32_t data[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-	int i;
-	uint32_t sum = 0;
 
-	for (i = 0; i < 15; i++) {
-		data[i] = data[i + 1];		// old data is low index
-		sum += data[i];
-	}
-	data[15] = new;		// new data at the end
-	sum += new;
-
-	return (sum >> 4);
-}
 
 // dma for DAC finished callback
 void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac) {
@@ -2198,12 +2185,6 @@ printf("*** TESTING BUILD USED ***\n");
 			(myip & 0xFF000000) >> 24);
 	printf("*****************************************\n");
 
-	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
-	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
-	HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
-
-	nextionloader("test", "lightning.vk4ya.com", 0);
-
 	if (http_downloading) {
 		printf("Downloading...\n");
 		while (http_downloading) {
@@ -2211,10 +2192,13 @@ printf("*** TESTING BUILD USED ***\n");
 		}
 	}
 
+	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
+	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
+	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+
 	printf("Starting httpd web server\n");
-
 	httpd_init();		// start the www server
-
 	init_httpd_ssi();	// set up the embedded tag handler
 
 // tim7 drives DAC
@@ -2253,6 +2237,7 @@ void uart2_rxdone() {
 
 /* USER CODE END 5 */
 
+
 /* USER CODE BEGIN Header_StarLPTask */
 /**
  * @brief Function implementing the LPTask thread.
@@ -2286,78 +2271,9 @@ void StarLPTask(void const *argument) {
 	}
 
 	strcpy(udp_target, SERVER_DESTINATION);
-
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
-#ifdef SPLAT1
-	lcduart_error = HAL_UART_ERROR_NONE;
-
-	lcd_init(9600);  // reset LCD to 9600 from current (unknown) speed
-	lcd_uart_init(9600); // then change our baud to match
-	lcd_init(9600);  // reset LCD (might be 2nd time or not)
-	osDelay(600);
-
-	lcd_init(230400);  //  LCD *should* return in 230400 baud
-	osDelay(600);
-	lcd_uart_init(230400); // then change our baud to match
-
-	osDelay(600);
-	lcduart_error = HAL_UART_ERROR_NONE;
-
-	writelcdcmd("page 0");
-//	printf("LCD page 0\n");
-	lcd_getid();		// what display is connected?
-//	lcd_getsys0();		// what version of our firmware is on the LCD?
-//	lcd_putsys0();		// write new version
-//	lcd_getsys0();		// what version of our firmware is on the LCD?
-
-	osDelay(600);
-	writelcdcmd("cls BLACK");
-	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
-	BUILD);
-	lcduart_error = HAL_UART_ERROR_NONE;
-	writelcdcmd(str);
-	lcduart_error = HAL_UART_ERROR_NONE;
-
-#endif
-	i = 0;
-#if 0
-	while (main_init_done == 0) { // wait from main to complete the init {
-		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
-		switch (i & 3) {
-		case 0:
-			writelcdcmd(strcat(str, ".\""));
-			break;
-		case 1:
-			writelcdcmd(strcat(str, "..\""));
-			break;
-		case 2:
-			writelcdcmd(strcat(str, "...\""));
-			break;
-		case 3:
-			writelcdcmd(strcat(str, "....\""));
-			break;
-		}
-		i++;
-		osDelay(250);
-
-		if (!(netif_is_link_up(&gnetif))) {
-			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
-		}
-#endif
-
-	for (;;) {
-		osDelay(5000);
-		HAL_IWDG_Refresh(&hiwdg);
-	}
-
-	lcduart_error = HAL_UART_ERROR_NONE;
-	writelcdcmd("ref 0");		// refresh screen
-
-#ifdef SPLAT1
-	lcduart_error = HAL_UART_ERROR_NONE;
-	writelcdcmd("page 0");
-#endif
+	init_nextion();
 
 #if 1
 #ifdef TESTING
@@ -2370,6 +2286,15 @@ void StarLPTask(void const *argument) {
 			udp_target, udp_ips);
 #endif
 #endif
+	osDelay(500);
+
+	if (http_downloading) {		// don't go further
+		while (http_downloading) {
+			osDelay(5000);
+			HAL_IWDG_Refresh(&hiwdg);
+		}
+//		rebootme(0);
+	}
 
 	HAL_TIM_Base_Start(&htim7);	// start audio synth sampling interval timer
 
@@ -2520,7 +2445,9 @@ void StarLPTask(void const *argument) {
 				timeinfo = *localtime(&localepochtime);
 
 				lastsec = onesectimer;
-				lcd_time();
+				lcd_time();		// display the clock on the LCD page 0
+				if (BUILDNO > 10029)
+					lcd_gps();		// display the GPS on the LCD page 0
 
 				if (timeinfo.tm_yday != lastday) {
 					lcd_date();
@@ -2581,8 +2508,8 @@ void StarLPTask(void const *argument) {
 					printf("semaphore take failed\n");
 				}
 #endif
-			while (!(xSemaphoreTake(
-					ssicontentHandle, (TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
+			while (!(xSemaphoreTake(ssicontentHandle,
+					(TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
 				printf("sem wait 1c\n");
 			}
 
@@ -2664,7 +2591,7 @@ void StarLPTask(void const *argument) {
 					nowtimestr);
 
 #else
-				printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
+printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
 #endif
 		} // end if 30 second timer
 

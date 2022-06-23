@@ -45,8 +45,11 @@ extern void processnex(void);
 // Application specific stuff
 void lcd_time(void);		// send the time
 void lcd_date(void);		// send the date
-void lcd_getid(void);			// get the LCD's ID
+int lcd_getid(void);			// get the LCD's ID
+int lcd_getsys0(void);		// read LCD's sys0 var
+void lcd_putsys0(uint32_t value);	// write the sys0 variable
 
+extern char nex_model[24];		// the Nextion model number read from the connected display
 extern struct tm timeinfo;		// lcd time
 extern time_t localepochtime;	// lcd time
 
@@ -57,5 +60,9 @@ extern volatile int lcduart_error;			// last uart err
 extern int lastday;		// the last date sown on the LCD
 extern uint16_t lastsec;	// the last second shown on the lcd
 extern volatile uint8_t lcd_currentpage;  // current LCD page
+extern int main_init_done;		// flag for main_init finished
+extern volatile int lcd_sys0;
+extern int txdmadone;
+extern volatile int lcd_txblocked;
 
 #endif /* INC_LCD_H_ */
