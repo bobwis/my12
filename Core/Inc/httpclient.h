@@ -67,7 +67,8 @@ struct hc_state {
 	char *RecvData;
 	u16_t Len;
 	u8_t ConnectionTimeout;
-	void (*ReturnPage)(u8_t num, hc_errormsg, char *data, u16_t len);
+//	void (*ReturnPage)(u8_t num, hc_errormsg, char *data, u16_t len);
+	void (*returnpage)(volatile char *content, volatile u16_t charcount, int errorm);
 };
 
 // Nextion http download buffer size

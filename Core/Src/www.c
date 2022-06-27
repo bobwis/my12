@@ -298,12 +298,11 @@ int parsep2(char *buf, char *match, int type, void *value) {
 void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	volatile int nconv, res, res2;
+	volatile int nconv, res, res2, res3;
 	volatile int p1;
-	volatile char p2[96];
-	volatile char filename[32], s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
-	char host[17] = "192.168.0.248";
+	volatile char p2[256];
+	volatile char filename[32],  s1[16];
+	volatile uint32_t crc1, crc2, n1 = 0,  n2 = 0;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
@@ -311,7 +310,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 //			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 			printf("server returned page: %.*s\n", charcount, content);
 			s1[0] = '\0';
-			nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
+			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
 				switch (nconv) {
 
@@ -320,13 +319,19 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 					if (p2[0] == '{') {		// its the start of enclosed params
 						res = 0;
 						res2 = 0;
+						res3 = 0;
 						res |= parsep2(&p2[1], "fw", 1, filename);
 						res |= parsep2(&p2[1], "bld", 2, &newbuild);
 						res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
 						res |= parsep2(&p2[1], "crc2", 3, &crc2);
-						res2 |= parsep2(&p2[1], "srv", 1, &host);
+
+						res2 |= parsep2(&p2[1], "srv", 1, &loaderhost);
 						res2 |= parsep2(&p2[1], "n2", 3, &n2);
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
+
+						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
+						res3 |= parsep2(&p2[1], "lbl", 2, &lcdbuildno);
+						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
@@ -379,7 +384,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 					osDelay(1000);
-					httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
+					httploader(filename, loaderhost, crc1, crc2);
 				} else {
 					printf("Rebooting before loading new firmware, wait...\n");
 					rebootme(0);

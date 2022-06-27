@@ -38,39 +38,57 @@
 
 int nxt_abort = 0;			// 1 == abort
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
-int tftfilesize = 0;
 
 // attempt to load new LCD user firmware
-void nxt_loader(char filename[], char host[], uint32_t crc) {
+int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 	static char newfilename[48];
 
-	dl_filecrc = 0;
+	printf("nextionloader: fliename=%s, host=%s, len=%u\n", filename, host, nxtfilesize);
 
-//	printf("nextionloader: fliename=%s, host=%s, crc=%u\n",filename,host,crc);
+	if ((nxtfilesize == 0) || (nxtfilesize == -1)) {
+
+		printf("nxt_loader: nxt file length was bad\n");
+		return (-1);
+	}
+
+	if (filename[0] == 0) {
+
+		printf("nxt_loader: nxt file name was bad\n");
+		return (-1);
+	}
+
+	if (host[0] == 0) {
+
+		printf("nxt_loader: nxt host name was bad\n");
+		return (-1);
+	}
 
 	sprintf(newfilename, "/firmware/%s-%04u.tft", filename, newbuild);
 	printf("Attempting to download new Nextion firmware %s from %s, ******* DO NOT SWITCH OFF ******\n", newfilename,
 			host);
-	osDelay(600);
+	osDelay(100);
 	http_downloading = NXT_LOADING;		// mode == nextion download
 	nxt_abort = 0;
-
-#define TFTSIZE 1972916
-	tftfilesize = TFTSIZE;
-
 	nxt_blocksacked = 0;
-	lcd_startdl(tftfilesize);		// put LCD into upload firmware mode	ZZZ filesize
-	osDelay(600);				// wait half a second for LCD to Ack
-	if (nxt_blocksacked) {		// LCD acks the start, its now in DL mode
-		nxt_blocksacked = 0;		// reset counter
-		http_dlclient(newfilename, host, (void*) 0);
+	osDelay(1000);		// wait for server result if server cant send data
+	if ((nxt_abort) || (http_downloading == NOT_LOADING)) {
+		printf("nxt_loader: Server aborted before sending nxt file\n");
+		return (-1);
 	} else {
-		http_downloading = NOT_LOADING;
-		printf("nextionloader: Nextion download not acked start\n");
-	}
+		lcd_startdl(nxtfilesize);	// put LCD into its download new user firmware mode
+		osDelay(600);				// wait > half a second for LCD to Ack
+		if (nxt_blocksacked) {		// LCD acks the start, its now in DL mode
+			nxt_blocksacked = 0;		// reset counter
+			http_dlclient(newfilename, host, (void*) 0);
+		} else {
+			http_downloading = NOT_LOADING;
+			printf("nextionloader: Nextion download not acked start\n");
+		}
 
-	// wait for transfer to complete
-	// unblock http client
+		// wait for transfer to complete
+		// unblock http client
+	}
+	return (0);
 }
 
 //#define lcd_writeblock(nxtbuffer, residual) printf("%d ",residual)
@@ -227,27 +245,27 @@ int nxt_check() {
 
 ///  Check if LCD needs updating and update it if so
 nxt_update() {
-	int lcdbuildno;
-
-	if (nxt_check() != 0) {		// we identified okay
+	if (nxt_check() == 0) {		// we could not identify LCD
+		printf("nxt_update: LCD not identified\n");
+	} else {
 		if (lcdbuildno != BUILDNO) {
+			printf("nxt_update: LCD user firmware != firmware build number\n");
+
 			// do the load
 			lcd_putsys0(BUILDNO);		// its volatile inside the LCD
-			nxt_loader("my12", "lightning.vk4ya.com", 0);
-			while ((http_downloading) && (nxt_abort == 0)) {
-				HAL_IWDG_Refresh(&hiwdg);
-				osDelay(5);
+			if (nxt_loader("my12", "lightning.vk4ya.com", lcdlen) == 0) {		// valid source file
+				while ((http_downloading) && (nxt_abort == 0)) {
+					HAL_IWDG_Refresh(&hiwdg);
+					osDelay(5);
+				}
+				osDelay(5000);
+				printf("Attempting LCD re-sync\n");
+				nxt_baud();		// resync hardware
 			}
-			osDelay(5000);
-			printf("Attempting LCD re-sync\n");
-			nxt_baud();		// resync hardware
 			lcd_txblocked = 0;		// unblock LCD sending blocked
-
 		} else {
 			printf("LCD firmware matched stm firmware\n");
 		}
-	} else {
-		printf("LCD not identified\n");
 	}
 }
 

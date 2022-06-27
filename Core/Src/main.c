@@ -142,6 +142,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
+unsigned int lcdbuildno;	// the (later) LCD firmware build number on the server
 
 /* USER CODE END PD */
 

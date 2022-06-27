@@ -147,3 +147,34 @@ uint32_t movavg(uint32_t new) {
 	return (sum >> 4);
 }
 
+
+// gridsquare calculator
+// origin: Ossi Väänänen
+//
+void calcLocator(char *dst, double lat, double lon) {
+  int o1, o2, o3;
+  int a1, a2, a3;
+  double remainder;
+  // longitude
+  remainder = lon + 180.0;
+  o1 = (int)(remainder / 20.0);
+  remainder = remainder - (double)o1 * 20.0;
+  o2 = (int)(remainder / 2.0);
+  remainder = remainder - 2.0 * (double)o2;
+  o3 = (int)(12.0 * remainder);
+
+  // latitude
+  remainder = lat + 90.0;
+  a1 = (int)(remainder / 10.0);
+  remainder = remainder - (double)a1 * 10.0;
+  a2 = (int)(remainder);
+  remainder = remainder - (double)a2;
+  a3 = (int)(24.0 * remainder);
+  dst[0] = (char)o1 + 'A';
+  dst[1] = (char)a1 + 'A';
+  dst[2] = (char)o2 + '0';
+  dst[3] = (char)a2 + '0';
+  dst[4] = (char)o3 + 'A';
+  dst[5] = (char)a3 + 'A';
+  dst[6] = (char)0;
+}

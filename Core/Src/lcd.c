@@ -65,7 +65,10 @@ static unsigned char pressvec[LCDXPIXELS] = { 0 };
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
 
 char nex_model[24];		// the Nextion model number read from the connected display
-volatile int lcd_sys0;	// used to store our firmware number of the LCd
+volatile int lcd_sys0;	// used to store our firmware number of the LCD
+char lcdfile[32];		// lcd file name on host
+char loaderhost[17] = "192.168.0.248";
+uint32_t lcdlen;
 
 inline int cycinc(int index, int limit) {
 	if (++index >= limit)
