@@ -65,8 +65,9 @@ static unsigned char pressvec[LCDXPIXELS] = { 0 };
 uint8_t retcode = 0;	// if 3 lots of 0xff follow then this contains the associated LCD return code
 
 char nex_model[24];		// the Nextion model number read from the connected display
-volatile int lcd_sys0;	// used to store our firmware number of the LCD
+volatile int lcd_sys0 = -1;	// used to store our firmware number of the LCD
 char lcdfile[32];		// lcd file name on host
+char fwfilename[32];	// stm firmware filename
 char loaderhost[17] = "192.168.0.248";
 uint32_t lcdlen;
 
@@ -498,14 +499,14 @@ int lcd_getsys0(void) {
 	lcd_txblocked = 0;
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
-	result = intwritelcdcmd("get sys0");
+	result = writelcdcmd("get sys0");
 	if (result == -1) {		// send err
 		printf("getsys0: Cmd failed\n\r");
 	}
 	result = lcd_getlack();		// wait for a response
 
 	lcd_txblocked = 0;		// allow others sending to the LCD
-	printf("getsys0: returned value=0x%08x\n", lcd_sys0);
+	printf("getsys0: returned value=0x%u\n", lcd_sys0);
 	return (result);
 }
 
@@ -534,7 +535,7 @@ void lcd_startdl(int filesize) {
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
 	sprintf(cmd, "whmi-wri %i,230400,0", filesize);
-	printf("lcd_startdl: \"%s\"\n", cmd);
+//	printf("lcd_startdl: \"%s\"\n", cmd);
 	lcd_txblocked = 0;
 	writelcdcmd(cmd);
 	result = lcd_getlack();		// wait for a response
@@ -920,14 +921,15 @@ void processnex() {		// process Nextion - called at regular intervals
 
 // send the GPS coords t2.txt
 void lcd_gps(void) {
-	unsigned char str[64];
-	float lat, lon;
+	unsigned char str[64], gridsquare[16];
+	double lat, lon;
 
 	lat = statuspkt.NavPvt.lat / 10000000.0;
 	lon = statuspkt.NavPvt.lon / 10000000.0;
+	calcLocator(gridsquare, lat, lon);
 
 	if (gpslocked) {
-		sprintf(str, "Lat: %.06f\rLon: %.06f", lat, lon);
+		sprintf(str, "Lat: %.06f\\rLon: %.06f\\rGrid: %s", lat, lon, gridsquare);
 		setlcdtext("t2.txt", str);
 	} else {
 		setlcdtext("t2.txt", "");
@@ -1244,11 +1246,15 @@ init_nextion() {
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
-	osDelay(500);
+
+	osDelay(100);
 	lcd_getid();		// in the background
-	osDelay(100);
+	processnex();
+
+	osDelay(500);
 	lcd_getsys0();
-	osDelay(100);
+	processnex();
+
 	i = 0;
 	while (main_init_done == 0) { // wait from main to complete the init
 		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");

@@ -301,7 +301,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile int nconv, res, res2, res3;
 	volatile int p1;
 	volatile char p2[256];
-	volatile char filename[32],  s1[16];
+	volatile char s1[16];
 	volatile uint32_t crc1, crc2, n1 = 0,  n2 = 0;
 
 //	printf("returnpage:\n");
@@ -320,7 +320,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res = 0;
 						res2 = 0;
 						res3 = 0;
-						res |= parsep2(&p2[1], "fw", 1, filename);
+						res |= parsep2(&p2[1], "fw", 1, fwfilename);
 						res |= parsep2(&p2[1], "bld", 2, &newbuild);
 						res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
 						res |= parsep2(&p2[1], "crc2", 3, &crc2);
@@ -384,7 +384,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 					osDelay(1000);
-					httploader(filename, loaderhost, crc1, crc2);
+					httploader(fwfilename, loaderhost, crc1, crc2);
 				} else {
 					printf("Rebooting before loading new firmware, wait...\n");
 					rebootme(0);

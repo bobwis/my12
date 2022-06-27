@@ -53,7 +53,8 @@
 // http rx callback mode
 #define NOT_LOADING 0
 #define FLASH_LOADING 1
-#define NXT_LOADING 2
+#define NXT_PRELOADING 2
+#define NXT_LOADING 3
 
 // You can replace this enum for saving MEMORY (replace with define's)
 typedef enum {

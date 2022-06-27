@@ -48,6 +48,7 @@ void lcd_date(void);		// send the date
 int lcd_getid(void);			// get the LCD's ID
 int lcd_getsys0(void);		// read LCD's sys0 var
 void lcd_putsys0(uint32_t value);	// write the sys0 variable
+void calcLocator(char *dst, double lat, double lon);
 
 extern char nex_model[24];		// the Nextion model number read from the connected display
 extern struct tm timeinfo;		// lcd time

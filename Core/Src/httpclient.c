@@ -1097,7 +1097,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 	strcpy(domain_name, host);
 	strcpy(rxbuffer, filename);
 
-	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
+//	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
 	down_total = 0;
 	expectedapage = 0;
