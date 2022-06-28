@@ -2447,8 +2447,6 @@ void StarLPTask(void const *argument) {
 
 				lastsec = onesectimer;
 				lcd_time();		// display the clock on the LCD page 0
-				if (BUILDNO > 10029)
-					lcd_gps();		// display the GPS on the LCD page 0
 
 				if (timeinfo.tm_yday != lastday) {
 					lcd_date();
@@ -2524,6 +2522,13 @@ void StarLPTask(void const *argument) {
 			lcd_trigplot();		// update lcd trigger and noise plots
 
 		}		// if 1 second timer hit
+
+
+
+		if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
+			if ((lcd_sys0 >> 8) > 10029)
+				lcd_gps();		// display the GPS on the LCD page 0
+		}
 
 		/**********************  Every 10 Secs   *******************************/
 

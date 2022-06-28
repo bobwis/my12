@@ -36,7 +36,6 @@ uint8_t lcdrxbuffer[LCDRXBUFSIZE] = { "" };
 uint8_t dmarxbuffer[DMARXBUFSIZE] = { "" };
 
 char sbuffer[40];		// lcd message building buffer
-char lcdmodel[32];		// lcd model
 struct tm timeinfo;		// lcd time
 time_t localepochtime;	// lcd time
 
@@ -391,7 +390,7 @@ int writelcdcmd(char *str) {
 	char pkt[96];  //  __attribute__ ((aligned (16)));
 
 	if (lcd_txblocked)
-		return(-1);
+		return (-1);
 
 	strcpy(pkt, str);
 	strcat(pkt, "\xff\xff\xff");
@@ -919,10 +918,12 @@ void processnex() {		// process Nextion - called at regular intervals
 //
 //////////////////////////////////////////////////////////////
 
-// send the GPS coords t2.txt
+// send the GPS coords t2.txt Lat,Lon,Grid  t3.txt Sats
 void lcd_gps(void) {
 	unsigned char str[64], gridsquare[16];
 	double lat, lon;
+	int sats, col;
+	static int vis = 0;
 
 	lat = statuspkt.NavPvt.lat / 10000000.0;
 	lon = statuspkt.NavPvt.lon / 10000000.0;
@@ -931,9 +932,30 @@ void lcd_gps(void) {
 	if (gpslocked) {
 		sprintf(str, "Lat: %.06f\\rLon: %.06f\\rGrid: %s", lat, lon, gridsquare);
 		setlcdtext("t2.txt", str);
+
 	} else {
 		setlcdtext("t2.txt", "");
 	}
+
+	// number of satellites
+	sats = statuspkt.NavPvt.numSV;
+	sprintf(str, "\\r\\rSats:%u", sats);
+	setlcdtext("t4.txt", str);
+	if (sats < 4)
+		col = 0xf800;		// red
+	else if (sats < 6)
+		col = 0xf6c0;		// dark yellow
+	else
+		col = 0xffff;		// white
+	setlcdbin("t4.pco", col);
+
+	if (sats < 5) {
+		if (vis++ & 1)
+			writelcdcmd("vis t4,1");
+		else
+			writelcdcmd("vis t4,0");
+	} else
+		writelcdcmd("vis t4,1");
 }
 
 // send the time to t0.txt
