@@ -13,6 +13,7 @@
 //-----------------------------------
 #include "eeprom.h"
 #include "stm32f7xx_hal.h"
+#include "httpclient.h"
 
 uint32_t flash_load_address = LOADER_BASE_MEM1;
 void *flash_memptr = (void*) 0;
@@ -356,12 +357,12 @@ void stampboot() {
 
 		res = HAL_FLASHEx_OBProgram(&OBInitStruct);
 		if (res != HAL_OK) {
-			printf("swapboot: failed to OBProgram %d\n", res);
+			printf("stampboot: failed to OBProgram %d\n", res);
 		}
 
 		res = HAL_FLASH_OB_Launch();
 		if (res != HAL_OK) {
-			printf("swapboot: failed to OBLaunch %d\n", res);
+			printf("stampboot: failed to OBLaunch %d\n", res);
 		}
 		printf(".......re-stamped boot vector.......\n");
 	}
@@ -396,7 +397,7 @@ void swapboot() {
 	if (res != HAL_OK) {
 		printf("swapboot: failed to OBLaunch %d\n", res);
 	}
-	printf("fixing boot....\n");
+	printf("swapping boot....\n");
 	HAL_FLASH_OB_Lock();
 
 	printf("swapboot ran\n");
@@ -516,7 +517,7 @@ void* memclose() {
 	notflashed = 1;		// now assumed dirty
 	if (flash_abort) {
 		flash_abort = 0;
-		http_downloading = 0;
+		http_downloading = NOT_LOADING;
 		return;
 	}
 
@@ -614,7 +615,7 @@ void* memclose() {
 		}
 	}
 #endif
-	http_downloading = 0;
+	http_downloading = NOT_LOADING;
 }
 
 // calculate the crc over a range of memory

@@ -27,11 +27,34 @@
 #ifndef __HTTPCLIENT_H
 #define __HTTPCLIENT_H
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <time.h>
+#include "main.h"
+#include "stm32f7xx_hal.h"
 #include "lwip.h"
+#include "httpd_structs.h"
+#include "www.h"
+#include "neo7m.h"
+#include "udpstream.h"
+#include "splat1.h"
+#include "adcstream.h"
+
+#include "eeprom.h"
+#include "tftp/tftp_loader.h"
+
+#include "ethernet.h"
 
 //#include "inc/hw_memmap.h"
 //#include "inc/hw_types.h"
-#include "ethernet.h"
+
+// http rx callback mode
+#define NOT_LOADING 0
+#define FLASH_LOADING 1
+#define NXT_PRELOADING 2
+#define NXT_LOADING 3
 
 // You can replace this enum for saving MEMORY (replace with define's)
 typedef enum {
@@ -45,10 +68,17 @@ struct hc_state {
 	char *RecvData;
 	u16_t Len;
 	u8_t ConnectionTimeout;
-	void (*ReturnPage)(u8_t num, hc_errormsg, char *data, u16_t len);
+//	void (*ReturnPage)(u8_t num, hc_errormsg, char *data, u16_t len);
+	void (*returnpage)(volatile char *content, volatile u16_t charcount, int errorm);
 };
 
+// Nextion http download buffer size
+#define NXDL_BUFF_SIZE 600
+#define DOWNLOAD_PORT 8083
+
+
 // Public function
-int hc_open(char*, char*, char*, void (*)(u8_t, hc_errormsg, char*, u16_t));
+int hc_open(char *servername, char *page, char Postvars, void *returpage);
+void http_dlclient(char *filename, char *host, void *flash_memptr);
 
 #endif //  __HTTPCLIENT_H

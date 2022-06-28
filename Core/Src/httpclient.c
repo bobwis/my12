@@ -58,6 +58,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "eeprom.h"
+#include "httpclient.h"
+#include "nextionloader.h"
 
 #if LWIP_TCP && LWIP_CALLBACK_API
 
@@ -85,8 +87,8 @@
 #define HTTPC_DEBUG_WARN_STATE   (HTTPC_DEBUG | LWIP_DBG_LEVEL_WARNING | LWIP_DBG_STATE)
 #define HTTPC_DEBUG_SERIOUS      (HTTPC_DEBUG | LWIP_DBG_LEVEL_SERIOUS)
 
-#define HTTPC_POLL_INTERVAL     1
-#define HTTPC_POLL_TIMEOUT      30 /* 15 seconds */
+#define HTTPC_POLL_INTERVAL     3
+#define HTTPC_POLL_TIMEOUT      100 /* 15 seconds */
 
 //#define pbuf_free pbuf_free_callback
 #define HTTPC_CONTENT_LEN_INVALID 0xFFFFFFFF
@@ -648,7 +650,8 @@ altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
  * @return ERR_OK if starting the request succeeds (callback_fn will be called later)
  *         or an error code
  */
-err_t httpc_get_file_dns(const char *server_name, u16_t port, const char *uri, const httpc_connection_t *settings, altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
+err_t httpc_get_file_dns(const char *server_name, u16_t port, const char *uri, const httpc_connection_t *settings,
+		altcp_recv_fn recv_fn, void *callback_arg, httpc_state_t **connection) {
 	err_t err;
 	httpc_state_t *req;
 
@@ -912,7 +915,7 @@ static const char *lerr_strerr[] = { "Ok.", /* ERR_OK          0  */
  */
 void printlwiperr(err_t err) {
 	if ((err > 0) || (-err >= (err_t) LWIP_ARRAYSIZE(lerr_strerr))) {
-		printf("LWIP: Unknown error: total=%d\n",down_total);
+		printf("LWIP: Unknown error: total=%d\n", down_total);
 	} else
 		printf("LWIP error %d: total=%d, %s\n", -err, down_total, lerr_strerr[-err]);
 	stats_display();
@@ -984,13 +987,15 @@ err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *
 }
 
 //
-// received file has finished
+// received firmware file has finished
 void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-//	printf("HttpClientFileResultCallback: total=%u\n", mytot);
+
+	http_downloading = NOT_LOADING;		// whatever the result
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientFileResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 		flash_memptr = 0;
+		nxt_abort = 1;
 	}
 	if (err != ERR_OK) {
 		printlwiperr(err);
@@ -1000,14 +1005,14 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 		memclose();
 	}
 
-//	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
+	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
 }
 
 //
 // receive page has finished
 void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t rx_content_len, u32_t srv_res,
 		err_t err) {
-//	printf("HttpClientPageResultCallback: total=%u\n", mytot);
+//	printf("HttpClientPageResultCallback: total=%u\n", tlen);
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientPageResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 	}
@@ -1024,38 +1029,12 @@ int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf 
 	struct pbuf *q;
 	int count = 0, tlen = 0, len = 0;
 
-//	printf("HttpClientFileReceiveCallback:\n");
-
-	LWIP_ASSERT("p != NULL", p != NULL);
-	if (err != ERR_OK) {
-		putchar('#');
-		printlwiperr(err);
-		return;
+	if (http_downloading == FLASH_LOADING) {
+		stm_rx_callback(arg, pcb, p, err);
+	} else if (http_downloading == NXT_LOADING) {
+		nxt_rx_callback(arg, pcb, p, err);
 	}
 
-	for (q = p; q != NULL; q = q->next) {
-		count += q->len;
-		tlen = q->tot_len;
-		len = q->len;
-#if 0
-		putchar('.');
-#endif
-		if ((flash_abort == 0) && (flash_memptr != 0)) { // we need to write this data to flash
-			if (flash_memwrite(q->payload, 1, q->len, flash_memptr) != (size_t) len) {
-				flash_abort = 1;
-				flash_memptr = 0;
-				printf("Flash Write failed from http client\n");
-				return (-1);
-			}
-		}
-		down_total += q->len;
-
-		altcp_recved(pcb, p->tot_len);
-		pbuf_free(p);
-
-//		p = p->next;
-//		printf("HttpClientFileReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, mytot);
-	}
 	return (0);
 }
 
@@ -1070,7 +1049,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 
 	LWIP_ASSERT("p != NULL", p != NULL);
 	if (err != ERR_OK) {
-		putchar('#');
+		putchar('^');
 		printlwiperr(err);
 		return;
 	}
@@ -1096,7 +1075,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 			putchar('!');
 			printlwiperr(err);
 		}
-//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, mytot);
+//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, tlen);
 	}
 }
 
@@ -1115,9 +1094,6 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 	connection1->timeout_ticks = 1;
 
-//	strcpy(domain_name, "xen.local");
-//	strcpy(rxbuffer, "/firmware/my12.bin");
-
 	strcpy(domain_name, host);
 	strcpy(rxbuffer, filename);
 
@@ -1125,7 +1101,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 	down_total = 0;
 	expectedapage = 0;
-	error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings1, HttpClientFileReceiveCallback,
+	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
 			HttpClientFileResultCallback, &connection1);
 	if (error != HTTPC_RESULT_OK) {
 		printf("httpc_get_file_dns: returned, err=%d\n", error);
@@ -1162,9 +1138,9 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
 //	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
 
 	down_total = 0;
-    expectedapage = 1;
-     error = httpc_get_file_dns(domain_name, 8082, rxbuffer, settings2, HttpClientPageReceiveCallback,
-    			HttpClientPageResultCallback, &connection2);
+	expectedapage = 1;
+	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
+			HttpClientPageResultCallback, &connection2);
 }
 
 #endif /* LWIP_TCP && LWIP_CALLBACK_API */

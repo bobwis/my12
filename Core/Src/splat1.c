@@ -116,6 +116,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	uint16_t pgacmd[1];
 	HAL_StatusTypeDef stat;
 
+
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
 	osDelay(5);
@@ -135,6 +136,10 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
+
+	if (gain > 6) {		// might be a DC jump
+		sigsuppress = 8;		// prevent trigger for a while
+	}
 
 	if (gain > 7) {
 		pgacmd[0] = 0x4101;			// write to channel reg select ch1

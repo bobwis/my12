@@ -13,8 +13,9 @@ C_SRCS += \
 ../Core/Src/httploader.c \
 ../Core/Src/lcd.c \
 ../Core/Src/main.c \
-../Core/Src/mydebug.c \
+../Core/Src/miscutils.c \
 ../Core/Src/neo7m.c \
+../Core/Src/nextionloader.c \
 ../Core/Src/splat1.c \
 ../Core/Src/stm32f7xx_hal_msp.c \
 ../Core/Src/stm32f7xx_hal_timebase_tim.c \
@@ -34,8 +35,9 @@ OBJS += \
 ./Core/Src/httploader.o \
 ./Core/Src/lcd.o \
 ./Core/Src/main.o \
-./Core/Src/mydebug.o \
+./Core/Src/miscutils.o \
 ./Core/Src/neo7m.o \
+./Core/Src/nextionloader.o \
 ./Core/Src/splat1.o \
 ./Core/Src/stm32f7xx_hal_msp.o \
 ./Core/Src/stm32f7xx_hal_timebase_tim.o \
@@ -55,8 +57,9 @@ C_DEPS += \
 ./Core/Src/httploader.d \
 ./Core/Src/lcd.d \
 ./Core/Src/main.d \
-./Core/Src/mydebug.d \
+./Core/Src/miscutils.d \
 ./Core/Src/neo7m.d \
+./Core/Src/nextionloader.d \
 ./Core/Src/splat1.d \
 ./Core/Src/stm32f7xx_hal_msp.d \
 ./Core/Src/stm32f7xx_hal_timebase_tim.d \
@@ -75,7 +78,7 @@ Core/Src/%.o Core/Src/%.su: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/adcstream.d ./Core/Src/adcstream.o ./Core/Src/adcstream.su ./Core/Src/crc32.d ./Core/Src/crc32.o ./Core/Src/crc32.su ./Core/Src/eeprom.d ./Core/Src/eeprom.o ./Core/Src/eeprom.su ./Core/Src/freertos.d ./Core/Src/freertos.o ./Core/Src/freertos.su ./Core/Src/httpclient.d ./Core/Src/httpclient.o ./Core/Src/httpclient.su ./Core/Src/httploader.d ./Core/Src/httploader.o ./Core/Src/httploader.su ./Core/Src/lcd.d ./Core/Src/lcd.o ./Core/Src/lcd.su ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/mydebug.d ./Core/Src/mydebug.o ./Core/Src/mydebug.su ./Core/Src/neo7m.d ./Core/Src/neo7m.o ./Core/Src/neo7m.su ./Core/Src/splat1.d ./Core/Src/splat1.o ./Core/Src/splat1.su ./Core/Src/stm32f7xx_hal_msp.d ./Core/Src/stm32f7xx_hal_msp.o ./Core/Src/stm32f7xx_hal_msp.su ./Core/Src/stm32f7xx_hal_timebase_tim.d ./Core/Src/stm32f7xx_hal_timebase_tim.o ./Core/Src/stm32f7xx_hal_timebase_tim.su ./Core/Src/stm32f7xx_it.d ./Core/Src/stm32f7xx_it.o ./Core/Src/stm32f7xx_it.su ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f7xx.d ./Core/Src/system_stm32f7xx.o ./Core/Src/system_stm32f7xx.su ./Core/Src/udpstream.d ./Core/Src/udpstream.o ./Core/Src/udpstream.su ./Core/Src/www.d ./Core/Src/www.o ./Core/Src/www.su
+	-$(RM) ./Core/Src/adcstream.d ./Core/Src/adcstream.o ./Core/Src/adcstream.su ./Core/Src/crc32.d ./Core/Src/crc32.o ./Core/Src/crc32.su ./Core/Src/eeprom.d ./Core/Src/eeprom.o ./Core/Src/eeprom.su ./Core/Src/freertos.d ./Core/Src/freertos.o ./Core/Src/freertos.su ./Core/Src/httpclient.d ./Core/Src/httpclient.o ./Core/Src/httpclient.su ./Core/Src/httploader.d ./Core/Src/httploader.o ./Core/Src/httploader.su ./Core/Src/lcd.d ./Core/Src/lcd.o ./Core/Src/lcd.su ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/miscutils.d ./Core/Src/miscutils.o ./Core/Src/miscutils.su ./Core/Src/neo7m.d ./Core/Src/neo7m.o ./Core/Src/neo7m.su ./Core/Src/nextionloader.d ./Core/Src/nextionloader.o ./Core/Src/nextionloader.su ./Core/Src/splat1.d ./Core/Src/splat1.o ./Core/Src/splat1.su ./Core/Src/stm32f7xx_hal_msp.d ./Core/Src/stm32f7xx_hal_msp.o ./Core/Src/stm32f7xx_hal_msp.su ./Core/Src/stm32f7xx_hal_timebase_tim.d ./Core/Src/stm32f7xx_hal_timebase_tim.o ./Core/Src/stm32f7xx_hal_timebase_tim.su ./Core/Src/stm32f7xx_it.d ./Core/Src/stm32f7xx_it.o ./Core/Src/stm32f7xx_it.su ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f7xx.d ./Core/Src/system_stm32f7xx.o ./Core/Src/system_stm32f7xx.su ./Core/Src/udpstream.d ./Core/Src/udpstream.o ./Core/Src/udpstream.su ./Core/Src/www.d ./Core/Src/www.o ./Core/Src/www.su
 
 .PHONY: clean-Core-2f-Src
 

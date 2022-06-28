@@ -298,13 +298,11 @@ int parsep2(char *buf, char *match, int type, void *value) {
 void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
 	volatile uint32_t sn;
-	volatile int nconv, res, res2;
+	volatile int nconv, res, res2, res3;
 	volatile int p1;
-	volatile char p2[96];
-	volatile char filename[32], s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
-	char host[17] = "192.168.0.248";
-	int newfirmware = 0;
+	volatile char p2[256];
+	volatile char s1[16];
+	volatile uint32_t crc1, crc2, n1 = 0,  n2 = 0;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
@@ -312,7 +310,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 //			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 			printf("server returned page: %.*s\n", charcount, content);
 			s1[0] = '\0';
-			nconv = sscanf(content, "%5u%48s%u%s", &sn, udp_target, &p1, &p2);
+			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
 				switch (nconv) {
 
@@ -321,19 +319,21 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 					if (p2[0] == '{') {		// its the start of enclosed params
 						res = 0;
 						res2 = 0;
-						res |= parsep2(&p2[1], "fw", 1, filename);
+						res3 = 0;
+						res |= parsep2(&p2[1], "fw", 1, fwfilename);
 						res |= parsep2(&p2[1], "bld", 2, &newbuild);
 						res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
 						res |= parsep2(&p2[1], "crc2", 3, &crc2);
-						res2 |= parsep2(&p2[1], "srv", 1, &host);
+
+						res2 |= parsep2(&p2[1], "srv", 1, &loaderhost);
 						res2 |= parsep2(&p2[1], "n2", 3, &n2);
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
-//						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
+						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
+						res3 |= parsep2(&p2[1], "lbl", 2, &lcdbuildno);
+						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
 
-						if (!(res)) {		// a valid firmware string received
-							newfirmware = 1;
-						}
+//						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
 					} // else ignore it
 					  // fall through
@@ -380,16 +380,15 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			if (!res) {		// build changed?
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
-			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO)) {// the version advertised is different to this one running now
-
-			if (lptask_init_done == 0)	{
+			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the version advertised is different to this one running now
+				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
-				osDelay(1000);
-				httploader(filename, host, crc1, crc2);	/// zzz  host ip ??
-			} else {
-				printf("Rebooting before loading new firmware, wait...\n");
-				rebootme(0);
-			}
+					osDelay(1000);
+					httploader(fwfilename, loaderhost, crc1, crc2);
+				} else {
+					printf("Rebooting before loading new firmware, wait...\n");
+					rebootme(0);
+				}
 			}
 		}
 	}
@@ -412,7 +411,7 @@ void getpage(char page[64]) {
 //	ip.addr = remoteip.addr;
 //	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
 //			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
-	printf("Control Server is %s\n",SERVER_DESTINATION);
+	printf("Control Server is %s\n", SERVER_DESTINATION);
 
 	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
 //	printf("httpclient: result=%d\n", result);
@@ -431,7 +430,7 @@ void initialapisn() {
 	{
 		printf("getting S/N and UDP target using http. Try=%d\n", j);
 		getpage(stmuid);		// get sn and targ
-		for (i=0; i<5000; i++) {
+		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
 				break;
 			osDelay(1);
