@@ -556,6 +556,7 @@ lcd_pagechange(uint8_t newpage) {
 	case 0:		// changed to page 0
 		lcd_time();
 		lcd_date();
+		lcd_gps();
 		break;
 	case 1:		// changed to page 1 - statistics
 		lcd_showvars();		// display vars on the lcd
@@ -925,6 +926,8 @@ void lcd_gps(void) {
 	int sats, col;
 	static int vis = 0;
 
+	if (our_currentpage != 0)
+		return;
 	lat = statuspkt.NavPvt.lat / 10000000.0;
 	lon = statuspkt.NavPvt.lon / 10000000.0;
 	calcLocator(gridsquare, lat, lon);

@@ -38,6 +38,9 @@
 
 int nxt_abort = 0;			// 1 == abort
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
+static int residual = 0;	// left over unsent to LCD bytes when block size overflowed
+static int bytesinblocksent = 0; 		// byte count into current block
+static char nxtbuffer[NXDL_BUFF_SIZE];
 
 // attempt to load new LCD user firmware
 int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
@@ -109,6 +112,23 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 	return (0);
 }
 
+// send residual buffer to the LCD
+// gets called from rx_callback and from rx_complete
+int nxt_sendres() {
+	int res;
+
+	if ((residual) && (nxt_abort == 0)) {				// residual data from last call to send first
+		if ((res = lcd_writeblock(nxtbuffer, residual)) == -1) {
+			printf("nxt_sendres: failed\n");
+			nxt_abort = 1;
+			return (-1);
+		}
+		while (txdmadone == 0)		// tx in progress
+			osDelay(1);
+	}
+	return (0);
+}
+
 //#define lcd_writeblock(nxtbuffer, residual) printf("%d ",residual)
 
 // http callback for Nextion firmware download
@@ -118,9 +138,8 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 	char *buf;
 	struct pbuf *q;
 	volatile int i, pktlen, res, tlen = 0, len = 0, ch;
-	static int residual, blockssent = 0;
-	static int bytesinblocksent = 0, qlentot = 0, tot_sent = 0;
-	static char nxtbuffer[NXDL_BUFF_SIZE];
+	static int blockssent = 0;
+	static int qlentot = 0, tot_sent = 0;
 
 //	printf("nxt_rx_callback:\n");
 
@@ -133,65 +152,46 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 
 //	printf("nxt_rx_callback1: nxt_abort=%d, blockssent=%d, nxt_blocksacked=%d, q->len=%d\n", nxt_abort, blockssent,	nxt_blocksacked, p->len);
 
+	if (nxt_abort) {
+		http_downloading = NOT_LOADING;
+	}
+
 	if (http_downloading == NXT_PRELOADING) {
 		http_downloading = NXT_LOADING;
 	}
 
-	if (nxt_abort) {
-		http_downloading = NOT_LOADING;
-		return (-1);
-	}
-
 	i = 0;
-#if 0
-	while (blockssent != nxt_blocksacked) {
-		osDelay(10);
-		i++;
-		if (i > 200) {		// 2 seconds
-			printf("nxt_rx_1: LCD upload timed out; aborting\n");
-			nxt_abort = 1;
-			return (-1);
-		}
-	}
-#endif
+
 	for (q = p; q != NULL; q = q->next) {
 		qlentot += q->len;
 		tlen = q->tot_len;
 		len = q->len;
 
-		if (nxt_abort == 0) { // we need to upload this data to the NXT
+		if (residual > 0) {
+			if (nxt_sendres() == -1) {	// send residual (if any)
+				return (-1);		// abort will now be set
+			}
+			tot_sent += residual;
+			bytesinblocksent += residual;
+			residual = 0;
+		}
 
-			if (residual) {				// residual data from last call to send first
-				tot_sent += residual;
-				if ((res = lcd_writeblock(nxtbuffer, residual)) == -1) {
-					printf("NXT Write2 failed from http client\n");
-					nxt_abort = 1;
-					return (-1);
-				}
-				bytesinblocksent += residual;
-				residual = 0;
-				while (txdmadone == 0)		// tx in progress
-					osDelay(1);
+		pktlen = q->len;
+
+		if ((pktlen + bytesinblocksent) > 4096) {	// will we will overflow the 4096 boundary?
+			len = 4096 - bytesinblocksent;		// we only have to send len this time
+
+			buf = q->payload;
+			for (i = len; i < pktlen; i++) {		// copy the extra bytes we cant send into a buffer
+				nxtbuffer[residual++] = buf[i];		// keep the rest back until next time
 			}
 
-			pktlen = q->len;
+		} else {
+			len = pktlen;		// just try to send what we have got
+		}
 
-			for (i = 0; i < sizeof(nxtbuffer); i++)
-				nxtbuffer[i] = 0xAA;
-
-			if ((pktlen + bytesinblocksent) > 4096) {	// will we will overflow the 4096 boundary?
-				len = 4096 - bytesinblocksent;		// we only have to send len this time
-
-				buf = q->payload;
-				for (i = len; i < pktlen; i++) {		// copy the extra bytes we cant send into a buffer
-					nxtbuffer[residual++] = buf[i];		// keep the rest back until next time
-				}
-
-			} else {
-				len = pktlen;		// just try to send what we have got
-			}
-
-			tot_sent += len;
+		tot_sent += len;
+		if (nxt_abort == 0) {
 			if ((res = lcd_writeblock(q->payload, len) == -1)) {
 				printf("NXT Write1 failed from http client\n");
 				nxt_abort = 1;
@@ -239,31 +239,38 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 				blockssent++;
 			}
 		}
+
 //		printf("nxt_rx_5: blk=%d, down_total=%d, tot_sent=%d, qlentot=%d\n", blockssent, down_total, tot_sent, qlentot);
-		down_total += q->len;			// downloaded but not necessarily all sent to lcd
+		down_total += q->len;		// downloaded but not necessarily all sent to lcd
 		altcp_recved(pcb, p->tot_len);
 		pbuf_free(p);
-
+	}
 //		p = p->next;
 //		printf("nxt_rx_4: len=%d, tot=%d qlentot=%d\n",  len, down_total, qlentot);
-	}
 	return (0);
 }
 
 // Get Nextion version and see if we are current
 int nxt_check() {
-	int model;
+	int res;
 
 	if (nex_model[0] == '\0') {
 //		printf("LCD Model number invalid\n)");
+		intwritelcdcmd("rest");	// try to reset the LCD
+		printf("Just tried to reset LCD\n");
+		osDelay(3000);
+		intwritelcdcmd("rest");	// try to reset the LCD
+		printf("Just tried to reset LCD\n");
+		osDelay(2000);
 		return (-1);
 	}
 
-	// find LCD sys0 value
+// find LCD sys0 value
 	if (lcd_sys0 == -1) {
 //		printf("LCD Buildno was invalid\n");
 		return (-2);
 	}
+
 	return (lcd_sys0);
 }
 
@@ -275,10 +282,14 @@ nxt_update() {
 		if (lcdbuildno == -2) {		// LCD user firmware might be corrupted
 			printf("LCD firmware corrupted?\n");
 		}
+#if 0
 		if (((lcd_sys0 >> 8) != BUILDNO) ||		// this LCD matches the wrong STM build number
 				(((lcd_sys0 & 0xff) != lcdbuildno)		// OR lcdbuildno != latest lcdbuildno  AND
 				&& ((lcd_sys0 >> 8) == BUILDNO)))			// its the same buildno as the STM
-				{
+#else
+		if (1)
+#endif
+		{
 //			printf("nxt_update: LCD firmware %d != stm firmware %d\n", lcdbuildno, BUILDNO);
 
 			// do the load
