@@ -380,7 +380,11 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			if (!res) {		// build changed?
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
+#if 1
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the version advertised is different to this one running now
+#else
+				if (1) {
+#endif
 				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 					osDelay(1000);

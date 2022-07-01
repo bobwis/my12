@@ -83,17 +83,17 @@ void cycleleds(void) {
 
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
-	}
-	osDelay(600);
-	for (i = 0; i < 5; i++) {
-		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_SET);
-		osDelay(140);
+		osDelay(100);
 	}
 	osDelay(500);
 	for (i = 0; i < 5; i++) {
+		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_SET);
+		osDelay(100);
+	}
+	osDelay(400);
+	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
+		osDelay(100);
 	}
 }
 
@@ -748,10 +748,6 @@ void test_ds2485() {
 //////////////////////////////////////////////
 void initsplat(void) {
 	int i, j, k;
-
-	cycleleds();
-	osDelay(500);
-	printf("Initsplat: LED cycle\n");
 
 	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");

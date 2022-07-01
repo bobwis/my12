@@ -46,6 +46,7 @@
 #include "splat1.h"
 #include "lcd.h"
 #include "eeprom.h"
+#include "httpclient.h"
 #include <queue.h>
 
 //#define netif_dhcp_data(netif) ((struct dhcp*)netif_get_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP))
@@ -399,6 +400,7 @@ int main(void) {
 
 	/* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
+
 	/* USER CODE END RTOS_QUEUES */
 
 	/* Create the thread(s) */
@@ -412,6 +414,7 @@ int main(void) {
 
 	/* USER CODE BEGIN RTOS_THREADS */
 	/* add threads, ... */
+
 	/* USER CODE END RTOS_THREADS */
 
 	/* Start scheduler */
@@ -420,6 +423,7 @@ int main(void) {
 	/* We should never get here as control is now taken by the scheduler */
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
+
 	while (1) {
 		/* USER CODE END WHILE */
 
@@ -2031,6 +2035,7 @@ void printaline(char *str) {
  */
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const *argument) {
+
 	/* init code for USB_DEVICE */
 	MX_USB_DEVICE_Init();
 
@@ -2038,6 +2043,12 @@ void StartDefaultTask(void const *argument) {
 	MX_LWIP_Init();
 
 	/* USER CODE BEGIN 5 */
+
+#ifdef SPLAT1
+	cycleleds();
+	init_nextion();			// initilise the LCD display
+#endif
+
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
 	int i;
@@ -2116,7 +2127,17 @@ statuspkt.bconf = 0x80000000;	// board config word
 printf("*** TESTING BUILD USED ***\n");
 //		testeeprom();
 #endif
-
+#if 1
+#ifdef TESTING
+		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
+				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
+				udp_target, udp_ips);
+#else
+	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
+	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
+			udp_target, udp_ips);
+#endif
+#endif
 #ifdef SPLAT1
 	initsplat();
 #endif
@@ -2186,17 +2207,28 @@ printf("*** TESTING BUILD USED ***\n");
 			(myip & 0xFF000000) >> 24);
 	printf("*****************************************\n");
 
+	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
+	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
+	osDelay(3000);		// wait for server to populate us (ZZZ)
+					// refresh the hardware watchdog reset system timer
+
 	if (http_downloading) {
 		printf("Downloading...\n");
 		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
 			osDelay(1000);
 		}
 	}
 
-	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
-	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
-	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
-	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+	nxt_update();		// check if LCD needs updating
+	if (http_downloading) {
+		printf("Downloading...\n");
+		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
+			osDelay(10);
+		}
+	}
 
 	printf("Starting httpd web server\n");
 	httpd_init();		// start the www server
@@ -2274,28 +2306,22 @@ void StarLPTask(void const *argument) {
 	strcpy(udp_target, SERVER_DESTINATION);
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
-	init_nextion();
-
-#if 1
-#ifdef TESTING
-		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
-				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
-				udp_target, udp_ips);
-#else
-	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
-	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
-			udp_target, udp_ips);
-#endif
-#endif
 	osDelay(500);
 
-	if (http_downloading) {		// don't go further
-		while (http_downloading) {
-			osDelay(5000);
+	if ((http_downloading) || (main_init_done == 0)) {		// don't go further
+		while ((http_downloading) || (main_init_done == 0)) {
+			osDelay(500);
 			HAL_IWDG_Refresh(&hiwdg);
 		}
 //		rebootme(0);
 	}
+
+	while (main_init_done == 0)	 {
+		lcd_starting();
+		HAL_IWDG_Refresh(&hiwdg);
+	}
+
+	writelcdcmd("page 0");		// redraw page0
 
 	HAL_TIM_Base_Start(&htim7);	// start audio synth sampling interval timer
 
