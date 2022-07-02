@@ -35,7 +35,7 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 
 	dl_filecrc = 0;
 
-	addr = (uint32_t)httploader & LOADER_BASE_MEM2; 	// where are we running this code?
+	addr = (uint32_t) httploader & LOADER_BASE_MEM2; 	// where are we running this code?
 	flash_load_address = (addr == LOADER_BASE_MEM1) ? LOADER_BASE_MEM2 : LOADER_BASE_MEM1; // find the other segment
 
 	switch (flash_load_address) {		// assign a code letter for the load address filename
@@ -57,20 +57,19 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 	writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"DOWNLOADING NEW F/W\"");
 	writelcdcmd("xstr 5,136,470,48,2,BLACK,RED,0,1,1,\"DON'T SWITCH OFF...\"");
 
-	printf("httploader: fliename=%s, host=%s, crc1=%u, crc2=%u\n",filename,host,crc1,crc2);
+	printf("httploader: fliename=%s, host=%s, crc1=%u, crc2=%u\n", filename, host, crc1, crc2);
 
 	flash_memptr = flash_load_address;
 	flash_filelength = 0;
 
 	sprintf(newfilename, "/firmware/%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
-	printf("Attempting to download new firmware %s to 0x%08x from %s, ******* DO NOT SWITCH OFF ******\n", newfilename, flash_memptr, host);
+	printf("Attempting to download new firmware %s to 0x%08x from %s, ******* DO NOT SWITCH OFF ******\n", newfilename,
+			flash_memptr, host);
 	writelcdcmd("\\r\\rDownloading new STM firmware....");
-
 
 	http_dlclient(newfilename, host, flash_memptr);
 	osDelay(5);
 }
-
 
 // http callback for stm firmware download
 // this gets called for each downloaded chunk received

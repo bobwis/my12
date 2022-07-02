@@ -400,7 +400,9 @@ int main(void) {
 
 	/* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
-
+#ifdef SPLAT1
+	cycleleds();
+#endif
 	/* USER CODE END RTOS_QUEUES */
 
 	/* Create the thread(s) */
@@ -413,6 +415,7 @@ int main(void) {
 	LPTaskHandle = osThreadCreate(osThread(LPTask), NULL);
 
 	/* USER CODE BEGIN RTOS_THREADS */
+	vTaskSuspend(LPTaskHandle);			// don't allow it to autostart
 	/* add threads, ... */
 
 	/* USER CODE END RTOS_THREADS */
@@ -1855,7 +1858,7 @@ crc_rom() {
 
 	length = (uint32_t) &__fini_array_end - (uint32_t) base + ((uint32_t) &_edata - (uint32_t) &_sdata);
 	romcrc = xcrc32(base, length, xinit);
-	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
+	printf("         CRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
 }
 
 err_leds(int why) {
@@ -2044,11 +2047,6 @@ void StartDefaultTask(void const *argument) {
 
 	/* USER CODE BEGIN 5 */
 
-#ifdef SPLAT1
-	cycleleds();
-	init_nextion();			// initilise the LCD display
-#endif
-
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
 	int i;
@@ -2066,9 +2064,14 @@ void StartDefaultTask(void const *argument) {
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 	STM32_UUID[2],
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	crc_rom();
+	printaline("");
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
-	crc_rom();
+#ifdef SPLAT1
+	cycleleds();
+	init_nextion();			// initilise the LCD display
+#endif
 
 	if (!(netif_is_link_up(&gnetif))) {
 		printf("LAN interface appears disconnected\n\r");
@@ -2209,26 +2212,32 @@ printf("*** TESTING BUILD USED ***\n");
 
 	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
 	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+
 	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
 	osDelay(3000);		// wait for server to populate us (ZZZ)
 					// refresh the hardware watchdog reset system timer
 
 	if (http_downloading) {
-		printf("Downloading...\n");
+		printf("STM Downloading...\n");
+		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
+			osDelay(1000);
+		}
+		osDelay(5000);		// allow time for it to get to reboot if its going to
+	}
+
+	nxt_update();		// check if LCD needs updating
+	if (http_downloading) {
+		printf("LCD Downloading...\n");
 		while (http_downloading) {
 			HAL_IWDG_Refresh(&hiwdg);
 			osDelay(1000);
 		}
 	}
 
-	nxt_update();		// check if LCD needs updating
-	if (http_downloading) {
-		printf("Downloading...\n");
-		while (http_downloading) {
-			HAL_IWDG_Refresh(&hiwdg);
-			osDelay(10);
-		}
-	}
+	osDelay(3000);		// wait for server to respond
+
+	vTaskResume(LPTaskHandle);		// allow it to start
 
 	printf("Starting httpd web server\n");
 	httpd_init();		// start the www server
@@ -2306,11 +2315,10 @@ void StarLPTask(void const *argument) {
 	strcpy(udp_target, SERVER_DESTINATION);
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
-	osDelay(500);
-
-	if ((http_downloading) || (main_init_done == 0)) {		// don't go further
-		while ((http_downloading) || (main_init_done == 0)) {
-			osDelay(500);
+	osDelay(10);
+	if (http_downloading) {		// don't go further
+		while (http_downloading)  {
+			osDelay(10);
 			HAL_IWDG_Refresh(&hiwdg);
 		}
 //		rebootme(0);

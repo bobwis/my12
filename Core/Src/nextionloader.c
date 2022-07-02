@@ -36,11 +36,33 @@
 #include "lcd.h"
 #include "Nextionloader.h"
 
-int nxt_abort = 0;			// 1 == abort
+
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
 static int residual = 0;	// left over unsent to LCD bytes when block size overflowed
 static int bytesinblocksent = 0; 		// byte count into current block
 static char nxtbuffer[NXDL_BUFF_SIZE];
+int nxt_abort = 0;			// 1 == abort
+
+int decnxtmodel(char *nex_model) {
+	char lcdmod;
+
+	lcdmod = 'Z';
+
+	if (!(strncmp(nex_model, "MX4832T035", 10))) {
+		lcdmod = 'A';
+	} else if (!(strncmp(nex_model, "MX4832F035", 10))) {
+		lcdmod = 'B';
+	} else if (!(strncmp(nex_model, "MX4832K035", 10))) {
+		lcdmod = 'C';
+	} else if (!(strncmp(nex_model, "MX4024K032", 10))) {
+		lcdmod = 'D';
+	} else if (!(strncmp(nex_model, "MX4024T032", 10))) {
+		lcdmod = 'E';
+	} else if (!(strncmp(nex_model, "MX3224F028", 10))) {
+		lcdmod = 'F';
+	}
+	return (lcdmod);
+}
 
 // attempt to load new LCD user firmware
 int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
@@ -48,7 +70,7 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 	int i;
 	char lcdmod;
 
-	printf("nextionloader:  fliename=%s, host=%s, len=%u\n", filename, host, nxtfilesize);
+//	printf("nextionloader:  fliename=%s, host=%s, len=%u\n", filename, host, nxtfilesize);
 
 	if ((nxtfilesize == 0) || (nxtfilesize == -1)) {
 
@@ -68,13 +90,7 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 		return (-1);
 	}
 
-	lcdmod = 'Z';
-	if (!(strncmp(nex_model, "MX4832T035", 10))) {
-		lcdmod = 'A';
-	} else {
-		if (!(strncmp(nex_model, "MX4832F035", 10)))
-			lcdmod = 'B';
-	}
+	lcdmod = decnxtmodel(nex_model);
 
 	http_downloading = NXT_PRELOADING;		// mode == getting ready for nextion download
 	sprintf(newfilename, "/firmware/%s-%04u-%c%u.tft", lcdfile, newbuild, lcdmod, lcdbuildno);
@@ -92,7 +108,7 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 		}		// see if file downloader returned an error before starting LCD upload
 	}
 	if ((nxt_abort) || (http_downloading == NOT_LOADING)) {
-		printf("nxt_loader: Server aborted before sending nxt file\n");
+		printf("nxt_loader: Server aborted before sending NXT file\n");
 		http_downloading = NOT_LOADING;
 		return (-1);
 	}
@@ -123,8 +139,8 @@ int nxt_sendres() {
 			printf("nxt_sendres: failed\n");
 			nxt_abort = 1;
 		} else {
-		while (txdmadone == 0)		// tx in progress
-			osDelay(1);
+			while (txdmadone == 0)		// tx in progress
+				osDelay(1);
 		}
 	}
 	residual = 0;
@@ -285,20 +301,20 @@ nxt_update() {
 		if (lcdbuildno == -2) {		// LCD user firmware might be corrupted
 			printf("LCD firmware corrupted?\n");
 		}
-#if 0
+#if 1
 		if (((lcd_sys0 >> 8) != BUILDNO) ||		// this LCD matches the wrong STM build number
 				(((lcd_sys0 & 0xff) != lcdbuildno)		// OR lcdbuildno != latest lcdbuildno  AND
 				&& ((lcd_sys0 >> 8) == BUILDNO)))			// its the same buildno as the STM
 #else
-			if (1)
+		if (1)
 #endif
 		{
 
 			if ((lcd_sys0 >> 8) != BUILDNO) {
-				printf("nxt_update: LCD build is %d, server STM build is %d\n", lcdbuildno, BUILDNO);
+				printf("nxt_update: Our STM build is %d, LCD is for STM build %d \n",  BUILDNO, (lcd_sys0 >> 8));
 			}
-			if ((lcd_sys0 & 0xff) != lcdbuildno)	 {
-				printf("nxt_update: LCD build is %d, server LCD build is %d\n", lcd_sys0 & 0xff, lcdbuildno);
+			if ((lcd_sys0 & 0xff) != lcdbuildno) {
+				printf("nxt_update: LCD's build is %d, server's LCD build is %d\n", lcd_sys0 & 0xff, lcdbuildno);
 			}
 
 			// do the load
@@ -310,7 +326,7 @@ nxt_update() {
 				}
 				osDelay(2000);
 				printf("Attempting LCD re-sync\n");
-				lcd_init();	// resync hardware
+				lcd_init(230400);	// resync hardware
 				osDelay(200);
 				lcd_putsys0((BUILDNO << 8) | (lcdbuildno & 0xff));//  write back this new lcd build ver (NON VOLATILE IN LCD)
 			}

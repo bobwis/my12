@@ -72,6 +72,8 @@ const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 ga
 //
 //////////////////////////////////////////////
 void cycleleds(void) {
+	volatile int delay;
+
 	const uint16_t pattern[] = {
 	LED_D1_Pin,
 	LED_D1_Pin | LED_D2_Pin,
@@ -83,17 +85,24 @@ void cycleleds(void) {
 
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(100);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(500);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_SET);
-		osDelay(100);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(400);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(100);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
 }
 
@@ -115,7 +124,6 @@ void initrfswtch(void) {
 void setpgagain(int gain) {		// this takes gain 0..9
 	uint16_t pgacmd[1];
 	HAL_StatusTypeDef stat;
-
 
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
@@ -613,7 +621,8 @@ uart6_rxdone() {
 }
 
 void esp_cmd(unsigned char *buffer) {
-	unsigned char txbuf[16];\
+	unsigned char txbuf[16];
+
 	volatile int len;
 	HAL_StatusTypeDef stat;
 
@@ -778,7 +787,7 @@ void initsplat(void) {
 	if (circuitboardpcb == LIGHTNINGBOARD2) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
-		{
+				{
 			Error_Handler();
 		}
 

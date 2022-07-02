@@ -24,7 +24,7 @@
 #define LOADER_BASE_MEM1	0x8000000			// 1st 1M Flash
 #define LOADER_BASE_MEM2	0x8100000			// 2nd 1M Flash
 
-extern int notflashed;		// 1 == not flashed,  0 = flashed
+extern int noterased;		// 1 == not flashed,  0 = flashed
 
 extern void *flash_memptr;
 extern int flash_filelength;

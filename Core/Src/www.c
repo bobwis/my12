@@ -30,7 +30,7 @@
 
 extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
-char stmuid[64] = { 0 };	// STM UUID
+char stmuid[72] = { 0 };	// STM UUID
 ip_addr_t remoteip = { 0 };
 int expectedapage = 0;
 
@@ -308,7 +308,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	if (expectedapage) {
 		if (errorm == 0) {
 //			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
-			printf("server returned page: %.*s\n", charcount, content);
+			printf("Server replied: \"%.*s\"\n", charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
@@ -371,6 +371,10 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 				default:
 					printf("Wrong number of params from Server -> %d\n", nconv);
+					down_total = 0;
+					nxt_abort = 1;
+					flash_abort = 1;
+					http_downloading = NOT_LOADING;
 					break;
 				}
 			} else {
@@ -381,7 +385,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
 #if 1
-			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the version advertised is different to this one running now
+			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the stm firmware version advertised is different to this one running now
 #else
 				if (1) {
 #endif
@@ -407,7 +411,7 @@ void getpage(char page[64]) {
 
 	static char *postvars = NULL;
 
-	printf("getpage: %s\n", page);
+//	printf("getpage: %s\n", page);
 
 //    err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
 //	if (err != ERR_OK)
@@ -426,13 +430,19 @@ void getpage(char page[64]) {
 // reboot if fails
 void initialapisn() {
 	int i, j;
+	char localip[24];
+	char params[48];
 
 	j = 1;
+	sprintf(localip,"%d:%d:%d:%d", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,(myip & 0xFF000000) >> 24);
+	sprintf(params,"?bld=%d\&ip=%s",BUILDNO,localip);
 	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+
+	strcat(stmuid,params);
 
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
-		printf("getting S/N and UDP target using http. Try=%d\n", j);
+		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT,j);
 		getpage(stmuid);		// get sn and targ
 		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
@@ -448,7 +458,7 @@ void initialapisn() {
 }
 
 void requestapisn() {
-	printf("updating S/N and UDP target using http\n");
+	printf("updating params from server on port %d\n",DOWNLOAD_PORT);
 	getpage(stmuid);		// get sn and targ
 }
 

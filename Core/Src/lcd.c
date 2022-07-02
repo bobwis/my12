@@ -512,7 +512,7 @@ void lcd_putsys0(uint32_t value) {
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
 	sprintf(cmd, "sys0=0x%08x", value);
-	printf("lcd_putsys0: %s\n", cmd);
+//	printf("lcd_putsys0: %s\n", cmd);
 	lcd_txblocked = 0;
 	writelcdcmd(cmd);
 	result = lcd_getlack();		// wait for a response (none expected)
@@ -733,7 +733,7 @@ int lcd_event_process(void) {
 					break;
 				case 0x05:
 					if (http_downloading == NXT_LOADING) {	// return code 0x05 is good - block rcv'd
-						printf("Nextion DL acked block %d\n", nxt_blocksacked);
+//						printf("Nextion DL acked block %d\n", nxt_blocksacked);
 						nxt_blocksacked++;
 					} else {
 						printf("NXT Error 0x05\n");
@@ -1300,7 +1300,7 @@ init_nextion() {
 	writelcdcmd(str);
 	lcduart_error = HAL_UART_ERROR_NONE;
 
-	osDelay(100);
+	osDelay(500);
 	lcd_getid();		// in the background
 	processnex();
 

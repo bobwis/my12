@@ -12,7 +12,7 @@ void httpclient(char*);
 
 extern osSemaphoreId ssicontentHandle;
 
-extern char stmuid[64];
+extern char stmuid[72];
 extern ip_addr_t remoteip;
 
 #endif /* WWW_H_ */

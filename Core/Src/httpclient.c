@@ -992,7 +992,7 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 		err_t err) {
 
 	nxt_sendres();		// upload any residual buffer to the LCD (dont care if this is stm firmware callback)
-	http_downloading = NOT_LOADING;		// whatever the result
+
 	if (httpc_result != HTTPC_RESULT_OK) {
 		printf("HttpClientFileResultCallback: %u: %s\n", httpc_result, clientresult(httpc_result));
 		flash_memptr = 0;
@@ -1005,7 +1005,7 @@ void HttpClientFileResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 	if (flash_memptr != 0) {
 		memclose();
 	}
-
+	http_downloading = NOT_LOADING;		// whatever the result
 //	printf("HttpClientFileResultCallback: srv_res=%lu, content bytes=%lu\n", srv_res, rx_content_len);
 }
 
