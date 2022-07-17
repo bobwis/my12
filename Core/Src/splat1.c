@@ -588,7 +588,6 @@ void init_esp() {
 	int waitforoutput;
 
 	printf("init_esp32_c3_13\n");
-
 	stat = HAL_UART_Receive_DMA(&huart6, &espch, 1);		// set up RX
 	if (stat != HAL_OK) {
 		printf("init_esp: huart6 error\n");
@@ -790,12 +789,13 @@ void initsplat(void) {
 				{
 			Error_Handler();
 		}
-
 		test_ds2485();
 		init_esp();
 		osDelay(500);
 		test_esp();
 		osDelay(200);
+	} else if (circuitboardpcb == LIGHTNINGBOARD1) {
+		test_ds2485();
 	}
 
 	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset

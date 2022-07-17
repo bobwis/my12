@@ -19,6 +19,8 @@
 #include "udpstream.h"
 #include "splat1.h"
 #include "adcstream.h"
+#include "lcd.h"
+#include "nextionloader.h"
 
 //#include "httpd.h"
 
@@ -30,7 +32,7 @@
 
 extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
-char stmuid[72] = { 0 };	// STM UUID
+char stmuid[96] = { 0 };	// STM UUID
 ip_addr_t remoteip = { 0 };
 int expectedapage = 0;
 
@@ -263,7 +265,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
 				if (type == 1) {		// looking for a string
 					j = 0;
 					pch = value;
-					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.'))) {
+					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.') || (buf[i] == '_'))) {
 						pch[j++] = buf[i++];
 					}
 					pch[j] = 0;
@@ -302,7 +304,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile int p1;
 	volatile char p2[256];
 	volatile char s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0,  n2 = 0;
+	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
@@ -330,7 +332,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
 						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
-						res3 |= parsep2(&p2[1], "lbl", 2, &lcdbuildno);
+						res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
 						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
@@ -434,15 +436,16 @@ void initialapisn() {
 	char params[48];
 
 	j = 1;
-	sprintf(localip,"%d:%d:%d:%d", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,(myip & 0xFF000000) >> 24);
-	sprintf(params,"?bld=%d\&ip=%s",BUILDNO,localip);
+	sprintf(localip, "%d:%d:%d:%d", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
+			(myip & 0xFF000000) >> 24);
+	sprintf(params, "?bld=%d\&ip=%s\&nx=%s", BUILDNO, localip, nex_model);
 	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 
-	strcat(stmuid,params);
+	strcat(stmuid, params);
 
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
-		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT,j);
+		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT, j);
 		getpage(stmuid);		// get sn and targ
 		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
@@ -458,7 +461,7 @@ void initialapisn() {
 }
 
 void requestapisn() {
-	printf("updating params from server on port %d\n",DOWNLOAD_PORT);
+	printf("updating params from server on port %d\n", DOWNLOAD_PORT);
 	getpage(stmuid);		// get sn and targ
 }
 

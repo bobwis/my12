@@ -36,7 +36,6 @@
 #include "lcd.h"
 #include "Nextionloader.h"
 
-
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
 static int residual = 0;	// left over unsent to LCD bytes when block size overflowed
 static int bytesinblocksent = 0; 		// byte count into current block
@@ -66,7 +65,7 @@ int decnxtmodel(char *nex_model) {
 
 // attempt to load new LCD user firmware
 int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
-	static char newfilename[48];
+	static char newfilename[72];
 	int i;
 	char lcdmod;
 
@@ -93,7 +92,7 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 	lcdmod = decnxtmodel(nex_model);
 
 	http_downloading = NXT_PRELOADING;		// mode == getting ready for nextion download
-	sprintf(newfilename, "/firmware/%s-%04u-%c%u.tft", lcdfile, newbuild, lcdmod, lcdbuildno);
+	sprintf(newfilename, "/firmware/%s-%c%u.tft", lcdfile, lcdmod, srvlcdbld);
 	printf("Attempting to download Nextion firmware %s from %s, ******* DO NOT SWITCH OFF ******\n", newfilename, host);
 	osDelay(100);
 
@@ -285,41 +284,46 @@ int nxt_check() {
 	}
 
 // find LCD sys0 value
-	if (lcd_sys0 == -1) {
-//		printf("LCD Buildno was invalid\n");
+	if ((lcd_sys0 & 0xffff == 0) || ((lcd_sys0 & 0xffff) == 0xffff)) {
+		printf("LCD's stored buildno was invalid\n");
 		return (-2);
 	}
-
 	return (lcd_sys0);
+}
+
+int lcdupneeded() {
+	if (srvlcdbld) {		// not 0 from the server
+		if ((lcd_sys0 & 0xffff) != srvlcdbld) 	{ // this LCD doesent match the build presented by the server
+			printf("LCD server build %d, lcd has %d\n",srvlcdbld,lcd_sys0);
+			return (1);
+		}
+		printf("LCD firmware matched\n");
+	} else {
+		printf("LCD firmware match bypassed\n");
+	}
+	return (0);
 }
 
 ///  Check if LCD needs updating and update it if so
 nxt_update() {
+	uint32_t lcdbld;
+	int i;
+
+
 	if (nxt_check() == -1) {		// we could not identify LCD
 		printf("nxt_update: LCD not identified\n");
 	} else {
-		if (lcdbuildno == -2) {		// LCD user firmware might be corrupted
+		if (srvlcdbld == -2) {		// LCD user firmware might be corrupted
 			printf("LCD firmware corrupted?\n");
 		}
 #if 1
-		if (((lcd_sys0 >> 8) != BUILDNO) ||		// this LCD matches the wrong STM build number
-				(((lcd_sys0 & 0xff) != lcdbuildno)		// OR lcdbuildno != latest lcdbuildno  AND
-				&& ((lcd_sys0 >> 8) == BUILDNO)))			// its the same buildno as the STM
+		if (lcdupneeded())
 #else
 		if (1)
 #endif
 		{
-
-			if ((lcd_sys0 >> 8) != BUILDNO) {
-				printf("nxt_update: Our STM build is %d, LCD is for STM build %d \n",  BUILDNO, (lcd_sys0 >> 8));
-			}
-			if ((lcd_sys0 & 0xff) != lcdbuildno) {
-				printf("nxt_update: LCD's build is %d, server's LCD build is %d\n", lcd_sys0 & 0xff, lcdbuildno);
-			}
-
 			// do the load
-
-			if (nxt_loader(fwfilename, loaderhost, lcdlen) == 0) {		// valid source file
+			if (nxt_loader(lcdfile, loaderhost, lcdlen) == 0) {		// valid source file
 				while ((http_downloading) && (nxt_abort == 0)) {
 					HAL_IWDG_Refresh(&hiwdg);
 					osDelay(5);
@@ -327,12 +331,15 @@ nxt_update() {
 				osDelay(2000);
 				printf("Attempting LCD re-sync\n");
 				lcd_init(230400);	// resync hardware
-				osDelay(200);
-				lcd_putsys0((BUILDNO << 8) | (lcdbuildno & 0xff));//  write back this new lcd build ver (NON VOLATILE IN LCD)
+				osDelay(400);
+
+/* THIS DOES NOT STORE - LATER LCD RESET SOMEWHERE ?? */
+				lcd_putsys0(srvlcdbld);//  write back this new lcd build ver (NON VOLATILE IN LCD)
+				osDelay(400);
+				lcd_putsys0(srvlcdbld);//  write back this new lcd build ver (NON VOLATILE IN LCD) twice for luck
 			}
 			lcd_txblocked = 0;		// unblock LCD sending blocked
 		} else {
-			printf("LCD firmware matched stm firmware\n");
 			http_downloading = NOT_LOADING;
 		}
 	}

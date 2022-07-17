@@ -298,9 +298,10 @@ uint8_t lcd_getlack() {
 
 	processnex();
 	while (lcdstatus == 0xff) {
-		if (trys > 1000) {
+		if (trys > 1500) {
 			printf("getlcdack: Timeout waiting for LCD response\n\r");
 			trys = 0;
+			lcdstatus = 0;
 			return (-1);
 		}
 		trys++;
@@ -890,7 +891,7 @@ void processnex() {		// process Nextion - called at regular intervals
 		dimtimer--;
 	} else {
 		dimtimer = 60000;
-		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 2) + (lcdbright >> 4)));		// - 87.5% dim
+		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 4)));		// - 62.5% dim
 		if (i < 2)
 			i = 2;	// prevent black
 //		printf("Auto Dimming now %d to %d\n", lcdbright, i);

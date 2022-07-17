@@ -143,7 +143,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
-unsigned int lcdbuildno;	// the (later) LCD firmware build number on the server
+unsigned int srvlcdbld = 0;	// the (later) LCD firmware build number on the server
 
 /* USER CODE END PD */
 
@@ -2560,8 +2560,7 @@ void StarLPTask(void const *argument) {
 
 
 		if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
-			if ((lcd_sys0 >> 8) > 10029)
-				lcd_gps();		// display the GPS on the LCD page 0
+			lcd_gps();		// display the GPS on the LCD page 0
 		}
 
 		/**********************  Every 10 Secs   *******************************/
@@ -2642,15 +2641,29 @@ printf("triggers=%04d,    ------------------------------------------- %s", trigs
 			if (boosttrys > 0)	// timer for boost gain oscillating
 				boosttrys--;
 			lcd_pressplot();	// add a point to the pressure plot
+#if 0
+			requestapisn();			//update s/n and udp target (reboot on fail)
+
+			if (lcdupneeded()) {
+				printf("LCD update required, wait for reboot and download..\n");
+				rebootme(0);
+			}
+#endif
 		}
 
 		/**********************  Every 15 minutes  *******************************/
 		if (onesectimer > 900) {			// 15 mins
 			onesectimer = 0;
+#if 1
 			requestapisn();			//update s/n and udp target (reboot on fail)
+
+			if (lcdupneeded()) {
+				printf("LCD update required, wait for reboot and download..\n");
+				rebootme(0);
+			}
+#endif
 		}
 	}
-
 	/* USER CODE END StarLPTask */
 }
 
