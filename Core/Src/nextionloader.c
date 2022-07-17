@@ -36,16 +36,40 @@
 #include "lcd.h"
 #include "Nextionloader.h"
 
-int nxt_abort = 0;			// 1 == abort
 int nxt_blocksacked = 0;	// number of acks recieved by the LCD (every 4k bytes)
+static int residual = 0;	// left over unsent to LCD bytes when block size overflowed
+static int bytesinblocksent = 0; 		// byte count into current block
+static char nxtbuffer[NXDL_BUFF_SIZE];
+int nxt_abort = 0;			// 1 == abort
+
+int decnxtmodel(char *nex_model) {
+	char lcdmod;
+
+	lcdmod = 'Z';
+
+	if (!(strncmp(nex_model, "MX4832T035", 10))) {
+		lcdmod = 'A';
+	} else if (!(strncmp(nex_model, "MX4832F035", 10))) {
+		lcdmod = 'B';
+	} else if (!(strncmp(nex_model, "MX4832K035", 10))) {
+		lcdmod = 'C';
+	} else if (!(strncmp(nex_model, "MX4024K032", 10))) {
+		lcdmod = 'D';
+	} else if (!(strncmp(nex_model, "MX4024T032", 10))) {
+		lcdmod = 'E';
+	} else if (!(strncmp(nex_model, "MX3224F028", 10))) {
+		lcdmod = 'F';
+	}
+	return (lcdmod);
+}
 
 // attempt to load new LCD user firmware
 int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
-	static char newfilename[48];
+	static char newfilename[72];
 	int i;
 	char lcdmod;
 
-	printf("nextionloader: fliename=%s, host=%s, len=%u\n", filename, host, nxtfilesize);
+//	printf("nextionloader:  fliename=%s, host=%s, len=%u\n", filename, host, nxtfilesize);
 
 	if ((nxtfilesize == 0) || (nxtfilesize == -1)) {
 
@@ -65,18 +89,13 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 		return (-1);
 	}
 
-	lcdmod = 'Z';
-	if (!(strncmp(nex_model, "MX4832T035", 10))) {
-		lcdmod = 'A';
-	} else {
-		if (!(strncmp(nex_model, "MX4832F035", 10)))
-			lcdmod = 'B';
-	}
+	lcdmod = decnxtmodel(nex_model);
 
-	sprintf(newfilename, "/firmware/%s-%04u-%c%u.tft", lcdfile, newbuild, lcdmod, lcdbuildno);
+	http_downloading = NXT_PRELOADING;		// mode == getting ready for nextion download
+	sprintf(newfilename, "/firmware/%s-%c%u.tft", lcdfile, lcdmod, srvlcdbld);
 	printf("Attempting to download Nextion firmware %s from %s, ******* DO NOT SWITCH OFF ******\n", newfilename, host);
 	osDelay(100);
-	http_downloading = NXT_PRELOADING;		// mode == getting ready for nextion download
+
 	nxt_abort = 0;
 	nxt_blocksacked = 0;
 	http_dlclient(newfilename, host, (void*) 0);		// start the download
@@ -88,7 +107,7 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 		}		// see if file downloader returned an error before starting LCD upload
 	}
 	if ((nxt_abort) || (http_downloading == NOT_LOADING)) {
-		printf("nxt_loader: Server aborted before sending nxt file\n");
+		printf("nxt_loader: Server aborted before sending NXT file\n");
 		http_downloading = NOT_LOADING;
 		return (-1);
 	}
@@ -109,6 +128,24 @@ int nxt_loader(char filename[], char host[], uint32_t nxtfilesize) {
 	return (0);
 }
 
+// send residual buffer to the LCD
+// gets called from rx_callback and from rx_complete
+int nxt_sendres() {
+	int res = 0;
+
+	if ((residual) && (nxt_abort == 0)) {				// residual data from last call to send first
+		if ((res = lcd_writeblock(nxtbuffer, residual)) == -1) {
+			printf("nxt_sendres: failed\n");
+			nxt_abort = 1;
+		} else {
+			while (txdmadone == 0)		// tx in progress
+				osDelay(1);
+		}
+	}
+	residual = 0;
+	return (res);
+}
+
 //#define lcd_writeblock(nxtbuffer, residual) printf("%d ",residual)
 
 // http callback for Nextion firmware download
@@ -118,9 +155,8 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 	char *buf;
 	struct pbuf *q;
 	volatile int i, pktlen, res, tlen = 0, len = 0, ch;
-	static int residual, blockssent = 0;
-	static int bytesinblocksent = 0, qlentot = 0, tot_sent = 0;
-	static char nxtbuffer[NXDL_BUFF_SIZE];
+	static int blockssent = 0;
+	static int qlentot = 0, tot_sent = 0;
 
 //	printf("nxt_rx_callback:\n");
 
@@ -133,65 +169,46 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 
 //	printf("nxt_rx_callback1: nxt_abort=%d, blockssent=%d, nxt_blocksacked=%d, q->len=%d\n", nxt_abort, blockssent,	nxt_blocksacked, p->len);
 
+	if (nxt_abort) {
+		http_downloading = NOT_LOADING;
+	}
+
 	if (http_downloading == NXT_PRELOADING) {
 		http_downloading = NXT_LOADING;
 	}
 
-	if (nxt_abort) {
-		http_downloading = NOT_LOADING;
-		return (-1);
-	}
-
 	i = 0;
-#if 0
-	while (blockssent != nxt_blocksacked) {
-		osDelay(10);
-		i++;
-		if (i > 200) {		// 2 seconds
-			printf("nxt_rx_1: LCD upload timed out; aborting\n");
-			nxt_abort = 1;
-			return (-1);
-		}
-	}
-#endif
+
 	for (q = p; q != NULL; q = q->next) {
 		qlentot += q->len;
 		tlen = q->tot_len;
 		len = q->len;
 
-		if (nxt_abort == 0) { // we need to upload this data to the NXT
+		if (residual > 0) {
+			tot_sent += residual;
+			bytesinblocksent += residual;
 
-			if (residual) {				// residual data from last call to send first
-				tot_sent += residual;
-				if ((res = lcd_writeblock(nxtbuffer, residual)) == -1) {
-					printf("NXT Write2 failed from http client\n");
-					nxt_abort = 1;
-					return (-1);
-				}
-				bytesinblocksent += residual;
-				residual = 0;
-				while (txdmadone == 0)		// tx in progress
-					osDelay(1);
+			if (nxt_sendres() == -1) {	// send residual (if any)
+				return (-1);		// abort will now be set
+			}
+		}
+
+		pktlen = q->len;
+
+		if ((pktlen + bytesinblocksent) > 4096) {	// will we will overflow the 4096 boundary?
+			len = 4096 - bytesinblocksent;		// we only have to send len this time
+
+			buf = q->payload;
+			for (i = len; i < pktlen; i++) {		// copy the extra bytes we cant send into a buffer
+				nxtbuffer[residual++] = buf[i];		// keep the rest back until next time
 			}
 
-			pktlen = q->len;
+		} else {
+			len = pktlen;		// just try to send what we have got
+		}
 
-			for (i = 0; i < sizeof(nxtbuffer); i++)
-				nxtbuffer[i] = 0xAA;
-
-			if ((pktlen + bytesinblocksent) > 4096) {	// will we will overflow the 4096 boundary?
-				len = 4096 - bytesinblocksent;		// we only have to send len this time
-
-				buf = q->payload;
-				for (i = len; i < pktlen; i++) {		// copy the extra bytes we cant send into a buffer
-					nxtbuffer[residual++] = buf[i];		// keep the rest back until next time
-				}
-
-			} else {
-				len = pktlen;		// just try to send what we have got
-			}
-
-			tot_sent += len;
+		tot_sent += len;
+		if (nxt_abort == 0) {
 			if ((res = lcd_writeblock(q->payload, len) == -1)) {
 				printf("NXT Write1 failed from http client\n");
 				nxt_abort = 1;
@@ -239,64 +256,91 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 				blockssent++;
 			}
 		}
+
 //		printf("nxt_rx_5: blk=%d, down_total=%d, tot_sent=%d, qlentot=%d\n", blockssent, down_total, tot_sent, qlentot);
-		down_total += q->len;			// downloaded but not necessarily all sent to lcd
+		down_total += q->len;		// downloaded but not necessarily all sent to lcd
 		altcp_recved(pcb, p->tot_len);
 		pbuf_free(p);
-
+	}
 //		p = p->next;
 //		printf("nxt_rx_4: len=%d, tot=%d qlentot=%d\n",  len, down_total, qlentot);
-	}
 	return (0);
 }
 
 // Get Nextion version and see if we are current
 int nxt_check() {
-	int model;
+	int res;
 
 	if (nex_model[0] == '\0') {
 //		printf("LCD Model number invalid\n)");
-		return (-1);
+		lcd_init(9600);  // reset LCD to 9600 from current (unknown) speed
+		lcd_getid();	// try again to read its model number etc
+		printf("nxt_check: Trying to reset the LCD\n");
+		osDelay(1500);
+		lcd_init(230400);  // reset LCD to normal speed
+		osDelay(100);
+		if (nex_model[0] == '\0')
+			return (-1);
 	}
 
-	// find LCD sys0 value
-	if (lcd_sys0 == -1) {
-//		printf("LCD Buildno was invalid\n");
+// find LCD sys0 value
+	if ((lcd_sys0 & 0xffff == 0) || ((lcd_sys0 & 0xffff) == 0xffff)) {
+		printf("LCD's stored buildno was invalid\n");
 		return (-2);
 	}
 	return (lcd_sys0);
 }
 
+int lcdupneeded() {
+	if (srvlcdbld) {		// not 0 from the server
+		if ((lcd_sys0 & 0xffff) != srvlcdbld) 	{ // this LCD doesent match the build presented by the server
+			printf("LCD server build %d, lcd has %d\n",srvlcdbld,lcd_sys0);
+			return (1);
+		}
+		printf("LCD firmware matched\n");
+	} else {
+		printf("LCD firmware match bypassed\n");
+	}
+	return (0);
+}
+
 ///  Check if LCD needs updating and update it if so
 nxt_update() {
+	uint32_t lcdbld;
+	int i;
+
+
 	if (nxt_check() == -1) {		// we could not identify LCD
 		printf("nxt_update: LCD not identified\n");
 	} else {
-		if (lcdbuildno == -2) {		// LCD user firmware might be corrupted
+		if (srvlcdbld == -2) {		// LCD user firmware might be corrupted
 			printf("LCD firmware corrupted?\n");
 		}
-		if (((lcd_sys0 >> 8) != BUILDNO) ||		// this LCD matches the wrong STM build number
-				(((lcd_sys0 & 0xff) != lcdbuildno)		// OR lcdbuildno != latest lcdbuildno  AND
-				&& ((lcd_sys0 >> 8) == BUILDNO)))			// its the same buildno as the STM
-				{
-//			printf("nxt_update: LCD firmware %d != stm firmware %d\n", lcdbuildno, BUILDNO);
-
+#if 1
+		if (lcdupneeded())
+#else
+		if (1)
+#endif
+		{
 			// do the load
-
-			if (nxt_loader(fwfilename, loaderhost, lcdlen) == 0) {		// valid source file
+			if (nxt_loader(lcdfile, loaderhost, lcdlen) == 0) {		// valid source file
 				while ((http_downloading) && (nxt_abort == 0)) {
 					HAL_IWDG_Refresh(&hiwdg);
 					osDelay(5);
 				}
-				osDelay(5000);
+				osDelay(2000);
 				printf("Attempting LCD re-sync\n");
-				nxt_baud();		// resync hardware
-				osDelay(200);
-				lcd_putsys0((BUILDNO << 8) | (lcdbuildno & 0xff));//  write back this new lcd build ver (NON VOLATILE IN LCD)
+				lcd_init(230400);	// resync hardware
+				osDelay(400);
+
+/* THIS DOES NOT STORE - LATER LCD RESET SOMEWHERE ?? */
+				lcd_putsys0(srvlcdbld);//  write back this new lcd build ver (NON VOLATILE IN LCD)
+				osDelay(400);
+				lcd_putsys0(srvlcdbld);//  write back this new lcd build ver (NON VOLATILE IN LCD) twice for luck
 			}
 			lcd_txblocked = 0;		// unblock LCD sending blocked
 		} else {
-			printf("LCD firmware matched stm firmware\n");
+			http_downloading = NOT_LOADING;
 		}
 	}
 }

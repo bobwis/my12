@@ -54,6 +54,8 @@ void sendCommand(const char *cmd);
  *
  */
 
+extern int lcdupneeded();		// check if LCD version etc is up to date
+
 extern IWDG_HandleTypeDef hiwdg;
 
 extern uint32_t _baudrate; /*nextion serail baudrate*/

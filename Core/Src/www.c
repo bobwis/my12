@@ -19,6 +19,8 @@
 #include "udpstream.h"
 #include "splat1.h"
 #include "adcstream.h"
+#include "lcd.h"
+#include "nextionloader.h"
 
 //#include "httpd.h"
 
@@ -30,7 +32,7 @@
 
 extern I2C_HandleTypeDef hi2c1;
 char udp_target[64];	// dns or ip address of udp target
-char stmuid[64] = { 0 };	// STM UUID
+char stmuid[96] = { 0 };	// STM UUID
 ip_addr_t remoteip = { 0 };
 int expectedapage = 0;
 
@@ -263,7 +265,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
 				if (type == 1) {		// looking for a string
 					j = 0;
 					pch = value;
-					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.'))) {
+					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.') || (buf[i] == '_'))) {
 						pch[j++] = buf[i++];
 					}
 					pch[j] = 0;
@@ -302,13 +304,13 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile int p1;
 	volatile char p2[256];
 	volatile char s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0,  n2 = 0;
+	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
 		if (errorm == 0) {
 //			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
-			printf("server returned page: %.*s\n", charcount, content);
+			printf("Server replied: \"%.*s\"\n", charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
@@ -330,7 +332,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res2 |= parsep2(&p2[1], "s1", 1, s1);
 
 						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
-						res3 |= parsep2(&p2[1], "lbl", 2, &lcdbuildno);
+						res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
 						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
@@ -371,6 +373,10 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 				default:
 					printf("Wrong number of params from Server -> %d\n", nconv);
+					down_total = 0;
+					nxt_abort = 1;
+					flash_abort = 1;
+					http_downloading = NOT_LOADING;
 					break;
 				}
 			} else {
@@ -380,7 +386,11 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 			if (!res) {		// build changed?
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
-			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the version advertised is different to this one running now
+#if 1
+			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the stm firmware version advertised is different to this one running now
+#else
+				if (1) {
+#endif
 				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 					osDelay(1000);
@@ -403,7 +413,7 @@ void getpage(char page[64]) {
 
 	static char *postvars = NULL;
 
-	printf("getpage: %s\n", page);
+//	printf("getpage: %s\n", page);
 
 //    err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
 //	if (err != ERR_OK)
@@ -422,13 +432,20 @@ void getpage(char page[64]) {
 // reboot if fails
 void initialapisn() {
 	int i, j;
+	char localip[24];
+	char params[48];
 
 	j = 1;
+	sprintf(localip, "%d:%d:%d:%d", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
+			(myip & 0xFF000000) >> 24);
+	sprintf(params, "?bld=%d\&ip=%s\&nx=%s", BUILDNO, localip, nex_model);
 	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+
+	strcat(stmuid, params);
 
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
-		printf("getting S/N and UDP target using http. Try=%d\n", j);
+		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT, j);
 		getpage(stmuid);		// get sn and targ
 		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
@@ -444,7 +461,7 @@ void initialapisn() {
 }
 
 void requestapisn() {
-	printf("updating S/N and UDP target using http\n");
+	printf("updating params from server on port %d\n", DOWNLOAD_PORT);
 	getpage(stmuid);		// get sn and targ
 }
 

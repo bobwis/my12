@@ -20,7 +20,7 @@ void *flash_memptr = (void*) 0;
 int flash_filelength = 0;
 int flash_abort = 0;		// 1 == abort
 uint32_t dl_filecrc = 0;
-int notflashed = 1;		// 1 == not flashed,  0 = flashed
+int noterased = 1;		// 1 == not erased,  0 = erased
 uint32_t q_bytes[4];	// memwrite buffer between calls
 int q_index = 0;	// number of bytes queued for next memwrite
 uint32_t *p, patt = 0x80010000;	// used for teting only zzz
@@ -226,7 +226,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 		}
 	}
 
-	if ((dirty) && (notflashed)) {
+	if ((dirty) && (noterased)) {
 		osDelay(1000);
 		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
 
@@ -244,7 +244,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 			dirty = 1;
 		} else {
 			printf("Flash successfully erased\n");
-			notflashed = 0;
+			noterased = 0;
 
 			// check the erasure
 			dirty = 0;
@@ -255,7 +255,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 				}
 			}
 			if (dirty) {
-				notflashed = 1;
+				noterased = 1;
 				printf("*** ERROR: Flash was erased but bits still dirty at 0x%08x\n",ptr);
 			}
 		}
@@ -448,9 +448,9 @@ printf("memwrite: count=%d, memptr=0x%x, totlen=%d, len=%d\n",count, flash_mempt
 //////////////////////////////////////////////////////
 #endif
 
-	if ((!(flash_abort)) && (notflashed)) {
+	if ((!(flash_abort)) && (noterased)) {
 		res = EraseFlash(flash_memptr);
-		notflashed = 0;
+		noterased = 0;
 	}
 
 #if 0
@@ -514,10 +514,11 @@ void* memclose() {
 	HAL_StatusTypeDef res;
 	int i;
 
-	notflashed = 1;		// now assumed dirty
+	noterased = 1;		// now assumed dirty
 	if (flash_abort) {
 		flash_abort = 0;
 		http_downloading = NOT_LOADING;
+		down_total = 0;		// unfreeze main
 		return;
 	}
 
@@ -533,13 +534,16 @@ void* memclose() {
 	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%0x total=%d\n", flash_load_address,
 			flash_filelength, (unsigned int) flash_memptr, down_total);
 	osDelay(1000);
+
 	if (LockFlash() != HAL_OK) {
 		printf("eeprom: flash2 failed\n");
+		down_total = 0;		// unfreeze main
 		return ((void*) 0);
 	}
 
 	xcrc = flash_findcrc(flash_load_address, flash_filelength);
 	if ((dl_filecrc != xcrc) && (dl_filecrc != 0xffffffff)) {
+		down_total = 0;		// unfreeze main
 		printf(
 				"\n****************** Downloaded file/ROM CRC check failed ourcrc=0x%08x, filecrc=0x%08x Total=%d **********\n",
 				xcrc, dl_filecrc, down_total);
@@ -576,11 +580,13 @@ void* memclose() {
 		res = HAL_FLASHEx_OBProgram(&OBInitStruct);
 		if (res != HAL_OK) {
 			printf("memclose: failed to OBProgram %d\n", res);
+			down_total = 0;		// unfreeze main
 		}
 
 		res = HAL_FLASH_OB_Launch();
 		if (res != HAL_OK) {
 			printf("memclose: failed to OBLaunch %d\n", res);
+			down_total = 0;		// unfreeze main
 		}
 
 //		*(uint32_t *)(0x1FFF0010) = ((memptr - filelength) == TFTP_BASE_MEM1) ? 0x0080 : 0x00c0;

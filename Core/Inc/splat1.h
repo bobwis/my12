@@ -32,6 +32,7 @@ extern uint32_t pressure, pressfrac, temperature, tempfrac;
 extern int16_t pgagain;
 extern uint16_t boosttrys;	// prevent boost mode oscillating inside 3 min timer
 extern uint16_t agc;
+extern int nxt_abort;			// 1 == nextion loader abort
 
 extern int psensor;		// pressure sensor type
 

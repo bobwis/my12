@@ -72,6 +72,8 @@ const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 ga
 //
 //////////////////////////////////////////////
 void cycleleds(void) {
+	volatile int delay;
+
 	const uint16_t pattern[] = {
 	LED_D1_Pin,
 	LED_D1_Pin | LED_D2_Pin,
@@ -83,17 +85,24 @@ void cycleleds(void) {
 
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(600);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_SET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(500);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
 }
 
@@ -115,7 +124,6 @@ void initrfswtch(void) {
 void setpgagain(int gain) {		// this takes gain 0..9
 	uint16_t pgacmd[1];
 	HAL_StatusTypeDef stat;
-
 
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PGA
@@ -580,7 +588,6 @@ void init_esp() {
 	int waitforoutput;
 
 	printf("init_esp32_c3_13\n");
-
 	stat = HAL_UART_Receive_DMA(&huart6, &espch, 1);		// set up RX
 	if (stat != HAL_OK) {
 		printf("init_esp: huart6 error\n");
@@ -613,7 +620,8 @@ uart6_rxdone() {
 }
 
 void esp_cmd(unsigned char *buffer) {
-	unsigned char txbuf[16];\
+	unsigned char txbuf[16];
+
 	volatile int len;
 	HAL_StatusTypeDef stat;
 
@@ -749,10 +757,6 @@ void test_ds2485() {
 void initsplat(void) {
 	int i, j, k;
 
-	cycleleds();
-	osDelay(500);
-	printf("Initsplat: LED cycle\n");
-
 	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");
 		initdualmux();
@@ -782,15 +786,16 @@ void initsplat(void) {
 	if (circuitboardpcb == LIGHTNINGBOARD2) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
-		{
+				{
 			Error_Handler();
 		}
-
 		test_ds2485();
 		init_esp();
 		osDelay(500);
 		test_esp();
 		osDelay(200);
+	} else if (circuitboardpcb == LIGHTNINGBOARD1) {
+		test_ds2485();
 	}
 
 	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset

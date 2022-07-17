@@ -67,7 +67,7 @@ char nex_model[24];		// the Nextion model number read from the connected display
 volatile int lcd_sys0 = -1;	// used to store our firmware number of the LCD
 char lcdfile[32];		// lcd file name on host
 char fwfilename[32];	// stm firmware filename
-char loaderhost[17] = "192.168.0.248";
+char loaderhost[48] = "192.168.0.248";
 uint32_t lcdlen;
 
 inline int cycinc(int index, int limit) {
@@ -179,27 +179,17 @@ void lcd_uart_init(int baud) {
 #if 1
 	stat = HAL_UART_Receive_DMA(&huart5, dmarxbuffer, DMARXBUFSIZE);	// start Rx cyclic DMA
 	if (stat != HAL_OK) {
-		printf("lcd_init: 1 Err HAL_UART_Receive_DMA uart5 %d\n", stat);
+		printf("lcd_uart_init: Err HAL_UART_Receive_DMA uart5 %d\n", stat);
 	}
 #endif
 }
 
-// lcd_init:  sends LCD reset command and them two set hi-speed commands
-void lcd_init(int baud) {
-	volatile HAL_StatusTypeDef stat;
-	int i;
 
+// send reset command to LCD  (LCD's own init will start it again at 9600)
+lcd_reset()
+{
+	HAL_StatusTypeDef stat;
 	const unsigned char lcd_reset[] = { "rest\xff\xff\xff" };
-	const unsigned char lcd_fast[] = { "baud=230400\xff\xff\xff" };
-	const unsigned char lcd_slow[] = { "baud=9600\xff\xff\xff" };
-	int siz, page;
-	volatile char *cmd;
-
-//	printf("lcd_init: baud=%d\n", baud);
-	if (!((baud == 9600) || (baud == 230400))) {
-		printf("lcd_init: ***** bad baud rate requested %d **** \n", baud);
-		return;
-	}
 
 	txdmadone = 0;	// TX is NOT free
 	stat = HAL_UART_Transmit_DMA(&huart5, lcd_reset, sizeof(lcd_reset) - 1);  // current baud
@@ -207,26 +197,30 @@ void lcd_init(int baud) {
 		printf("lcd_init: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
 	}
 	while (!(txdmadone)) {
-//		printf("lcd_init: waiting for txdmadone\n");
+//		printf("lcd_reset: waiting for txdmadone\n");
 		osDelay(1);		// wait for comms to complete
 	}
-	txdmadone = 0;	// TX is NOT free
-	osDelay(800);
-
-	if (baud == 9600)
-		stat = HAL_UART_Transmit_DMA(&huart5, lcd_slow, sizeof(lcd_slow) - 1);		// if leading nulls on tx line
-	else
-		stat = HAL_UART_Transmit_DMA(&huart5, lcd_fast, sizeof(lcd_fast) - 1);		// if leading nulls on tx line
-	if (stat != HAL_OK) {														// this cmd will be rejected
-		printf("lcd_init: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
-	}
-	while (!(txdmadone)) {
-//		printf("lcd_init: waiting1 for txdmadone\n");
-		osDelay(1);		// wait for comms to complete
-	}
-	txdmadone = 0;	// TX is NOT free
-	osDelay(120);
+	osDelay(500);		// give it time to reset
 }
+
+// send baudrate command to LCD
+lcd_baud(int baud) {
+	HAL_StatusTypeDef stat;
+	char str[32];
+	int i;
+
+	txdmadone = 0;	// TX is NOT free
+	sprintf(str,"baud=%u\xff\xff\xff",baud);
+	i = strlen(str);
+
+	stat = HAL_UART_Transmit_DMA(&huart5, str, i);		// if leading nulls on tx line
+	while (!(txdmadone)) {
+//		printf("lcd_baud: waiting for txdmadone\n");
+		osDelay(1);		// wait for comms to complete
+	}
+}
+
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -304,9 +298,10 @@ uint8_t lcd_getlack() {
 
 	processnex();
 	while (lcdstatus == 0xff) {
-		if (trys > 1000) {
+		if (trys > 1500) {
 			printf("getlcdack: Timeout waiting for LCD response\n\r");
 			trys = 0;
+			lcdstatus = 0;
 			return (-1);
 		}
 		trys++;
@@ -494,7 +489,7 @@ int lcd_getid(void) {
 int lcd_getsys0(void) {
 	int result;
 
-	printf("Getting SYS0\n");
+//	printf("Getting SYS0\n");
 	lcd_txblocked = 0;
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
@@ -505,11 +500,11 @@ int lcd_getsys0(void) {
 	result = lcd_getlack();		// wait for a response
 
 	lcd_txblocked = 0;		// allow others sending to the LCD
-	printf("getsys0: returned value=0x%u\n", lcd_sys0);
+//	printf("getsys0: returned 0x%u\n", lcd_sys0);
 	return (result);
 }
 
-// put LCD sys0 value
+// put LCD sys0 value  (non-volatile)
 void lcd_putsys0(uint32_t value) {
 	char cmd[16];
 	int result;
@@ -518,7 +513,7 @@ void lcd_putsys0(uint32_t value) {
 	lcd_clearrxbuf();
 	lcdstatus = 0xff;
 	sprintf(cmd, "sys0=0x%08x", value);
-	printf("lcd_putsys0: %s\n", cmd);
+//	printf("lcd_putsys0: %s\n", cmd);
 	lcd_txblocked = 0;
 	writelcdcmd(cmd);
 	result = lcd_getlack();		// wait for a response (none expected)
@@ -556,6 +551,7 @@ lcd_pagechange(uint8_t newpage) {
 	case 0:		// changed to page 0
 		lcd_time();
 		lcd_date();
+		lcd_gps();
 		break;
 	case 1:		// changed to page 1 - statistics
 		lcd_showvars();		// display vars on the lcd
@@ -738,7 +734,7 @@ int lcd_event_process(void) {
 					break;
 				case 0x05:
 					if (http_downloading == NXT_LOADING) {	// return code 0x05 is good - block rcv'd
-						printf("Nextion DL acked block %d\n", nxt_blocksacked);
+//						printf("Nextion DL acked block %d\n", nxt_blocksacked);
 						nxt_blocksacked++;
 					} else {
 						printf("NXT Error 0x05\n");
@@ -770,7 +766,7 @@ int lcd_event_process(void) {
 			case 0x71:	// This is an integer variable from a "Get" command
 				lcd_sys0 = decode_int(eventbuffer);
 				if (nex_model[0] != '\0') {
-					printf("Nextion LCD Integer: 0x%0x\n", lcd_sys0);
+					printf("Nextion LCD's Firmware build: 0x%0x\n", lcd_sys0);
 				}
 				break;
 
@@ -862,22 +858,13 @@ void processnex() {		// process Nextion - called at regular intervals
 	if (lcd_initflag == 1) {		// full init
 		lcduart_error = HAL_UART_ERROR_NONE;
 		printf("processnex: calling lcd_uart_init(9600)\n");
-		lcd_uart_init(9600);	// switch us to 9600
-		lcd_init(9600);		// try to reset LCD
-		delay = 500;
+		lcd_init(230400);		// try to reset LCD
 		lcd_initflag = 2;		// request wait for lcd to process baud speedup command
 		return;
 	}
 
 	if (lcd_initflag == 2) {	// wait after giving cmd for lcd to change LCD to fast
-#if 0
-		if (delay) {
-			osDelay(1);
-			delay--;
-		} else
-#else
 		osDelay(500);
-#endif
 		lcd_initflag = 3;
 		return;
 	}
@@ -904,7 +891,7 @@ void processnex() {		// process Nextion - called at regular intervals
 		dimtimer--;
 	} else {
 		dimtimer = 60000;
-		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 2) + (lcdbright >> 4)));		// - 87.5% dim
+		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 4)));		// - 62.5% dim
 		if (i < 2)
 			i = 2;	// prevent black
 //		printf("Auto Dimming now %d to %d\n", lcdbright, i);
@@ -925,6 +912,8 @@ void lcd_gps(void) {
 	int sats, col;
 	static int vis = 0;
 
+	if (our_currentpage != 0)
+		return;
 	lat = statuspkt.NavPvt.lat / 10000000.0;
 	lon = statuspkt.NavPvt.lon / 10000000.0;
 	calcLocator(gridsquare, lat, lon);
@@ -969,8 +958,10 @@ void lcd_time() {
 
 	if (gpslocked) {
 		writelcdcmd("vis t3,0");	// hide warning
+		writelcdcmd("vis t1,1");	// show date
 	} else {
-		sprintf(str, "AQUIRE GPS:%d", statuspkt.NavPvt.numSV);
+		writelcdcmd("vis t1,0");	// hide date
+		sprintf(str, "UNLOCK GPS %d", statuspkt.NavPvt.numSV);
 		setlcdtext("t3.txt", str);
 		writelcdcmd("vis t3,1");
 	}
@@ -1235,50 +1226,32 @@ lcd_controls() {
 
 // try to set the baud to 230400
 // only assumes it could be at 9600 to begin with
-nxt_baud() {
+lcd_init(int rqbaud) {
 	lcduart_error = HAL_UART_ERROR_NONE;
 
-	lcd_init(9600);  // reset LCD to 9600 from current (unknown) speed
-	lcd_uart_init(9600); // then change our baud to match
-	lcd_init(9600);  // reset LCD (might be 2nd time or not)
+	lcd_reset();		// command LCD reset at the current baudrate - it should switch to 9600
+	lcd_baud(9600);  // command LCD to 9600 from current (unknown) speed
+	lcd_uart_init(9600); // then change our uart baud to match
+	lcd_reset();	// command LCD reset at the current baudrate - it should switch to 9600
+	lcd_baud(9600);  // reset LCD (might be 2nd time or not)
 	osDelay(600);
 
-	lcd_init(230400);  //  LCD *should* return in 230400 baud
+	lcd_baud(rqbaud);  //  LCD *should* return in rqbuad baud
 	osDelay(600);
-	lcd_uart_init(230400); // then change our baud to match
+	lcd_uart_init(rqbaud); // then change our baud to match
 
 	osDelay(600);
 	lcduart_error = HAL_UART_ERROR_NONE;
-	printf("nxt_baud:\n");
+//	printf("nxt_baud:\n");
 	writelcdcmd("page 0");
 }
 
-init_nextion() {
-	int i;
+
+// display starting up items
+lcd_starting() {
+	static int i = 0;
 	char str[82] = { "empty" };
 
-	lcduart_error = HAL_UART_ERROR_NONE;
-
-	nxt_baud();
-
-	osDelay(600);
-	writelcdcmd("cls BLACK");
-	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
-	BUILD);
-	lcduart_error = HAL_UART_ERROR_NONE;
-	writelcdcmd(str);
-	lcduart_error = HAL_UART_ERROR_NONE;
-
-	osDelay(100);
-	lcd_getid();		// in the background
-	processnex();
-
-	osDelay(500);
-	lcd_getsys0();
-	processnex();
-
-	i = 0;
-	while (main_init_done == 0) { // wait from main to complete the init
 		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
 		switch (i & 3) {
 		case 0:
@@ -1300,14 +1273,40 @@ init_nextion() {
 		if (!(netif_is_link_up(&gnetif))) {
 			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
 		}
-	}
-
-	nxt_update();		// check if LCD needs updating
-
+//	}
+#if 0
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd("ref 0");		// refresh screen
 
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd("page 0");
+#endif
+}
+
+
+init_nextion() {
+	int i;
+	char str[82] = { "empty" };
+
+	lcduart_error = HAL_UART_ERROR_NONE;
+
+	lcd_init(230400);
+	osDelay(300);
+	lcd_txblocked = 0;
+	writelcdcmd("cls BLACK");
+	osDelay(300);
+	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
+	BUILD);
+	lcduart_error = HAL_UART_ERROR_NONE;
+	writelcdcmd(str);
+	lcduart_error = HAL_UART_ERROR_NONE;
+
+	osDelay(500);
+	lcd_getid();		// in the background
+	processnex();
+
+	osDelay(100);
+	lcd_getsys0();
+	processnex();
 
 }

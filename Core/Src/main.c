@@ -46,6 +46,7 @@
 #include "splat1.h"
 #include "lcd.h"
 #include "eeprom.h"
+#include "httpclient.h"
 #include <queue.h>
 
 //#define netif_dhcp_data(netif) ((struct dhcp*)netif_get_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP))
@@ -142,7 +143,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
-unsigned int lcdbuildno;	// the (later) LCD firmware build number on the server
+unsigned int srvlcdbld = 0;	// the (later) LCD firmware build number on the server
 
 /* USER CODE END PD */
 
@@ -399,6 +400,9 @@ int main(void) {
 
 	/* USER CODE BEGIN RTOS_QUEUES */
 	/* add queues, ... */
+#ifdef SPLAT1
+	cycleleds();
+#endif
 	/* USER CODE END RTOS_QUEUES */
 
 	/* Create the thread(s) */
@@ -411,7 +415,9 @@ int main(void) {
 	LPTaskHandle = osThreadCreate(osThread(LPTask), NULL);
 
 	/* USER CODE BEGIN RTOS_THREADS */
+	vTaskSuspend(LPTaskHandle);			// don't allow it to autostart
 	/* add threads, ... */
+
 	/* USER CODE END RTOS_THREADS */
 
 	/* Start scheduler */
@@ -420,6 +426,7 @@ int main(void) {
 	/* We should never get here as control is now taken by the scheduler */
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
+
 	while (1) {
 		/* USER CODE END WHILE */
 
@@ -1851,7 +1858,7 @@ crc_rom() {
 
 	length = (uint32_t) &__fini_array_end - (uint32_t) base + ((uint32_t) &_edata - (uint32_t) &_sdata);
 	romcrc = xcrc32(base, length, xinit);
-	printf("XCRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
+	printf("         CRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
 }
 
 err_leds(int why) {
@@ -2031,6 +2038,7 @@ void printaline(char *str) {
  */
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const *argument) {
+
 	/* init code for USB_DEVICE */
 	MX_USB_DEVICE_Init();
 
@@ -2038,6 +2046,7 @@ void StartDefaultTask(void const *argument) {
 	MX_LWIP_Init();
 
 	/* USER CODE BEGIN 5 */
+
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
 	int i;
@@ -2055,9 +2064,14 @@ void StartDefaultTask(void const *argument) {
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 	STM32_UUID[2],
 	MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	crc_rom();
+	printaline("");
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
 
-	crc_rom();
+#ifdef SPLAT1
+	cycleleds();
+	init_nextion();			// initilise the LCD display
+#endif
 
 	if (!(netif_is_link_up(&gnetif))) {
 		printf("LAN interface appears disconnected\n\r");
@@ -2116,7 +2130,17 @@ statuspkt.bconf = 0x80000000;	// board config word
 printf("*** TESTING BUILD USED ***\n");
 //		testeeprom();
 #endif
-
+#if 1
+#ifdef TESTING
+		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
+				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
+				udp_target, udp_ips);
+#else
+	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
+	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
+			udp_target, udp_ips);
+#endif
+#endif
 #ifdef SPLAT1
 	initsplat();
 #endif
@@ -2186,17 +2210,34 @@ printf("*** TESTING BUILD USED ***\n");
 			(myip & 0xFF000000) >> 24);
 	printf("*****************************************\n");
 
+	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
+	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+
+	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
+	osDelay(3000);		// wait for server to populate us (ZZZ)
+					// refresh the hardware watchdog reset system timer
+
 	if (http_downloading) {
-		printf("Downloading...\n");
+		printf("STM Downloading...\n");
 		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
+			osDelay(1000);
+		}
+		osDelay(5000);		// allow time for it to get to reboot if its going to
+	}
+
+	nxt_update();		// check if LCD needs updating
+	if (http_downloading) {
+		printf("LCD Downloading...\n");
+		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
 			osDelay(1000);
 		}
 	}
 
-	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
-	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
-	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
-	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+	osDelay(3000);		// wait for server to respond
+
+	vTaskResume(LPTaskHandle);		// allow it to start
 
 	printf("Starting httpd web server\n");
 	httpd_init();		// start the www server
@@ -2274,28 +2315,21 @@ void StarLPTask(void const *argument) {
 	strcpy(udp_target, SERVER_DESTINATION);
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
-	init_nextion();
-
-#if 1
-#ifdef TESTING
-		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
-				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
-				udp_target, udp_ips);
-#else
-	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
-	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
-			udp_target, udp_ips);
-#endif
-#endif
-	osDelay(500);
-
+	osDelay(10);
 	if (http_downloading) {		// don't go further
-		while (http_downloading) {
-			osDelay(5000);
+		while (http_downloading)  {
+			osDelay(10);
 			HAL_IWDG_Refresh(&hiwdg);
 		}
 //		rebootme(0);
 	}
+
+	while (main_init_done == 0)	 {
+		lcd_starting();
+		HAL_IWDG_Refresh(&hiwdg);
+	}
+
+	writelcdcmd("page 0");		// redraw page0
 
 	HAL_TIM_Base_Start(&htim7);	// start audio synth sampling interval timer
 
@@ -2526,8 +2560,7 @@ void StarLPTask(void const *argument) {
 
 
 		if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
-			if ((lcd_sys0 >> 8) > 10029)
-				lcd_gps();		// display the GPS on the LCD page 0
+			lcd_gps();		// display the GPS on the LCD page 0
 		}
 
 		/**********************  Every 10 Secs   *******************************/
@@ -2608,15 +2641,29 @@ printf("triggers=%04d,    ------------------------------------------- %s", trigs
 			if (boosttrys > 0)	// timer for boost gain oscillating
 				boosttrys--;
 			lcd_pressplot();	// add a point to the pressure plot
+#if 0
+			requestapisn();			//update s/n and udp target (reboot on fail)
+
+			if (lcdupneeded()) {
+				printf("LCD update required, wait for reboot and download..\n");
+				rebootme(0);
+			}
+#endif
 		}
 
 		/**********************  Every 15 minutes  *******************************/
 		if (onesectimer > 900) {			// 15 mins
 			onesectimer = 0;
+#if 1
 			requestapisn();			//update s/n and udp target (reboot on fail)
+
+			if (lcdupneeded()) {
+				printf("LCD update required, wait for reboot and download..\n");
+				rebootme(0);
+			}
+#endif
 		}
 	}
-
 	/* USER CODE END StarLPTask */
 }
 
