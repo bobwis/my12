@@ -67,7 +67,7 @@ char nex_model[24];		// the Nextion model number read from the connected display
 volatile int lcd_sys0 = -1;	// used to store our firmware number of the LCD
 char lcdfile[32];		// lcd file name on host
 char fwfilename[32];	// stm firmware filename
-char loaderhost[17] = "192.168.0.248";
+char loaderhost[48] = "192.168.0.248";
 uint32_t lcdlen;
 
 inline int cycinc(int index, int limit) {

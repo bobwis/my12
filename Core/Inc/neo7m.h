@@ -123,7 +123,7 @@ extern unsigned int newbuild;	// the new firmware build number from the server
 extern unsigned int srvlcdbld;	// the (later) LCD firmware build number on the server
 extern char lcdfile[32];
 extern char fwfilename[32];
-extern char loaderhost[17];
+extern char loaderhost[48];
 extern uint32_t lcdlen;
 
 extern uint32_t dl_filecrc;
