@@ -3907,7 +3907,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 	down_total = 0;
  8001cbc:	600d      	str	r5, [r1, #0]
 	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
- 8001cbe:	f641 7192 	movw	r1, #8082	; 0x1f92
+ 8001cbe:	f641 7193 	movw	r1, #8083	; 0x1f93
  8001cc2:	9200      	str	r2, [sp, #0]
 	expectedapage = 0;
  8001cc4:	6005      	str	r5, [r0, #0]
@@ -4039,7 +4039,7 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
  8001d76:	2400      	movs	r4, #0
  8001d78:	4819      	ldr	r0, [pc, #100]	; (8001de0 <hc_open+0xcc>)
 	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
- 8001d7a:	f641 7192 	movw	r1, #8082	; 0x1f92
+ 8001d7a:	f641 7193 	movw	r1, #8083	; 0x1f93
  8001d7e:	f8cd 8008 	str.w	r8, [sp, #8]
  8001d82:	4b0e      	ldr	r3, [pc, #56]	; (8001dbc <hc_open+0xa8>)
  8001d84:	e9cd 2700 	strd	r2, r7, [sp]
@@ -21934,7 +21934,7 @@ void initialapisn() {
  80091a2:	f8df 9098 	ldr.w	r9, [pc, #152]	; 800923c <initialapisn+0x108>
 		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT, j);
  80091a6:	463a      	mov	r2, r7
- 80091a8:	f641 7192 	movw	r1, #8082	; 0x1f92
+ 80091a8:	f641 7193 	movw	r1, #8083	; 0x1f93
  80091ac:	4650      	mov	r0, sl
 	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
  80091ae:	f241 3488 	movw	r4, #5000	; 0x1388
@@ -22021,7 +22021,7 @@ void requestapisn() {
 void requestapisn() {
  8009244:	b082      	sub	sp, #8
 	printf("updating params from server on port %d\n", DOWNLOAD_PORT);
- 8009246:	f641 7192 	movw	r1, #8082	; 0x1f92
+ 8009246:	f641 7193 	movw	r1, #8083	; 0x1f93
  800924a:	4809      	ldr	r0, [pc, #36]	; (8009270 <requestapisn+0x30>)
  800924c:	f01d fa42 	bl	80266d4 <iprintf>
 	printf("Control Server is %s\n", SERVER_DESTINATION);
