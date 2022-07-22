@@ -184,10 +184,8 @@ void lcd_uart_init(int baud) {
 #endif
 }
 
-
 // send reset command to LCD  (LCD's own init will start it again at 9600)
-lcd_reset()
-{
+lcd_reset() {
 	HAL_StatusTypeDef stat;
 	const unsigned char lcd_reset[] = { "rest\xff\xff\xff" };
 
@@ -210,7 +208,7 @@ lcd_baud(int baud) {
 	int i;
 
 	txdmadone = 0;	// TX is NOT free
-	sprintf(str,"baud=%u\xff\xff\xff",baud);
+	sprintf(str, "baud=%u\xff\xff\xff", baud);
 	i = strlen(str);
 
 	stat = HAL_UART_Transmit_DMA(&huart5, str, i);		// if leading nulls on tx line
@@ -219,8 +217,6 @@ lcd_baud(int baud) {
 		osDelay(1);		// wait for comms to complete
 	}
 }
-
-
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -277,8 +273,6 @@ int lcd_puts(char *str) {
 		i++;
 	}
 	buffer[i] = '\0';
-
-//	printf("lcd_puts: %s\n",buffer);
 
 	txdmadone = 0;	// TX in progress
 //	printf("lcd_puts: len=%d, [%s]\n", i, str);
@@ -441,7 +435,7 @@ int getlcdpage(void) {
 	lcdstatus = 0xff;
 	result = intwritelcdcmd("sendme");
 	if (result == -1) {		// send err
-		printf("getlcdpage: Cmd failed\n\r");
+		printf("getlcdpage: sendme failed\n");
 	}
 	result = lcd_getlack();		// wait for a response
 //	printf("getlcdpage: returned %d\n\r",result);
@@ -905,30 +899,38 @@ void processnex() {		// process Nextion - called at regular intervals
 //
 //////////////////////////////////////////////////////////////
 
-// send the GPS coords t2.txt Lat,Lon,Grid  t3.txt Sats
+// send the GPS coords t2.txt Lat,Lon,Grid  t4.txt Sats
 void lcd_gps(void) {
 	unsigned char str[64], gridsquare[16];
-	double lat, lon;
-	int sats, col;
-	static int vis = 0;
+	double lat, lon, acc;
+	uint32_t sats, col;
+	static uint8_t vis = 0, oldsats = 0;
+	static uint32_t oldcol = 0;
 
 	if (our_currentpage != 0)
 		return;
-	lat = statuspkt.NavPvt.lat / 10000000.0;
-	lon = statuspkt.NavPvt.lon / 10000000.0;
-	calcLocator(gridsquare, lat, lon);
 
 	if (gpslocked) {
+		lat = statuspkt.NavPvt.lat / 10000000.0;
+		lon = statuspkt.NavPvt.lon / 10000000.0;
+		calcLocator(gridsquare, lat, lon);
 		sprintf(str, "Lat: %.06f\\rLon: %.06f\\rGrid: %s", lat, lon, gridsquare);
 		setlcdtext("t2.txt", str);
 
+		acc = statuspkt.NavPvt.hAcc / 1000.0;
+
+		sprintf(str,"HAcc:%.02fm\\rPres:%d.%03d",acc,pressure, pressfrac>>2);
+		setlcdtext("t5.txt", str);
+
 	} else {
 		setlcdtext("t2.txt", "");
+		setlcdtext("t5.txt", "");
 	}
 
 	// number of satellites
 	sats = statuspkt.NavPvt.numSV;
-	sprintf(str, "\\r\\rSats:%u", sats);
+
+	sprintf(str, "Sats:%u", sats);
 	setlcdtext("t4.txt", str);
 	if (sats < 4)
 		col = 0xf800;		// red
@@ -936,34 +938,45 @@ void lcd_gps(void) {
 		col = 0xf6c0;		// dark yellow
 	else
 		col = 0xffff;		// white
-	setlcdbin("t4.pco", col);
+	if (oldcol != col) {
+		setlcdbin("t4.pco", col);
+		oldcol = col;
+	}
 
 	if (sats < 5) {
 		if (vis++ & 1)
-			writelcdcmd("vis t4,1");
+			writelcdcmd("vis t4,1");		// flashing
 		else
 			writelcdcmd("vis t4,0");
-	} else
-		writelcdcmd("vis t4,1");
+	} else {
+		if (oldsats != sats) {
+			writelcdcmd("vis t4,1");
+			oldsats = sats;
+		}
+	}
 }
 
 // send the time to t0.txt
 void lcd_time() {
 	unsigned char str[16];
+	static uint8_t oldlocked = 0xff;
 
 	localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
 	timeinfo = *localtime(&localepochtime);
 	strftime(sbuffer, sizeof(sbuffer), "%H:%M:%S", &timeinfo);
 	setlcdtext("t0.txt", sbuffer);
 
-	if (gpslocked) {
-		writelcdcmd("vis t3,0");	// hide warning
-		writelcdcmd("vis t1,1");	// show date
-	} else {
-		writelcdcmd("vis t1,0");	// hide date
-		sprintf(str, "UNLOCK GPS %d", statuspkt.NavPvt.numSV);
-		setlcdtext("t3.txt", str);
-		writelcdcmd("vis t3,1");
+	if (gpslocked != oldlocked) {
+		if (gpslocked) {
+			writelcdcmd("vis t3,0");	// hide warning
+			writelcdcmd("vis t1,1");	// show date
+		} else {
+			writelcdcmd("vis t1,0");	// hide date
+			sprintf(str, "UNLOCK GPS %d", statuspkt.NavPvt.numSV);
+			setlcdtext("t3.txt", str);
+			writelcdcmd("vis t3,1");	// show warning
+		}
+		oldlocked = gpslocked;
 	}
 }
 
@@ -1216,7 +1229,7 @@ lcd_controls() {
 	if (our_currentpage == 4) {		// if currently displaying on LCD
 		setlcdtext("t0.txt", "Sound");
 		setlcdtext("t1.txt", "LEDS");
-		setlcdtext("t2.txt", "LCD Brightness");
+//		setlcdtext("t2.txt", "LCD Brightness");
 //	sprintf(str,"%s Control Server IP: %lu.%lu.%lu.%lu", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 //			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
 		sprintf(str, "Target UDP host: %s\n", udp_target);
@@ -1246,33 +1259,32 @@ lcd_init(int rqbaud) {
 	writelcdcmd("page 0");
 }
 
-
 // display starting up items
 lcd_starting() {
 	static int i = 0;
 	char str[82] = { "empty" };
 
-		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
-		switch (i & 3) {
-		case 0:
-			writelcdcmd(strcat(str, ".\""));
-			break;
-		case 1:
-			writelcdcmd(strcat(str, "..\""));
-			break;
-		case 2:
-			writelcdcmd(strcat(str, "...\""));
-			break;
-		case 3:
-			writelcdcmd(strcat(str, "....\""));
-			break;
-		}
-		i++;
-		osDelay(250);
+	strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
+	switch (i & 3) {
+	case 0:
+		writelcdcmd(strcat(str, ".\""));
+		break;
+	case 1:
+		writelcdcmd(strcat(str, "..\""));
+		break;
+	case 2:
+		writelcdcmd(strcat(str, "...\""));
+		break;
+	case 3:
+		writelcdcmd(strcat(str, "....\""));
+		break;
+	}
+	i++;
+	osDelay(250);
 
-		if (!(netif_is_link_up(&gnetif))) {
-			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
-		}
+	if (!(netif_is_link_up(&gnetif))) {
+		writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
+	}
 //	}
 #if 0
 	lcduart_error = HAL_UART_ERROR_NONE;
@@ -1282,7 +1294,6 @@ lcd_starting() {
 	writelcdcmd("page 0");
 #endif
 }
-
 
 init_nextion() {
 	int i;
