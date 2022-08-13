@@ -7912,8 +7912,8 @@ int lcd_event_process(void) {
  80035de:	78a3      	ldrb	r3, [r4, #2]
  80035e0:	2b06      	cmp	r3, #6
  80035e2:	f000 80b1 	beq.w	8003748 <lcd_event_process+0x350>
-				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 8)) {		// p4 reset button
- 80035e6:	2b08      	cmp	r3, #8
+				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
+ 80035e6:	2b07      	cmp	r3, #7
  80035e8:	f000 80d1 	beq.w	800378e <lcd_event_process+0x396>
 				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 2)) {		// p4 sound radio button
  80035ec:	2b02      	cmp	r3, #2
@@ -8122,11 +8122,11 @@ int lcd_event_process(void) {
  800377a:	9b02      	ldr	r3, [sp, #8]
  800377c:	3301      	adds	r3, #1
  800377e:	d014      	beq.n	80037aa <lcd_event_process+0x3b2>
-				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 8)) {		// p4 reset button
+				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
  8003780:	7863      	ldrb	r3, [r4, #1]
 	return (result);
  8003782:	9a02      	ldr	r2, [sp, #8]
-				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 8)) {		// p4 reset button
+				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
  8003784:	2b04      	cmp	r3, #4
  8003786:	f47f aef2 	bne.w	800356e <lcd_event_process+0x176>
  800378a:	78a3      	ldrb	r3, [r4, #2]

@@ -779,7 +779,7 @@ int lcd_event_process(void) {
 					setlcddim(lcdbright);
 				}
 
-				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 8)) {		// p4 reset button
+				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
 					printf("Reboot touch\n");
 					osDelay(100);
 					rebootme();
