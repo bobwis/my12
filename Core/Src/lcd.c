@@ -904,8 +904,7 @@ void lcd_gps(void) {
 	unsigned char str[64], gridsquare[16];
 	double lat, lon, acc;
 	uint32_t sats, col;
-	static uint8_t vis = 0, oldsats = 0;
-	static uint32_t oldcol = 0;
+	static uint8_t vis = 0;
 
 	if (our_currentpage != 0)
 		return;
@@ -919,7 +918,7 @@ void lcd_gps(void) {
 
 		acc = statuspkt.NavPvt.hAcc / 1000.0;
 
-		sprintf(str,"HAcc:%.02fm\\rPres:%d.%03d",acc,pressure, pressfrac>>2);
+		sprintf(str, "HAcc:%.02fm\\rPres:%d.%03d", acc, pressure, pressfrac >> 2);
 		setlcdtext("t5.txt", str);
 
 	} else {
@@ -930,30 +929,25 @@ void lcd_gps(void) {
 	// number of satellites
 	sats = statuspkt.NavPvt.numSV;
 
-	sprintf(str, "Sats:%u", sats);
-	setlcdtext("t4.txt", str);
+	(vis++);
 	if (sats < 4)
 		col = 0xf800;		// red
 	else if (sats < 6)
 		col = 0xf6c0;		// dark yellow
 	else
 		col = 0xffff;		// white
-	if (oldcol != col) {
-		setlcdbin("t4.pco", col);
-		oldcol = col;
-	}
+	setlcdbin("t4.pco", col);
 
 	if (sats < 5) {
-		if (vis++ & 1)
-			writelcdcmd("vis t4,1");		// flashing
+		if (vis & 1)
+			writelcdcmd("vis t4,1");		// flashing on
 		else
 			writelcdcmd("vis t4,0");
 	} else {
-		if (oldsats != sats) {
-			writelcdcmd("vis t4,1");
-			oldsats = sats;
-		}
+		writelcdcmd("vis t4,1");
 	}
+	sprintf(str, "Sats:%u", sats);
+	setlcdtext("t4.txt", str);
 }
 
 // send the time to t0.txt

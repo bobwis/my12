@@ -348,10 +348,10 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 					}
 
 					if (p1 == 2) {		// freeze the UDP streaming
-						globalfreeze = 1;
+						globalfreeze |= 1;
 						printf("Server -> commands a streaming freeze\n");
 					} else
-						globalfreeze = 0;
+						globalfreeze &= ~1;
 					// falls through
 
 				case 2: 							// converted  2 fields

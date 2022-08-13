@@ -96,6 +96,7 @@ extern struct statpkt {
 //extern __attribute__((aligned(4),packed)) CHALLENGE;
 
 extern uint8_t gpslocked;		// Gps locked flag;
+extern uint16_t gpsfake;	// fake GPS when set
 extern uint8_t epochvalid;		// have we have worked out the epoch seconds?;
 // set up the newo7 as we want it
 extern HAL_StatusTypeDef setupneo(void);

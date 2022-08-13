@@ -219,6 +219,7 @@ char snstr[164] = { "\"No S/N\"" };
 char statstr[264] = { "\"No status\"" };
 char gpsstr[64] = { "\"No GPS data\"" };
 uint16_t agc = 1;	// agc enable > 0
+uint16_t gpsfake = 0;	// fake GPS when set
 uint32_t myip;
 uint32_t uip;		// udp target
 QueueHandle_t consolerxq;
@@ -1958,8 +1959,6 @@ void netif_link_callbk_fn(struct netif *netif) {
 	}
 }
 
-
-
 // dma for DAC finished callback
 void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac) {
 	HAL_DAC_Stop_DMA(hdac, DAC_CHANNEL_1);
@@ -2215,7 +2214,7 @@ printf("*** TESTING BUILD USED ***\n");
 
 	initialapisn();									// get initial s/n and UDP target from http server; reboots if fails
 	osDelay(3000);		// wait for server to populate us (ZZZ)
-					// refresh the hardware watchdog reset system timer
+	// refresh the hardware watchdog reset system timer
 
 	if (http_downloading) {
 		printf("STM Downloading...\n");
@@ -2279,7 +2278,6 @@ void uart2_rxdone() {
 
 /* USER CODE END 5 */
 
-
 /* USER CODE BEGIN Header_StarLPTask */
 /**
  * @brief Function implementing the LPTask thread.
@@ -2317,14 +2315,14 @@ void StarLPTask(void const *argument) {
 
 	osDelay(10);
 	if (http_downloading) {		// don't go further
-		while (http_downloading)  {
+		while (http_downloading) {
 			osDelay(10);
 			HAL_IWDG_Refresh(&hiwdg);
 		}
 //		rebootme(0);
 	}
 
-	while (main_init_done == 0)	 {
+	while (main_init_done == 0) {
 		lcd_starting();
 		HAL_IWDG_Refresh(&hiwdg);
 	}
@@ -2353,13 +2351,31 @@ void StarLPTask(void const *argument) {
 		}
 
 		while (xQueueReceive(consolerxq, &inch, 0)) {
-			if (inch == 0x03) {		// control C
+			if (inch == 0x07) {  // control G
+				gpsfake = (gpsfake) ? 0 : 1;
+				printf("Fake GPS lock and UDP freeze is ");
+				if (gpsfake) {
+					printf("ON\n");
+					globalfreeze |= 2;
+				} else {
+					printf("OFF\n");
+					globalfreeze &= ~2;
+				}
+			}
+
+			if (inch == 0x06) {  // control F
+				printf("UDP freeze is off\n");
+				globalfreeze = 0;
+			}
+
+			if (inch == 0x03) {		// control C,  AGC man/auto
 				agc = (agc) ? 0 : 1;
 				printf("AGC is ");
-				if (agc)
+				if (agc) {
 					printf("ON\n");
-				else
+				} else {
 					printf("OFF\n");
+				}
 			}
 			if ((isdigit(inch)) && (agc == 0)) {
 				setpgagain(inch - '0');
@@ -2556,8 +2572,6 @@ void StarLPTask(void const *argument) {
 			lcd_trigplot();		// update lcd trigger and noise plots
 
 		}		// if 1 second timer hit
-
-
 
 		if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
 			lcd_gps();		// display the GPS on the LCD page 0
