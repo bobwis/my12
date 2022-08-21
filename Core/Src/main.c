@@ -1992,12 +1992,24 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 #else
 		diff = lastcap;
 #endif
-		statuspkt.clktrim = movavg(diff);
+		if ((lptask_init_done) && (gpslocked > 2)) {
+			if (abs(CCLK - diff) < 2160)		// its a real reading +- 10ppm
+				statuspkt.clktrim = movavg(diff);
+			else if (gpslocked > 18) {				// wait 16 +2
+				statuspkt.reserved2++;			// use reserved2 to show CCLK errors
+				printf("108MHz Clock was outside bounds: %u\n",diff);
+				gpslocked = 0;
+			}
+			lastcap = t2cap[0];			// dma has populated t2cap from Channel 3 trigger on Timer 2
+		} else {
+			lastcap = CCLK;
+			statuspkt.clktrim = CCLK;
+		}
 		/*		printf("TIM2 IC Callback CCR3=%08x, [0]%08xu, [1]%08x diff=%u, clktrim=%08x",
 		 htim->Instance->CCR3, t2cap[0], lastcap, diff, statuspkt.clktrim);
 		 printf(" globaladcavg=%u\n",globaladcavg);
 		 */
-		lastcap = t2cap[0];			// dma has populated t2cap from Channel 3 trigger on Timer 2
+
 	} else if (htim->Instance == TIM4) {
 		printf("Timer4 callback\n");
 	}
@@ -2066,6 +2078,7 @@ void StartDefaultTask(void const *argument) {
 	crc_rom();
 	printaline("");
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
+	strcpy(udp_target, SERVER_DESTINATION);
 
 #ifdef SPLAT1
 	cycleleds();
@@ -2310,7 +2323,6 @@ void StarLPTask(void const *argument) {
 		rebootme(0);
 	}
 
-	strcpy(udp_target, SERVER_DESTINATION);
 	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
 	osDelay(10);
@@ -2582,6 +2594,24 @@ void StarLPTask(void const *argument) {
 		if ((tenmstimer + 27) % 1000 == 0) {		// every 10 seconds
 
 //			tftp_example_init_client();
+
+// check PPS signal is actually running
+			if (gpslocked) {
+				if (rtseconds > 0) {		// rtseconds not just clicked over the minute
+					if ((rtseconds - statuspkt.NavPvt.sec) > 1)		// not expected
+							{
+						printf("PPS stuttering or not running?\n");
+						statuspkt.reserved2 += 65536;			// use reserved2 to show CCLK errors
+						gpslocked = 0;
+					}
+				} else	// rtseconds == 0
+				if (!((statuspkt.NavPvt.sec == 59) || (statuspkt.NavPvt.sec == 0))) { // not okay
+					printf("PPS stuttering or not running?\n");
+					statuspkt.reserved2 += 65536;			// use reserved2 to show CCLK errors
+					gpslocked = 0;
+				}
+			} else // unlocked
+				statuspkt.reserved2 = 0;		// clear all CCLK and PPS error counts
 
 #ifdef SPLAT1
 

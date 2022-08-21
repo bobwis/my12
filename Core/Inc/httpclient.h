@@ -74,7 +74,7 @@ struct hc_state {
 
 // Nextion http download buffer size
 #define NXDL_BUFF_SIZE 600
-#define DOWNLOAD_PORT 8082
+#define DOWNLOAD_PORT 8083
 
 
 // Public function

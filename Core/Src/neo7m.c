@@ -671,7 +671,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				statuspkt.epochsecs = calcepoch32(); // should not be needed if our 1 sec timer was accurate, also dbg desyncs this
 //printf("*%d ",statuspkt.epochsecs % 60);
 				if ((statuspkt.NavPvt.flags & 1) || (gpsfake)) { // locked or fake locked
-					gpslocked = 1;
+					if (gpslocked < 255)
+						gpslocked++;		// bump each time, limit at 255
 					if (statuspkt.NavPvt.flags & 1)	{ // actually, its now a real lock
 						gpsfake = 0;				// so turn off the fake lock
 						globalfreeze &= ~2;			// and allow udp detections to flow

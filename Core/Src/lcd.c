@@ -782,7 +782,7 @@ int lcd_event_process(void) {
 				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
 					printf("Reboot touch\n");
 					osDelay(100);
-					rebootme();
+					rebootme(0);
 				}
 
 				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 2)) {		// p4 sound radio button
@@ -1217,7 +1217,7 @@ void lcd_pressplot() {
 
 // refresh the entire control page on the lcd
 lcd_controls() {
-	unsigned char str[48];
+	unsigned char str[96];
 
 	osDelay(100);
 	if (our_currentpage == 4) {		// if currently displaying on LCD
@@ -1226,7 +1226,7 @@ lcd_controls() {
 //		setlcdtext("t2.txt", "LCD Brightness");
 //	sprintf(str,"%s Control Server IP: %lu.%lu.%lu.%lu", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 //			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-		sprintf(str, "Target UDP host: %s\n", udp_target);
+		sprintf(str, "UDP host: %s\\rTCP Port: %i", udp_target,DOWNLOAD_PORT);
 		setlcdtext("t3.txt", str);
 	}
 }

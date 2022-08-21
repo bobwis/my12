@@ -56,6 +56,9 @@
 #define STAT_TIME 120
 #endif
 
+// CPU half clock speed
+#define  CCLK  108000000
+
 #ifndef TESTING
 #if 1
 #define HARDWARE_WATCHDOG 1

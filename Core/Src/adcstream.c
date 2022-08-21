@@ -472,7 +472,7 @@ void startadc() {
 //	adcbufdum1 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer
 //	adcbufdum2 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer
 
-	statuspkt.clktrim = 108000000;
+	statuspkt.clktrim = CCLK;
 	statuspkt.adcpktssent = 0;
 
 	printf("Starting ADC DMA\n");

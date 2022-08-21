@@ -6,6 +6,7 @@
  */
 #include "stm32f7xx_hal.h"
 #include <stdio.h>
+#include "version.h"
 #include "mydebug.h"
 
 /* We need to implement own __FILE struct */
@@ -133,15 +134,15 @@ inline void gpioeclr(uint32_t clrbits) {
 // moving avg, used by:-
 // clktrim
 uint32_t movavg(uint32_t new) {
-	static uint32_t data[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	static uint32_t mdata[16] = { CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK, CCLK };
 	int i;
 	uint32_t sum = 0;
 
 	for (i = 0; i < 15; i++) {
-		data[i] = data[i + 1];		// old data is low index
-		sum += data[i];
+		mdata[i] = mdata[i + 1];		// old data is low index
+		sum += mdata[i];
 	}
-	data[15] = new;		// new data at the end
+	mdata[15] = new;		// new data at the end
 	sum += new;
 
 	return (sum >> 4);
