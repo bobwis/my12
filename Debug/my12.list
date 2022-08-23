@@ -5906,7 +5906,7 @@ void lcd_time() {
  8002886:	9204      	str	r2, [sp, #16]
  8002888:	f8d3 2424 	ldr.w	r2, [r3, #1060]	; 0x424
  800288c:	9203      	str	r2, [sp, #12]
- 800288e:	f242 7234 	movw	r2, #10036	; 0x2734
+ 800288e:	f242 7235 	movw	r2, #10037	; 0x2735
  8002892:	f8d3 1420 	ldr.w	r1, [r3, #1056]	; 0x420
  8002896:	2314      	movs	r3, #20
  8002898:	e9cd 2000 	strd	r2, r0, [sp]
@@ -8548,7 +8548,7 @@ void lcd_startdl(int filesize) {
  8003a6c:	f44f 7096 	mov.w	r0, #300	; 0x12c
  8003a70:	f012 fea4 	bl	80167bc <osDelay>
 		sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
- 8003a74:	f242 7334 	movw	r3, #10036	; 0x2734
+ 8003a74:	f242 7335 	movw	r3, #10037	; 0x2735
  8003a78:	4622      	mov	r2, r4
  8003a7a:	4929      	ldr	r1, [pc, #164]	; (8003b20 <init_nextion+0xf0>)
  8003a7c:	9300      	str	r3, [sp, #0]
@@ -9645,7 +9645,7 @@ void StarLPTask(void const *argument) {
  800423c:	f3c3 2207 	ubfx	r2, r3, #8, #8
  8004240:	b2db      	uxtb	r3, r3
  8004242:	9200      	str	r2, [sp, #0]
- 8004244:	f242 7234 	movw	r2, #10036	; 0x2734
+ 8004244:	f242 7235 	movw	r2, #10037	; 0x2735
  8004248:	f022 fb3c 	bl	80268c4 <iprintf>
 			printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n",
  800424c:	4b5d      	ldr	r3, [pc, #372]	; (80043c4 <StarLPTask+0x4d8>)
@@ -12391,7 +12391,7 @@ void StartDefaultTask(void const *argument) {
 	printf("%s----------------------------------------------------------------------------\n", str);
  800568c:	49ba      	ldr	r1, [pc, #744]	; (8005978 <StartDefaultTask+0x31c>)
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
- 800568e:	f242 7834 	movw	r8, #10036	; 0x2734
+ 800568e:	f242 7835 	movw	r8, #10037	; 0x2735
 	printf("%s----------------------------------------------------------------------------\n", str);
  8005692:	48ba      	ldr	r0, [pc, #744]	; (800597c <StartDefaultTask+0x320>)
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
@@ -21822,7 +21822,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
  80090d0:	4293      	cmp	r3, r2
  80090d2:	d0a1      	beq.n	8009018 <returnpage+0x18>
  80090d4:	4a75      	ldr	r2, [pc, #468]	; (80092ac <returnpage+0x2ac>)
- 80090d6:	f242 7334 	movw	r3, #10036	; 0x2734
+ 80090d6:	f242 7335 	movw	r3, #10037	; 0x2735
  80090da:	6812      	ldr	r2, [r2, #0]
  80090dc:	429a      	cmp	r2, r3
  80090de:	d09b      	beq.n	8009018 <returnpage+0x18>
@@ -21995,7 +21995,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
  8009204:	e732      	b.n	800906c <returnpage+0x6c>
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
  8009206:	4b29      	ldr	r3, [pc, #164]	; (80092ac <returnpage+0x2ac>)
- 8009208:	f242 7134 	movw	r1, #10036	; 0x2734
+ 8009208:	f242 7135 	movw	r1, #10037	; 0x2735
  800920c:	4839      	ldr	r0, [pc, #228]	; (80092f4 <returnpage+0x2f4>)
  800920e:	681a      	ldr	r2, [r3, #0]
  8009210:	f01d fb58 	bl	80268c4 <iprintf>
@@ -22137,7 +22137,7 @@ void initialapisn() {
 	sprintf(params, "?bld=%d\&ip=%s\&nx=%s", BUILDNO, localip, nex_model);
  8009340:	4830      	ldr	r0, [pc, #192]	; (8009404 <initialapisn+0xe8>)
  8009342:	ab04      	add	r3, sp, #16
- 8009344:	f242 7234 	movw	r2, #10036	; 0x2734
+ 8009344:	f242 7235 	movw	r2, #10037	; 0x2735
  8009348:	492f      	ldr	r1, [pc, #188]	; (8009408 <initialapisn+0xec>)
  800934a:	9000      	str	r0, [sp, #0]
  800934c:	a80a      	add	r0, sp, #40	; 0x28
