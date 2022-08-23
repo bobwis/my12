@@ -129,6 +129,7 @@ extern uint32_t lcdlen;
 
 extern uint32_t dl_filecrc;
 extern int lptask_init_done;		// zero when lptask is not finished its init
+extern char lcd_err_msg[16];
 
 #endif /* NEO7M_H_ */
 

@@ -69,6 +69,7 @@ char lcdfile[32];		// lcd file name on host
 char fwfilename[32];	// stm firmware filename
 char loaderhost[48] = "192.168.0.248";
 uint32_t lcdlen;
+char lcd_err_msg[16] = {0};	// lcd error message or trigger message
 
 inline int cycinc(int index, int limit) {
 	if (++index >= limit)
@@ -952,97 +953,108 @@ void lcd_gps(void) {
 
 // send the time to t0.txt
 void lcd_time() {
-	unsigned char str[16];
+	unsigned char str[16], errmsg[48];
 	static uint8_t oldlocked = 0xff;
+	static int trigs = 0;
 
-	localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
-	timeinfo = *localtime(&localepochtime);
-	strftime(sbuffer, sizeof(sbuffer), "%H:%M:%S", &timeinfo);
-	setlcdtext("t0.txt", sbuffer);
 
-	if (gpslocked != oldlocked) {
-		if (gpslocked) {
-			writelcdcmd("vis t3,0");	// hide warning
-			writelcdcmd("vis t1,1");	// show date
+		if (lcd_err_msg[0] != '\0') {
+			setlcddim(99);
+			dimtimer = 60000;
+			sprintf(errmsg, "xstr 21,17,442,110,7,0,65504,1,1,1,%s", lcd_err_msg);
+			writelcdcmd(errmsg);
+			lcd_err_msg[0] = '\0';
 		} else {
-			writelcdcmd("vis t1,0");	// hide date
-			sprintf(str, "UNLOCK GPS %d", statuspkt.NavPvt.numSV);
-			setlcdtext("t3.txt", str);
-			writelcdcmd("vis t3,1");	// show warning
+			localepochtime = epochtime + (time_t) (10 * 60 * 60);		// add ten hours
+			timeinfo = *localtime(&localepochtime);
+			strftime(sbuffer, sizeof(sbuffer), "%H:%M:%S", &timeinfo);
+			setlcdtext("t0.txt", sbuffer);
+
+			if (gpslocked != oldlocked) {
+				if (gpslocked) {
+					writelcdcmd("vis t3,0");	// hide warning
+					writelcdcmd("vis t1,1");	// show date
+				} else {
+					writelcdcmd("vis t1,0");	// hide date
+					sprintf(str, "UNLOCK GPS %d", statuspkt.NavPvt.numSV);
+					setlcdtext("t3.txt", str);
+					writelcdcmd("vis t3,1");	// show warning
+				}
+				oldlocked = gpslocked;
+			}
 		}
-		oldlocked = gpslocked;
 	}
-}
 
 // send the date to t1.txt (assumes timeinfo is current)
-void lcd_date() {
+	void lcd_date() {
 
-	lastday = timeinfo.tm_yday;
-	strftime(sbuffer, sizeof(sbuffer), "%a %e %h %Y ", &timeinfo);
-	setlcdtext("t1.txt", sbuffer);
-}
+		lastday = timeinfo.tm_yday;
+		strftime(sbuffer, sizeof(sbuffer), "%a %e %h %Y ", &timeinfo);
+		setlcdtext("t1.txt", sbuffer);
+	}
 
 // populate the page2 vars
-void lcd_showvars() {
-	unsigned char str[96];
-	unsigned long board;
-	static uint16_t toggle = 0;
+	void lcd_showvars() {
+		unsigned char str[96];
+		unsigned long board;
+		static uint16_t toggle = 0;
 
-	switch (toggle) {
-	case 0:
-		sprintf(str, "%d.%d.%d.%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
-				(myip & 0xFF000000) >> 24);
-		setlcdtext("t11.txt", str);
-		sprintf(str, "%d", statuspkt.uid);
-		setlcdtext("t10.txt", str);
-		sprintf(str, "%d", statuspkt.adcpktssent);
-		setlcdtext("t9.txt", str);
-		sprintf(str, "%d", (globaladcavg & 0xfff));  // base
-		setlcdtext("t8.txt", str);
-		sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
-		setlcdtext("t7.txt", str);
-		sprintf(str, "%d", pgagain);	// gain
-		setlcdtext("t6.txt", str);
-		sprintf(str, "%d", statuspkt.adcudpover);	// overuns
-		setlcdtext("t24.txt", str);
-		toggle = 1;
-		break;
+		switch (toggle) {
+		case 0:
+			sprintf(str, "%d.%d.%d.%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
+					(myip & 0xFF000000) >> 24);
+			setlcdtext("t11.txt", str);
+			sprintf(str, "%d", statuspkt.uid);
+			setlcdtext("t10.txt", str);
+			sprintf(str, "%d", statuspkt.adcpktssent);
+			setlcdtext("t9.txt", str);
+			sprintf(str, "%d", (globaladcavg & 0xfff));  // base
+			setlcdtext("t8.txt", str);
+			sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
+			setlcdtext("t7.txt", str);
+			sprintf(str, "%d", pgagain);	// gain
+			setlcdtext("t6.txt", str);
+			sprintf(str, "%d", statuspkt.adcudpover);	// overuns
+			setlcdtext("t24.txt", str);
+			toggle = 1;
+			break;
 
-	case 1:
-		sprintf(str, "%d", statuspkt.NavPvt.numSV);	// satellites
-		setlcdtext("t0.txt", str);
-		sprintf(str, "%d", statuspkt.NavPvt.lat);	// latitude
-		setlcdtext("t1.txt", str);
-		sprintf(str, "%d", statuspkt.NavPvt.lon);	// longtitude
-		setlcdtext("t2.txt", str);
-		sprintf(str, "%d", statuspkt.NavPvt.height);	// height
-		setlcdtext("t3.txt", str);
-		toggle = 2;
-		break;
+		case 1:
+			sprintf(str, "%d", statuspkt.NavPvt.numSV);	// satellites
+			setlcdtext("t0.txt", str);
+			sprintf(str, "%d", statuspkt.NavPvt.lat);	// latitude
+			setlcdtext("t1.txt", str);
+			sprintf(str, "%d", statuspkt.NavPvt.lon);	// longtitude
+			setlcdtext("t2.txt", str);
+			sprintf(str, "%d", statuspkt.NavPvt.height);	// height
+			setlcdtext("t3.txt", str);
+			toggle = 2;
+			break;
 
-	case 2:
-		sprintf(str, "%d", statuspkt.trigcount);	// trigger count
-		setlcdtext("t4.txt", str);
-		sprintf(str, "%d", statuspkt.sysuptime);	// system up time
-		setlcdtext("t5.txt", str);
-		toggle = 3;
-		break;
+		case 2:
+			sprintf(str, "%d", statuspkt.trigcount);	// trigger count
+			setlcdtext("t4.txt", str);
+			sprintf(str, "%d", statuspkt.sysuptime);	// system up time
+			setlcdtext("t5.txt", str);
+			toggle = 3;
+			break;
 
-	case 3:
-		sprintf(str, "Ver %d.%d Build:%d PCB=%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, circuitboardpcb,
-		STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
+		case 3:
+			sprintf(str, "Ver %d.%d Build:%d PCB=%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD,
+					circuitboardpcb,
+					STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 //		sprintf(str, "Ver %d.%d, Build:%d\\rUID=%lx %lx %lx", MAJORVERSION, MINORVERSION, BUILD, STM32_UUID[0],
 //				STM32_UUID[1], STM32_UUID[2]);
-		setlcdtext("t26.txt", str);
-		toggle = 0;
-		break;
+			setlcdtext("t26.txt", str);
+			toggle = 0;
+			break;
+		}
 	}
-}
 
 // display / refresh  the entire trigger and noise chart
-void lcd_trigcharts() {
-	int i, buffi;
-	unsigned char str[32];
+	void lcd_trigcharts() {
+		int i, buffi;
+		unsigned char str[32];
 
 #if 0
 for (i=0; i<LCDXPIXELS; i++) {
@@ -1051,234 +1063,236 @@ for (i=0; i<LCDXPIXELS; i++) {
 #endif
 
 // refresh the labels as pior page queued commands can clobber them
-	setlcdtext("t3.txt", "Triggers");
-	setlcdtext("t18.txt", "Triggers");
-	setlcdtext("t4.txt", "Noise");
-	setlcdtext("t1.txt", "Noise");
-
-	sprintf(str, "%d", statuspkt.trigcount);	// trigger count
-	setlcdtext("t0.txt", str);
-	sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
-	setlcdtext("t2.txt", str);
-
-//	writelcdcmd("tsw b2,0");	// disable touch controls
-	writelcdcmd("b2.bco=123" /*23275*/);		// dark grey
-	buffi = trigindex;
-	for (i = 0; i < LCDXPIXELS; i++) {
-		if (our_currentpage != 2)		// impatient user
-			return;
-		sprintf(str, "add 2,0,%d", trigvec[buffi]);
-		writelcdcmd(str);
-		osDelay(15);
-
-		sprintf(str, "add 5,0,%d", noisevec[buffi]);
-		writelcdcmd(str);
-		osDelay(15);
-
-		buffi++;
-		if (buffi > LCDXPIXELS)
-			buffi = 0;
-	}
-//	writelcdcmd("tsw b2,1");	// enable touch controls
-	writelcdcmd("b2.bco=63422");		// normal grey
-}
-
-// called at regular intervals to add a point to the display
-// update lcd trigger and noise plot memory,
-// the page display may not be showing  ( 120 pix height)
-void lcd_trigplot() {
-	int val;
-	static uint32_t lasttrig;
-	unsigned char str[32];
-
-// process the triggers
-	val = statuspkt.trigcount - lasttrig;	// difference in trigs since last time
-	lasttrig = statuspkt.trigcount;
-	val = val * 32;		// scale up: n pixels per trigger
-
-	if (val >= 120)
-		val = 119;		// max Y
-	trigvec[trigindex] = val;
-
-// process the noise
-	val = abs(meanwindiff) & 0xfff;
-//	val = globaladcnoise;
-
-	if (val < 0)
-		val = 0;
-
-	if (val >= 120)
-		val = 119;		// max Y
-	noisevec[trigindex] = val;
-
-	if (our_currentpage == 2) {		// if currently displaying on LCD
-
 		setlcdtext("t3.txt", "Triggers");
 		setlcdtext("t18.txt", "Triggers");
 		setlcdtext("t4.txt", "Noise");
 		setlcdtext("t1.txt", "Noise");
-
-		sprintf(str, "add 2,0,%d", trigvec[trigindex]);
-		writelcdcmd(str);
-		sprintf(str, "add 5,0,%d", noisevec[trigindex]);
-		writelcdcmd(str);
 
 		sprintf(str, "%d", statuspkt.trigcount);	// trigger count
 		setlcdtext("t0.txt", str);
 		sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
 		setlcdtext("t2.txt", str);
 
-		// bring chart labels to the front
-		writelcdcmd("vis t3,1");
-		writelcdcmd("vis t4,1");
+//	writelcdcmd("tsw b2,0");	// disable touch controls
+		writelcdcmd("b2.bco=123" /*23275*/);		// dark grey
+		buffi = trigindex;
+		for (i = 0; i < LCDXPIXELS; i++) {
+			if (our_currentpage != 2)		// impatient user
+				return;
+			sprintf(str, "add 2,0,%d", trigvec[buffi]);
+			writelcdcmd(str);
+			osDelay(15);
+
+			sprintf(str, "add 5,0,%d", noisevec[buffi]);
+			writelcdcmd(str);
+			osDelay(15);
+
+			buffi++;
+			if (buffi > LCDXPIXELS)
+				buffi = 0;
+		}
+//	writelcdcmd("tsw b2,1");	// enable touch controls
+		writelcdcmd("b2.bco=63422");		// normal grey
 	}
 
-	trigindex++;
-	if (trigindex >= LCDXPIXELS)
-		trigindex = 0;
-}
+// called at regular intervals to add a point to the display
+// update lcd trigger and noise plot memory,
+// the page display may not be showing  ( 120 pix height)
+	void lcd_trigplot() {
+		int val;
+		static uint32_t lasttrig;
+		unsigned char str[32];
+
+// process the triggers
+		val = statuspkt.trigcount - lasttrig;	// difference in trigs since last time
+		lasttrig = statuspkt.trigcount;
+		val = val * 32;		// scale up: n pixels per trigger
+
+		if (val >= 120)
+			val = 119;		// max Y
+		trigvec[trigindex] = val;
+
+// process the noise
+		val = abs(meanwindiff) & 0xfff;
+//	val = globaladcnoise;
+
+		if (val < 0)
+			val = 0;
+
+		if (val >= 120)
+			val = 119;		// max Y
+		noisevec[trigindex] = val;
+
+		if (our_currentpage == 2) {		// if currently displaying on LCD
+
+			setlcdtext("t3.txt", "Triggers");
+			setlcdtext("t18.txt", "Triggers");
+			setlcdtext("t4.txt", "Noise");
+			setlcdtext("t1.txt", "Noise");
+
+			sprintf(str, "add 2,0,%d", trigvec[trigindex]);
+			writelcdcmd(str);
+			sprintf(str, "add 5,0,%d", noisevec[trigindex]);
+			writelcdcmd(str);
+
+			sprintf(str, "%d", statuspkt.trigcount);	// trigger count
+			setlcdtext("t0.txt", str);
+			sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
+			setlcdtext("t2.txt", str);
+
+			// bring chart labels to the front
+			writelcdcmd("vis t3,1");
+			writelcdcmd("vis t4,1");
+		}
+
+		trigindex++;
+		if (trigindex >= LCDXPIXELS)
+			trigindex = 0;
+	}
 
 /// PRESSURE //////////////
 // display / refresh  the entire pressure chart
-void lcd_presscharts() {
-	int i, buffi;
-	unsigned char str[32];
+	void lcd_presscharts() {
+		int i, buffi;
+		unsigned char str[32];
 
 // refresh the labels as pior page queued commands can clobber them
-	setlcdtext("t3.txt", "Pressure");
-	setlcdtext("t18.txt", "Pressure");
+		setlcdtext("t3.txt", "Pressure");
+		setlcdtext("t18.txt", "Pressure");
 
-	sprintf(str, "%d.%03d kPa", pressure, pressfrac >> 2);	// pressure
-	setlcdtext("t0.txt", str);
+		sprintf(str, "%d.%03d kPa", pressure, pressfrac >> 2);	// pressure
+		setlcdtext("t0.txt", str);
 
 //	writelcdcmd("tsw b2,1");	// enable touch controls
-	writelcdcmd("b2.bco=123");		// normal grey
-	buffi = pressindex;
-	for (i = 0; i < LCDXPIXELS; i++) {
-		if (our_currentpage != 3)		// impatient user
-			return;
-		sprintf(str, "add 2,0,%d", pressvec[buffi]);
-		writelcdcmd(str);
-		osDelay(15);
+		writelcdcmd("b2.bco=123");		// normal grey
+		buffi = pressindex;
+		for (i = 0; i < LCDXPIXELS; i++) {
+			if (our_currentpage != 3)		// impatient user
+				return;
+			sprintf(str, "add 2,0,%d", pressvec[buffi]);
+			writelcdcmd(str);
+			osDelay(15);
 
-		buffi++;
-		if (buffi > LCDXPIXELS)
-			buffi = 0;
-	}
+			buffi++;
+			if (buffi > LCDXPIXELS)
+				buffi = 0;
+		}
 //	writelcdcmd("tsw b2,0");	// disable touch controls
-	writelcdcmd("b2.bco=63422");		// normal grey
-}
+		writelcdcmd("b2.bco=63422");		// normal grey
+	}
 
 // called at regular intervals to add a point to the display
 // update lcd pressure memory,
 // the page display may not be showing  (240 pix height)
-void lcd_pressplot() {
-	volatile int p, pf, val;
-	unsigned char str[32];
+	void lcd_pressplot() {
+		volatile int p, pf, val;
+		unsigned char str[32];
 
-	p = pressure;
-	pf = pressfrac >> 2;		// frac base was in quarters
+		p = pressure;
+		pf = pressfrac >> 2;		// frac base was in quarters
 
-	p = pressure * 1000 + pf;
-	if (p < 93000)
-		p = 93000;		// 93 HPa
-	if (p > 103000)
-		p - 103000;		// 103 HPa
+		p = pressure * 1000 + pf;
+		if (p < 93000)
+			p = 93000;		// 93 HPa
+		if (p > 103000)
+			p - 103000;		// 103 HPa
 
-	p = p - 93000;
-	val = p / (10000 / 240);		// scale for 240 Y steps on chart
+		p = p - 93000;
+		val = p / (10000 / 240);		// scale for 240 Y steps on chart
 
 //	printf("pressure for LCD %d", val);
 
 //	val = rand() & 0xFF;  // 0 - 255
 
-	if (val < 0)
-		val = 0;
-	if (val >= 240)
-		val = 239;		// max Y
-	pressvec[pressindex] = val;
+		if (val < 0)
+			val = 0;
+		if (val >= 240)
+			val = 239;		// max Y
+		pressvec[pressindex] = val;
 
-	if (our_currentpage == 3) {		// if currently displaying on LCD
+		if (our_currentpage == 3) {		// if currently displaying on LCD
 
-		sprintf(str, "add 2,0,%d", pressvec[pressindex]);
-		writelcdcmd(str);
+			sprintf(str, "add 2,0,%d", pressvec[pressindex]);
+			writelcdcmd(str);
 
-		sprintf(str, "%d.%03d kPa", pressure, pressfrac >> 2);	// pressure
-		setlcdtext("t0.txt", str);
+			sprintf(str, "%d.%03d kPa", pressure, pressfrac >> 2);	// pressure
+			setlcdtext("t0.txt", str);
 
-		// bring chart labels to the front
-		writelcdcmd("vis t3,1");
+			// bring chart labels to the front
+			writelcdcmd("vis t3,1");
+		}
+
+		pressindex++;
+		if (pressindex >= LCDXPIXELS)
+			pressindex = 0;
 	}
 
-	pressindex++;
-	if (pressindex >= LCDXPIXELS)
-		pressindex = 0;
-}
-
 // refresh the entire control page on the lcd
-lcd_controls() {
-	unsigned char str[96];
+	lcd_controls()
+	{
+		unsigned char str[96];
 
-	osDelay(100);
-	if (our_currentpage == 4) {		// if currently displaying on LCD
-		setlcdtext("t0.txt", "Sound");
-		setlcdtext("t1.txt", "LEDS");
+		osDelay(100);
+		if (our_currentpage == 4) {		// if currently displaying on LCD
+			setlcdtext("t0.txt", "Sound");
+			setlcdtext("t1.txt", "LEDS");
 //		setlcdtext("t2.txt", "LCD Brightness");
 //	sprintf(str,"%s Control Server IP: %lu.%lu.%lu.%lu", SERVER_DESTINATION, ip & 0xff, (ip & 0xff00) >> 8,
 //			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-		sprintf(str, "UDP host: %s\\rTCP Port: %i", udp_target,DOWNLOAD_PORT);
-		setlcdtext("t3.txt", str);
+			sprintf(str, "UDP host: %s\\rTCP Port: %i", udp_target, DOWNLOAD_PORT);
+			setlcdtext("t3.txt", str);
+		}
 	}
-}
 
 // try to set the baud to 230400
 // only assumes it could be at 9600 to begin with
-lcd_init(int rqbaud) {
-	lcduart_error = HAL_UART_ERROR_NONE;
+	lcd_init(int rqbaud) {
+		lcduart_error = HAL_UART_ERROR_NONE;
 
-	lcd_reset();		// command LCD reset at the current baudrate - it should switch to 9600
-	lcd_baud(9600);  // command LCD to 9600 from current (unknown) speed
-	lcd_uart_init(9600); // then change our uart baud to match
-	lcd_reset();	// command LCD reset at the current baudrate - it should switch to 9600
-	lcd_baud(9600);  // reset LCD (might be 2nd time or not)
-	osDelay(600);
+		lcd_reset();		// command LCD reset at the current baudrate - it should switch to 9600
+		lcd_baud(9600);// command LCD to 9600 from current (unknown) speed
+		lcd_uart_init(9600);// then change our uart baud to match
+		lcd_reset();// command LCD reset at the current baudrate - it should switch to 9600
+		lcd_baud(9600);// reset LCD (might be 2nd time or not)
+		osDelay(600);
 
-	lcd_baud(rqbaud);  //  LCD *should* return in rqbuad baud
-	osDelay(600);
-	lcd_uart_init(rqbaud); // then change our baud to match
+		lcd_baud(rqbaud);//  LCD *should* return in rqbuad baud
+		osDelay(600);
+		lcd_uart_init(rqbaud);// then change our baud to match
 
-	osDelay(600);
-	lcduart_error = HAL_UART_ERROR_NONE;
+		osDelay(600);
+		lcduart_error = HAL_UART_ERROR_NONE;
 //	printf("nxt_baud:\n");
-	writelcdcmd("page 0");
-}
+		writelcdcmd("page 0");
+	}
 
 // display starting up items
-lcd_starting() {
-	static int i = 0;
-	char str[82] = { "empty" };
+	lcd_starting()
+	{
+		static int i = 0;
+		char str[82] = { "empty" };
 
-	strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
-	switch (i & 3) {
-	case 0:
-		writelcdcmd(strcat(str, ".\""));
-		break;
-	case 1:
-		writelcdcmd(strcat(str, "..\""));
-		break;
-	case 2:
-		writelcdcmd(strcat(str, "...\""));
-		break;
-	case 3:
-		writelcdcmd(strcat(str, "....\""));
-		break;
-	}
-	i++;
-	osDelay(250);
+		strcpy(str, "xstr 5,44,470,32,3,BLACK,WHITE,0,1,1,\"Starting");
+		switch (i & 3) {
+		case 0:
+			writelcdcmd(strcat(str, ".\""));
+			break;
+		case 1:
+			writelcdcmd(strcat(str, "..\""));
+			break;
+		case 2:
+			writelcdcmd(strcat(str, "...\""));
+			break;
+		case 3:
+			writelcdcmd(strcat(str, "....\""));
+			break;
+		}
+		i++;
+		osDelay(250);
 
-	if (!(netif_is_link_up(&gnetif))) {
-		writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
-	}
+		if (!(netif_is_link_up(&gnetif))) {
+			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NETWORK UNPLUGGED??\"");
+		}
 //	}
 #if 0
 	lcduart_error = HAL_UART_ERROR_NONE;
@@ -1287,31 +1301,32 @@ lcd_starting() {
 	lcduart_error = HAL_UART_ERROR_NONE;
 	writelcdcmd("page 0");
 #endif
-}
+	}
 
-init_nextion() {
-	int i;
-	char str[82] = { "empty" };
+	init_nextion()
+	{
+		int i;
+		char str[82] = { "empty" };
 
-	lcduart_error = HAL_UART_ERROR_NONE;
+		lcduart_error = HAL_UART_ERROR_NONE;
 
-	lcd_init(230400);
-	osDelay(300);
-	lcd_txblocked = 0;
-	writelcdcmd("cls BLACK");
-	osDelay(300);
-	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
-	BUILD);
-	lcduart_error = HAL_UART_ERROR_NONE;
-	writelcdcmd(str);
-	lcduart_error = HAL_UART_ERROR_NONE;
+		lcd_init(230400);
+		osDelay(300);
+		lcd_txblocked = 0;
+		writelcdcmd("cls BLACK");
+		osDelay(300);
+		sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
+		BUILD);
+		lcduart_error = HAL_UART_ERROR_NONE;
+		writelcdcmd(str);
+		lcduart_error = HAL_UART_ERROR_NONE;
 
-	osDelay(500);
-	lcd_getid();		// in the background
-	processnex();
+		osDelay(500);
+		lcd_getid();		// in the background
+		processnex();
 
-	osDelay(100);
-	lcd_getsys0();
-	processnex();
+		osDelay(100);
+		lcd_getsys0();
+		processnex();
 
-}
+	}
