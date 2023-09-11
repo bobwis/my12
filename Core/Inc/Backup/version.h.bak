@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 15
+#define MINORVERSION 22
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,7 +28,8 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10027
+// 22 Nov 2022
+#define BUILD 10039
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -42,19 +43,22 @@
 #define PNONE 0
 
 #endif	/* SPLAT1 */
-#endif /* VERSION_H_ */
+#endif
 
 // If we want localtime (+10H) not UTC, define LOCALTIME
 #if 1
 #define LOCALTIME
 #endif
 
-// Time between sending timesd status packets (seconds)
+// Time between sending timed status packets (seconds)
 #ifdef TESTING
 #define STAT_TIME 2
 #else
 #define STAT_TIME 120
 #endif
+
+// CPU half clock speed
+#define  CCLK  108000000
 
 #ifndef TESTING
 #if 1
@@ -68,12 +72,21 @@
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0
 
+
+#ifdef TESTING
+//#define SERVER_DESTINATION "lightning.local"
+//#define SERVER_DESTINATION "10.10.201.240"
+#define HTTP_CONTROL_SERVER "lsrv.vk4ya.com"
+#else
+#define HTTP_CONTROL_SERVER "lsrv.vk4ya.com"
+#endif
+
+
 /*
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(message) 	printf("mydebug LWIP: %s\n", message);
 */
-#endif
 
-
+#endif /* VERSION_H_ */
 
 

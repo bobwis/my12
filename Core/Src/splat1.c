@@ -131,7 +131,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
 
-	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register
+	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register a mapped value
 //	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
 
 	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
@@ -146,7 +146,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 
 	if (gain > 6) {		// might be a DC jump
-		sigsuppress = 8;		// prevent trigger for a while
+		sigsuppress = 100;		// prevent trigger for 100 ADC buffer times
 	}
 
 	if (gain > 7) {
@@ -507,48 +507,73 @@ HAL_StatusTypeDef getpressure3115(void) {
 HAL_StatusTypeDef initpressure3115(void)	// returns 1 on bad MPL3115, 0 on good.
 {
 	int i, step;
-	uint8_t data[8];
-	HAL_StatusTypeDef result;
+	volatile uint8_t data[8];
+	volatile HAL_StatusTypeDef result;
+
+	HAL_I2C_DeInit(&hi2c1);
+	HAL_I2C_Init(&hi2c1);
 
 	result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x0c, 1, &data[0], 1, 1000); // rd who am i register
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 1\n\r");
 		return (result);
 	}
-	if (data[0] != 0xc4)		// not the default MPL3115 ID
-		return (HAL_ERROR);
+
+	if (data[0] != 0xc4) {		// not the default MPL3115 ID)
+		printf("MPL3115 unexpected ID returned\n\r");
+		return (result);
+	}
 
 //HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
 #if 0
-	if (HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) {0x26, 0x3}, 2, 1000) != HAL_OK) {// set force software reset
-		printf("I2C HAL returned error 2a\n\r");
-	}
+if (HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) {0x26, 0x3}, 2, 1000) != HAL_OK) {// set force software reset
+	printf("I2C HAL returned error 2a\n\r");
+}
 
-	step = 0;
-	for (i = 0; i < 50; i++) {
-		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
-		if (result != HAL_OK) {
-			printf("Splat1-1 I2C HAL returned error %d\n\r", result);
-			return (result);
-		}
-		if (data[0] & 0x8) {
-			step = 1;
-			break;
-		}
-		osDelay(1);
-	} // for
+step = 0;
+for (i = 0; i < 50; i++) {
+	result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
+	if (result != HAL_OK) {
+		printf("Splat1-1 I2C HAL returned error %d\n\r", result);
+		return (result);
+	}
+	if (data[0] & 0x8) {
+		step = 1;
+		break;
+	}
+	osDelay(1);
+} // for
 //	if (step == 0) {
 //		printf("MPL3115A2 Pressure sensor not found\n\r");
 //		return (1);
 //	}
 #endif
-	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x38 }, 2, 1000);
-	// set pressure mode OSR=128 pressure sense
+
+osDelay(550);
+	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x04 /*0x38*/}, 2, 5000); // RST bit
+// HAL always return error - unknown reason
+//	if (result != HAL_OK) {
+//		printf("I2C HAL returned error 2b\n\r");
+//		return (result);
+//	}
+
+	osDelay(550);
+
+	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x01 }, 2, 1000); // initiate active measurement start
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 2b\n\r");
 		return (result);
 	}
-
+/*
+	for (i = 0; i < 20; i++) {
+		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
+		printf("CTLREG1=0x%0x2\n\r", data[0]);
+		if (result != HAL_OK) {
+			printf("Splat1-1 I2C HAL returned error %d\n\r", result);
+			return (result);
+		}
+	}
+*/
 	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x13, 0x07 }, 2, 1000); // enbl data flags pressure sense
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 3\n\r");
@@ -601,7 +626,7 @@ void init_esp() {
 		printfromesp();		// try to empty anything in the buffer
 		osDelay(1);
 	}
-	osDelay(200);	// wait for prnt to finish
+	osDelay(200);	// wait for print to finish
 	printf("\n");
 }
 
@@ -614,7 +639,7 @@ uart6_rxdone() {
 	if (esprxindex >= sizeof(esprxdatabuf))
 		esprxindex = 0;
 	if (esprxindex == espoutindex) {	// overrun
-		printf("*** ESP RX overrun......\n");
+//		printf("*** ESP RX overrun......\n");
 		esprxindex = i;
 	}
 }
@@ -628,7 +653,7 @@ void esp_cmd(unsigned char *buffer) {
 	strcpy(txbuf, buffer);
 	strcat(txbuf, "\r\n");
 	len = strlen(txbuf);
-	printf("Sending ESP: %s\n", txbuf);
+//	printf("Sending ESP: %s\n", txbuf);
 
 	stat = HAL_UART_Transmit_DMA(&huart6, &txbuf[0], len);	// send the command
 //	stat = HAL_UART_Transmit(&huart6, &txbuf[0], len, 1000);	// send the command
@@ -640,24 +665,39 @@ void esp_cmd(unsigned char *buffer) {
 void test_esp() {
 	static unsigned char getstatus[] = "AT+GMR";
 	HAL_StatusTypeDef stat;
-	int waitforoutput;
+	int j, waitforoutput;
 
-	printf("Testing if ESP responds to command:-\n");
+	j = 0;
+	printf("test_esp: Check if ESP responds to command:-\n");
 	osDelay(200);
 	esp_cmd(getstatus);	// send the command
 
 	for (waitforoutput = 0; waitforoutput < 1000; waitforoutput++) {
-		printfromesp();		// try to empty anything in the buffer
+		j = j + printfromesp();		// try to empty anything in the buffer
 		osDelay(1);
 	}
+
+	if (j > 10) {
+		printf("test_esp: ESP *is* talking with us\n");
+	}
+// finished testing
+	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
+
 }
 
-void printfromesp() {
+int printfromesp() {
+	int i = 0;
+
 	while (espoutindex != esprxindex) {
-		putchar(esprxdatabuf[espoutindex++]);
+		i++;
+
+		espoutindex++;
+//		putchar(esprxdatabuf[espoutindex++]);
+
 		if (espoutindex > sizeof(esprxdatabuf))
 			espoutindex = 0;
 	}
+	return i;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -674,6 +714,8 @@ void init_ds2485(void) {
 //HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
 
 	printf("init_ds2485\n");
+	HAL_I2C_DeInit(&hi2c1);
+	HAL_I2C_Init(&hi2c1);
 
 	data[0] = 0xAA;		// Read status cmd
 	data[1] = 0x01;		// cmd len
@@ -791,13 +833,12 @@ void initsplat(void) {
 		}
 		test_ds2485();
 		init_esp();
-		osDelay(500);
+		osDelay(100);
 		test_esp();
-		osDelay(200);
+		osDelay(100);
 	} else if (circuitboardpcb == LIGHTNINGBOARD1) {
 		test_ds2485();
 	}
-
-	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
 }
+
 #endif

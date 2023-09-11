@@ -521,7 +521,7 @@
  * (only needed if you use the sequential API, like api_lib.c)
  */
 #if !defined MEMP_NUM_NETBUF || defined __DOXYGEN__
-#define MEMP_NUM_NETBUF                 4
+#define MEMP_NUM_NETBUF                 2
 #endif
 
 /**
@@ -572,7 +572,7 @@
  * if DNS_LOCAL_HOSTLIST_IS_DYNAMIC==1.
  */
 #if !defined MEMP_NUM_LOCALHOSTLIST || defined __DOXYGEN__
-#define MEMP_NUM_LOCALHOSTLIST          4
+#define MEMP_NUM_LOCALHOSTLIST          1
 #endif
 
 /**
@@ -1708,7 +1708,7 @@
  * sending for each netif (0 = disabled)
  */
 #if !defined LWIP_LOOPBACK_MAX_PBUFS || defined __DOXYGEN__
-#define LWIP_LOOPBACK_MAX_PBUFS	2
+#define LWIP_LOOPBACK_MAX_PBUFS         0
 #endif
 
 /**
@@ -3515,6 +3515,5 @@
 /**
  * @}
  */
-
 
 #endif /* LWIP_HDR_OPT_H */

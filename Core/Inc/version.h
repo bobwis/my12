@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 20
+#define MINORVERSION 23
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,7 +28,8 @@
 #define SPLAT1
 #endif
 
-#define BUILD 10037
+// 21 May 2023 - updated IDE
+#define BUILD 10040
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -67,6 +68,7 @@
 
 #define SPLATBOARD1	11
 #define SPLATBOARD2 12
+// see 2136 in main.c - needs manual substitution of LIGHTNINGBOARD version
 #define LIGHTNINGBOARD1	21
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0
@@ -75,9 +77,9 @@
 #ifdef TESTING
 //#define SERVER_DESTINATION "lightning.local"
 //#define SERVER_DESTINATION "10.10.201.240"
-#define SERVER_DESTINATION "lightning.vk4ya.com"
+#define HTTP_CONTROL_SERVER "lsrv.vk4ya.com"
 #else
-#define SERVER_DESTINATION "lightning.vk4ya.com"
+#define HTTP_CONTROL_SERVER "lsrv.vk4ya.com"
 #endif
 
 

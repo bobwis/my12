@@ -17,7 +17,7 @@
 #define ADCBUFSIZE (UDPBUFSIZE-ADCBUFHEAD)
 
 #define TRIG_THRES 100		// adc trigger level above avg noise (is calculated when running, not fixed)
-#define MINTRIGTHRES 3		// minimum triiger threshold
+#define MINTRIGTHRES 6		// minimum trigger threshold
 
 typedef uint32_t adcbuffer[ADCBUFSIZE / 2];
 typedef uint16_t adc16buffer[ADCBUFSIZE];
@@ -61,8 +61,9 @@ extern uint32_t globaladcnoise;
 extern uint16_t pretrigthresh;		// pretrigger threshold
 extern int16_t meanwindiff;	// sliding mean of window differences
 extern uint16_t lastmeanwindiff;
+extern uint16_t trigthresh;	// trigger threshold
 
-extern uint32_t pretrigcnt;	// counter of pretrigger detections
+extern volatile uint32_t pretrigcnt;	// counter of pretrigger detections
 extern int sigsuppress;		// countdown timer to suppress trigger
 
 extern volatile ADC_HandleTypeDef *globalhadc;	// dummy

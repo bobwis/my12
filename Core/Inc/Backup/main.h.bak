@@ -137,6 +137,7 @@ extern char udp_target[];	// dns or ip address of udp target
 #define SWO_GPIO_Port GPIOB
 #define LD2_Pin GPIO_PIN_7
 #define LD2_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 #define STM32_UUID ((uint32_t *)0x1FF0F420)
 /* USER CODE END Private defines */

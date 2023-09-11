@@ -23,7 +23,7 @@ uint8_t epochvalid = 0;
 unsigned int globalfreeze;		// freeze udp streaming
 
 struct ip4_addr udpdestip;		// udp dst ipv4 address
-char udp_ips[16]; // string version of IP address
+char ips[16]; // string version of IP address
 static uint32_t ip_ready = 0;
 
 // reboot
@@ -139,56 +139,76 @@ void dnsfound(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
 
 // set destination server IP using DNS lookup
 int dnslookup(char *name, struct ip4_addr *ip) {
-	int i, err = 0;
+	volatile int i, err = 0;
 
-	printf("DNS Resolving %s ", name);
-//	osDelay(500);
+	if (xSemaphoreTake(dnssemHandle, 6000) == pdFALSE) {
+		printf("dnslookup: Semaphore wait failed\n");
+	}
+
+//	printf("dnslookup: DNS Resolving %s\n", name);
 	ip_ready = 0;
 	err = dns_gethostbyname(name, ip, dnsfound, 0);
+
+	xSemaphoreGive(dnssemHandle);
 
 	switch (err) {
 	case ERR_OK:		// a cached result already in *ip.addr
 		break;
 	case ERR_INPROGRESS:	// a callback result to dnsfound if it finds it
-		printf("gethostbyname INPROGRESS");
-		for (i = 0; i < 20; i++) {
-			osDelay(1000);		// give it 20 seconds
-			printf(".");
-			if (ip_ready) {
+//		printf("dnslookup: IN PROGRESS\n");
+		for (i = 0; i < 5; i++) {
+			osDelay(1000);		// give it n seconds
+//			printf(".");
+			if (ip_ready) {		// is it done?
 				if (ip_ready == -1) {
 					ip->addr = "127.0.0.1";	// safe ?
+					printf("dnslookup: failed 1\n");
 					return (ERR_TIMEOUT);	// not always timeout, but some error
 				}
 				ip->addr = ip_ready;
+//				printf("dnslookup: returning OK\n");
 				return (ERR_OK);
 			}
-			if (err == ERR_OK)
-				break;
-		} // falls through on timeout
+		}
+		ip->addr = "127.0.0.1";	// safe ?
+		printf("dnslookup: failed 2\n");
+		return (-1);	// Timed out
+		break;
 	default:
-		printf("****** gethostbyname failed *****\n ");
+		printf("dnslookup: failed 3\n");
 		break;
 	}
+	if (err)
+		printf("dnslookup: returning %d\n",err);
 	return (err);
 }
 
-uint32_t locateudp()		// called from LPtask every n seconds
-{
+// lookup IP address from domain name
+extern struct ip4_addr locateip(char *targetname) {
 	volatile err_t err;
+	struct ip4_addr iprec;
 	uint32_t ip = 0;
 
-	printf("Finding %s for UDP streaming\n", udp_target);
-	err = dnslookup(udp_target, &udpdestip);
-	if (err)
-		rebootme(3);
+	printf("locateip: Finding %s IP address\n", targetname);
+	err = dnslookup(targetname, &iprec);
+	if (err) {
+		printf("locateip: FAILED on %s\n", targetname);
+		printf("locateip: Trying again %s IP address\n", targetname);
+		err = dnslookup(targetname, &iprec);
+		if (err) {
+			printf("locateip: FAILED on %s\n", targetname);
+			iprec.addr = 0;
+			return (iprec);
+		}
+	}
 
-	ip = udpdestip.addr;
-	sprintf(udp_ips, "%lu.%lu.%lu.%lu", ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-	printf("\nUDP Target IP: %s\n", udp_ips);
-	return (ip);
+	ip = iprec.addr;
+	sprintf(ips, "%lu.%lu.%lu.%lu", ip & 0xff, (ip & 0xff00) >> 8, (ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
+	printf("locateip: %s %s\n",targetname, ips);
+	return (iprec);
 }
 
-void startudp(uint32_t ip) {
+void startudp() {		// destination UDP target IP address
 	struct udp_pcb *pcb;
 	struct pbuf *pd, *p1, *p2, *ps;
 	uint32_t ulNotificationValue = 0;
@@ -282,7 +302,7 @@ void startudp(uint32_t ip) {
 				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 				pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
 
-				((uint8_t*) (pd->payload))[3] = 0;	// pkt type
+				((uint8_t*) (pd->payload))[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
 				((uint8_t*) (pd->payload))[0] = statuspkt.udppknum & 0xff;
 				((uint8_t*) (pd->payload))[1] = (statuspkt.udppknum & 0xff00) >> 8;
 				((uint8_t*) (pd->payload))[2] = (statuspkt.udppknum & 0xff0000) >> 16;
@@ -305,7 +325,7 @@ void startudp(uint32_t ip) {
 				/* send end of sequence status packet if end of batch sequence */
 				if (sendendstatus > 0) {
 //					if (jabbertimeout == 0)	// terminate curtailed sequence???
-						sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
+					sendstatus(ENDSEQ, ps, pcb, adcbatchid); // send end of seq status
 					sendendstatus = 0;	// cancel the flag
 					statuspkt.adcpktssent = 0;	// end of sequence so start again at 0
 				}

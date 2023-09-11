@@ -1,0 +1,10 @@
+../Middlewares/Third_Party/LwIP/src/core/dns.c:942:1:dns_call_found	9
+../Middlewares/Third_Party/LwIP/src/core/dns.c:748:1:dns_send.isra	10
+../Middlewares/Third_Party/LwIP/src/core/dns.c:1047:1:dns_check_entry	15
+../Middlewares/Third_Party/LwIP/src/core/dns.c:1170:1:dns_recv	49
+../Middlewares/Third_Party/LwIP/src/core/dns.c:315:1:dns_init	1
+../Middlewares/Third_Party/LwIP/src/core/dns.c:361:1:dns_setserver	3
+../Middlewares/Third_Party/LwIP/src/core/dns.c:381:1:dns_getserver	2
+../Middlewares/Third_Party/LwIP/src/core/dns.c:395:1:dns_tmr	1
+../Middlewares/Third_Party/LwIP/src/core/dns.c:1547:1:dns_gethostbyname_addrtype	32
+../Middlewares/Third_Party/LwIP/src/core/dns.c:1526:1:dns_gethostbyname	1

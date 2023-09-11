@@ -41,6 +41,8 @@
 /* Parameters set in STM32CubeMX LwIP Configuration GUI -*/
 /*----- WITH_RTOS enabled (Since FREERTOS is set) -----*/
 #define WITH_RTOS 1
+/* Temporary workaround to avoid conflict on errno defined in STM32CubeIDE and lwip sys_arch.c errno */
+#undef LWIP_PROVIDE_ERRNO
 /*----- CHECKSUM_BY_HARDWARE enabled -----*/
 #define CHECKSUM_BY_HARDWARE 1
 /*-----------------------------------------------------------------------------*/
@@ -180,6 +182,7 @@
 #define MEMP_NUM_PBUF 32
 #define LWIP_TCPIP_TIMEOUT 100
 #define LWIP_SO_RCVTIMEO 100
+#define ETH_RX_BUFFER_SIZE 1536
 
 #ifdef TESTING
 #define LWIP_DEBUG

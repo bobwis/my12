@@ -555,7 +555,7 @@ HAL_StatusTypeDef setupneo() {
 	}
 #endif
 
-	if (pcb == LIGHTNINGBOARD2) {
+	if (circuitboardpcb == LIGHTNINGBOARD2) {
 		HAL_UART_Abort_IT(&huart7);
 		HAL_UART_DeInit(&huart7);
 		huart7.Init.BaudRate = 9600;
@@ -670,8 +670,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				}
 				statuspkt.epochsecs = calcepoch32(); // should not be needed if our 1 sec timer was accurate, also dbg desyncs this
 //printf("*%d ",statuspkt.epochsecs % 60);
-				if (statuspkt.NavPvt.flags & 1) { // locked
-					gpslocked = 1;
+				if ((statuspkt.NavPvt.flags & 1) || (gpsfake)) { // locked or fake locked
+					if (gpslocked < 255)
+						gpslocked++;		// bump each time, limit at 255
+					if (statuspkt.NavPvt.flags & 1)	{ // actually, its now a real lock
+						gpsfake = 0;				// so turn off the fake lock
+						globalfreeze &= ~2;			// and allow udp detections to flow
+					}
 				} else
 					gpslocked = 0;
 				break;

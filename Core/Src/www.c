@@ -21,6 +21,7 @@
 #include "adcstream.h"
 #include "lcd.h"
 #include "nextionloader.h"
+#include "tftp/tftp_loader.h"
 
 //#include "httpd.h"
 
@@ -236,7 +237,7 @@ tSSIHandler tag_callback(int index, char *newstring, int maxlen) {
 }
 
 // embedded ssi tag handler setup
-init_httpd_ssi() {
+void init_httpd_ssi() {
 
 	http_set_ssi_handler(tag_callback, tagname, 21);	// was 32
 }
@@ -273,7 +274,7 @@ int parsep2(char *buf, char *match, int type, void *value) {
 				} else if (type == 2) { // uint32_t base 10 string
 					return ((sscanf(&buf[i], "%u", val) == 1) ? 0 : -1);
 				} else if (type == 3) { // uint32_t hex string
-					return ((sscanf(&buf[i], "%x", val) == 1) ? 0 : -1);
+					return ((sscanf(&buf[i], "%lx", val) == 1) ? 0 : -1);
 				}
 			}
 		}
@@ -281,9 +282,9 @@ int parsep2(char *buf, char *match, int type, void *value) {
 	return (-1);
 }
 
-/* ---------------------------------------------- */
+/* ---------------------------------------------------------------------------------------------------------------------------- */
 // http client
-/* ---------------------------------------------- */
+/* ---------------------------------------------------------------------------------------------------------------------------- */
 
 /*
  p1 commands:-
@@ -305,12 +306,15 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile char p2[256];
 	volatile char s1[16];
 	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
+	struct ip4_addr newip;
+	err_t err;
+	;
 
 //	printf("returnpage:\n");
 	if (expectedapage) {
 		if (errorm == 0) {
 //			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
-			printf("Server replied: \"%.*s\"\n", charcount, content);
+//			printf("Server replied: \"%.*s\"\n", charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
 			if (nconv != EOF) {
@@ -356,18 +360,31 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 				case 2: 							// converted  2 fields
 #ifdef TESTING
-				strcpy(udp_target, SERVER_DESTINATION);
+				strcpy(udp_target, HTTP_CONTROL_SERVER);
 #endif
 					if (strlen(udp_target) < 7) {					// bad url or ip address
-						strcpy(udp_target, SERVER_DESTINATION);		// default it
+						strcpy(udp_target, HTTP_CONTROL_SERVER);				// default it
 					}
-					printf("Server -> Target UDP host: %s\n", udp_target);
+//					newip = locateip(udp_target);
+// 			try altrnate method below. The above fails and times out (occasionally even triggering watchdog....)
+					newip.addr = 0;
+					err = dns_gethostbyname(udp_target, &newip, NULL, 0);
+					if (err == ERR_OK) {
+						if ((newip.addr > 0) && (newip.addr != udpdestip.addr)) {
+							printf("******* Target UDP host just changed ********\n ");
+							udpdestip = newip;
+						}
+					}
+					printf("Server -> Target UDP host: %s %d:%d:%d:%d\n", udp_target, udpdestip.addr & 0xFF,
+							(udpdestip.addr & 0xFF00) >> 8, (udpdestip.addr & 0xFF0000) >> 16,
+							(udpdestip.addr & 0xFF000000) >> 24);
+
 					// falls through
 
 				case 1: 							// converted the first field which is the serial number
 					if (statuspkt.uid != sn) {
 						statuspkt.uid = sn;
-						printf("Server -> Serial Number: %lu\n", statuspkt.uid);
+						printf("Server -> Serial Number: %u\n", statuspkt.uid);
 					}
 					break;
 
@@ -415,15 +432,14 @@ void getpage(char page[64]) {
 
 //	printf("getpage: %s\n", page);
 
-//    err = dnslookup(SERVER_DESTINATION, &(remoteip.addr));		// find serial number and udp target IP address
+//    err = dnslookup(HTTP_CONTROL_SERVER, &(remoteip.addr));		// find serial number and udp target IP address
 //	if (err != ERR_OK)
 //		rebootme(7);
 //	ip.addr = remoteip.addr;
-//	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", SERVER_DESTINATION, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
+//	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", HTTP_CONTROL_SERVER, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
 //			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
-	printf("Control Server is %s\n", SERVER_DESTINATION);
-
-	result = hc_open(SERVER_DESTINATION, page, postvars, NULL);
+	printf("Polling the control server: %s\n", HTTP_CONTROL_SERVER);
+	result = hc_open(HTTP_CONTROL_SERVER, page, postvars, NULL);
 //	printf("httpclient: result=%d\n", result);
 
 }
@@ -432,12 +448,12 @@ void getpage(char page[64]) {
 // reboot if fails
 void initialapisn() {
 	int i, j;
-	char localip[24];
-	char params[48];
+	char localip[32];
+	char params[64];
 
 	j = 1;
-	sprintf(localip, "%d:%d:%d:%d", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
-			(myip & 0xFF000000) >> 24);
+	sprintf(localip, "%u:%u:%u:%u", (uint) (myip & 0xFF), (uint) ((myip & 0xFF00) >> 8),
+			(uint) ((myip & 0xFF0000) >> 16), (uint) (myip & 0xFF000000) >> 24);
 	sprintf(params, "?bld=%d\&ip=%s\&nx=%s", BUILDNO, localip, nex_model);
 	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 
@@ -445,23 +461,26 @@ void initialapisn() {
 
 	while (statuspkt.uid == 0xfeed)		// not yet found new S/N from server
 	{
-		printf("getting params from server on port %d Try=%d\n", DOWNLOAD_PORT, j);
-		getpage(stmuid);		// get sn and targ
+		printf("initialapisn: getting params from server on port %d Try=%d\n", DOWNLOAD_PORT, j);
+		getpage(stmuid);
+		printf("initialapisn: waiting...\n");
+		osDelay(500); 	// get sn and targ
 		for (i = 0; i < 5000; i++) {
 			if (statuspkt.uid != 0xfeed)
 				break;
-			osDelay(1);
+			osDelay(2);
 		}
 		j++;
 		if (j > 5) {
-			printf("************* ABORTED **************\n");
+			printf("initialapisn: ************* ABORTED **************\n");
 			rebootme(8);
 		}
 	}
+//	printf("initialapisn: got page okay\n");
 }
 
 void requestapisn() {
-	printf("updating params from server on port %d\n", DOWNLOAD_PORT);
+//	printf("requestapisn: updating params from server on port %d\n", DOWNLOAD_PORT);
 	getpage(stmuid);		// get sn and targ
 }
 

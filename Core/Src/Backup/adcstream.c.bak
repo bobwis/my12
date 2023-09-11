@@ -42,6 +42,7 @@ uint32_t ledhang = 0;
 int16_t meanwindiff = 0;	// sliding mean of window differences
 uint16_t lastmeanwindiff = 0;
 uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
+int sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
 
@@ -303,7 +304,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)// adc conversion done
 
 // ADC DMA conversion complete, called via Timer 5 interrupt as a proxy IRQ
 //void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
-ADC_Conv_complete() {
+void ADC_Conv_complete(void) {
 	register int16_t i;
 	register uint8_t j;
 	register adcbuffer *buf;
@@ -340,38 +341,42 @@ ADC_Conv_complete() {
 		sigsend = 0;		// cancel previous signal
 	}
 
-	for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
-		j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
-		thissamp = (*adcbuf16)[i];
+	if (sigsuppress) {
+		sigsend = 0;
+	} else {
 
-		adcbgbaseacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
+		for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
+			j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
+			thissamp = (*adcbuf16)[i];
 
-		wmeanacc = wmeanacc + thissamp - lastsamp[j];		// window mean acc
-		winmean = wmeanacc >> (WINSHIFT);		// divide to find the new window mean
-		lastsamp[j] = thissamp;			// save last samples
+			adcbgbaseacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
 
-		thiswindiff = abs(thissamp - winmean);			// find difference from window mean
-		wdacc = wdacc - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
+			wmeanacc = wmeanacc + thissamp - lastsamp[j];		// window mean acc
+			winmean = wmeanacc >> (WINSHIFT);		// divide to find the new window mean
+			lastsamp[j] = thissamp;			// save last samples
 
-		lastmeanwindiff = abs(meanwindiff);
+			thiswindiff = abs(thissamp - winmean);			// find difference from window mean
+			wdacc = wdacc - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
 
-		meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
-		windiff[j] = meanwindiff;	// store latest window mean of differences
+			lastmeanwindiff = abs(meanwindiff);
 
-		if ((abs(meanwindiff) + pretrigthresh) > (lastmeanwindiff + trigthresh)) {
-			pretrigcnt++;
-		}
+			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
+			windiff[j] = meanwindiff;	// store latest window mean of differences
 
-		if (sigsend)
-			continue;		// skip detecting another trigger
+			if ((abs(meanwindiff) + pretrigthresh) > ((lastmeanwindiff + trigthresh))) {
+				pretrigcnt++;
+			}
 
-		if (abs(meanwindiff) > (lastmeanwindiff + trigthresh)) { // if new mean diff > last mean diff +1
-			sigsend = 1; // the real trigger
+			if (sigsend)
+				continue;		// skip detecting another trigger
+
+			if (abs(meanwindiff) > (lastmeanwindiff + trigthresh)) { // if new mean diff > last mean diff +1
+				sigsend = 1; // the real trigger
 //			HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET /*PE12*/); // debug pin
 //			gpioeset(GPIO_PIN_12);
-		}
-	} // end for i
-
+			}
+		} // end for i
+	}
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers
 	if (sigsend) {
 #ifndef SPLAT1
@@ -462,12 +467,12 @@ void ADC_MultiModeDMAConvM1Cplt(ADC_HandleTypeDef *hadc) {
 }
 
 void startadc() {
-	int i, lastbuf = 0;
+	int i;
 //	uint16_t *adcbufdum1, *adcbufdum2;		// debug
 //	adcbufdum1 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer
 //	adcbufdum2 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer
 
-	statuspkt.clktrim = 108000000;
+	statuspkt.clktrim = CCLK;
 	statuspkt.adcpktssent = 0;
 
 	printf("Starting ADC DMA\n");

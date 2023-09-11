@@ -181,6 +181,9 @@ void printflasherr() {
 	case FLASH_ERROR_OPERATION:
 		msg = "Operation";
 		break;
+	case FLASH_ERROR_RD:
+		msg = "Read Protection";
+		break;
 	default:
 		msg = NULL;
 		sprintf(msg, "Unknown err 0x%0x", err);

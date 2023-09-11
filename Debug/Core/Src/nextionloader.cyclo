@@ -1,0 +1,7 @@
+../Core/Src/nextionloader.c:45:5:decnxtmodel	6
+../Core/Src/nextionloader.c:67:5:nxt_loader	10
+../Core/Src/nextionloader.c:133:5:nxt_sendres	6
+../Core/Src/nextionloader.c:154:5:nxt_rx_callback	24
+../Core/Src/nextionloader.c:271:5:nxt_check	4
+../Core/Src/nextionloader.c:294:5:lcdupneeded	3
+../Core/Src/nextionloader.c:308:1:nxt_update	8

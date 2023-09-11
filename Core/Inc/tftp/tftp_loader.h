@@ -19,4 +19,7 @@ extern "C" {
 }
 #endif
 
+
+extern void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2);
+
 #endif /* INC_TFTP_TFTP_LOADER_H_ */

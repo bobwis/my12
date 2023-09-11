@@ -41,10 +41,28 @@ int jabbertimeout = 0;			// timeout for spamming trigger
 uint32_t ledhang = 0;
 int16_t meanwindiff = 0;	// sliding mean of window differences
 uint16_t lastmeanwindiff = 0;
-uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
+volatile uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
 int sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
+
+/* blow are vars used by the ADC capture function */
+
+// rolling window size, could be 32, 64, 128 etc
+#define WINSHIFT 5
+#define WINSIZE (1<<WINSHIFT)
+
+static uint32_t adcbgbaseacc = 0;		// avg adc level per buffer
+static uint32_t samplecnt = 0;
+static uint8_t adcbufnum = 0;		// adc sequence number
+static int32_t windiff[WINSIZE] = { 0 };		// past window differences from the window mean
+static uint16_t lastsamp[WINSIZE] = { 0 };		// last sample saved to calc global mean
+static int16_t winmean = 0;	// sliding window mean
+static int32_t wdacc = 0;	// window difference accumulator
+static int32_t wmeanacc = 0;	// window mean accumulator
+static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+
 
 /* Stores the handle of the task that will be notified when the
  transmission is complete. */
@@ -298,28 +316,19 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)// adc conversion done
 }
 #endif
 
-// rolling window size, could be 32, 64, 128 etc
-#define WINSHIFT 5
-#define WINSIZE (1<<WINSHIFT)
+
 
 // ADC DMA conversion complete, called via Timer 5 interrupt as a proxy IRQ
 //void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
-ADC_Conv_complete() {
+void ADC_Conv_complete(void) {
 	register int16_t i;
 	register uint8_t j;
 	register adcbuffer *buf;
 	register adc16buffer *adcbuf16;
-	int32_t thiswindiff = 0;
+	uint16_t thiswindiff;
 	uint16_t thissamp = 0;
-	static uint32_t adcbgbaseacc = 0;		// avg adc level per buffer
-	static uint32_t samplecnt = 0;
-	static uint8_t adcbufnum = 0;		// adc sequence number
-	static int32_t windiff[WINSIZE] = { 0 };		// past window differences from the window mean
-	static uint16_t lastsamp[WINSIZE] = { 0 };		// last sample saved to calc global mean
-	static int16_t winmean = 0;	// sliding window mean
-	static int32_t wdacc = 0;	// window difference accumulator
-	static int32_t wmeanacc = 0;	// window mean accumulator
-	static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	uint16_t lastthresh;
+
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
@@ -336,15 +345,14 @@ ADC_Conv_complete() {
 	(*buf)[1] = (statuspkt.uid << 16) | (adcbatchid << 8) | (rtseconds << 2) | (adcbufnum++ & 3);// ADC completed packet counter (24 bits)
 	(*buf)[2] = statuspkt.epochsecs; // statuspkt.NavPvt.iTOW;
 
-	if (sigsend) {		// oops overrun
-		statuspkt.adcudpover++;		// debug adc overruning the udp railgun
-		sigsend = 0;		// cancel previous signal
-	}
-
 	if (sigsuppress) {
 		sigsend = 0;
+		sigsuppress--;
 	} else {
-
+		if (sigsend) {
+			statuspkt.adcudpover++;		// debug adc overruning the udp railgun
+			return;						// skip detecting another trigger
+		}
 		for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
 			j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
 			thissamp = (*adcbuf16)[i];
@@ -358,23 +366,25 @@ ADC_Conv_complete() {
 			thiswindiff = abs(thissamp - winmean);			// find difference from window mean
 			wdacc = wdacc - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
 
-			lastmeanwindiff = abs(meanwindiff);
-
 			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
 			windiff[j] = meanwindiff;	// store latest window mean of differences
 
-			if ((abs(meanwindiff) + pretrigthresh) > (lastmeanwindiff + trigthresh)) {
-				pretrigcnt++;
-			}
+			lastthresh = lastmeanwindiff + trigthresh;
 
-			if (sigsend)
-				continue;		// skip detecting another trigger
-
-			if (abs(meanwindiff) > (lastmeanwindiff + trigthresh)) { // if new mean diff > last mean diff +1
+			if (abs(meanwindiff) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
 				sigsend = 1; // the real trigger
+				pretrigcnt++;
+			} else {
+				if (((abs(meanwindiff) + pretrigthresh)) > lastthresh)
+				{
+				pretrigcnt++;
+				}
+			}
+			lastmeanwindiff = abs(meanwindiff);
+
 //			HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET /*PE12*/); // debug pin
 //			gpioeset(GPIO_PIN_12);
-			}
+
 		} // end for i
 	}
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers
@@ -467,7 +477,7 @@ void ADC_MultiModeDMAConvM1Cplt(ADC_HandleTypeDef *hadc) {
 }
 
 void startadc() {
-	int i, lastbuf = 0;
+	int i;
 //	uint16_t *adcbufdum1, *adcbufdum2;		// debug
 //	adcbufdum1 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer
 //	adcbufdum2 = pvPortMalloc(UDPBUFSIZE);	//  dummy buffer

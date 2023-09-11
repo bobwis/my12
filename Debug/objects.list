@@ -21,6 +21,7 @@
 "./Core/Src/tftp/tftdriver.o"
 "./Core/Src/tftp/tftploader.o"
 "./Core/Startup/startup_stm32f767zitx.o"
+"./Drivers/BSP/Components/lan8742/lan8742.o"
 "./Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal.o"
 "./Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_adc.o"
 "./Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_adc_ex.o"

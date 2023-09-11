@@ -1,0 +1,7 @@
+C:\ST\STM32CubeIDE_1.12.1\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.11.3.rel1.win32_1.1.0.202305231506\tools\bin/../lib/gcc/arm-none-eabi/11.3.1/../../../../arm-none-eabi/include/stdio.h:224:5:fputc	1
+../Core/Src/miscutils.c:49:1:__io_putchar	2
+../Core/Src/miscutils.c:62:6:myhexDump	10
+../Core/Src/miscutils.c:120:13:gpioeset	1
+../Core/Src/miscutils.c:127:13:gpioeclr	1
+../Core/Src/miscutils.c:136:10:movavg	2
+../Core/Src/miscutils.c:155:6:calcLocator	1

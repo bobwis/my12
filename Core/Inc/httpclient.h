@@ -72,6 +72,9 @@ struct hc_state {
 	void (*returnpage)(volatile char *content, volatile u16_t charcount, int errorm);
 };
 
+
+extern char fs_domainname[30];
+
 // Nextion http download buffer size
 #define NXDL_BUFF_SIZE 600
 #define DOWNLOAD_PORT 8083

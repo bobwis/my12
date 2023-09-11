@@ -455,7 +455,16 @@ static err_t httpc_get_internal_dns(httpc_state_t *req, const char *server_name)
 	LWIP_ASSERT("req != NULL", req != NULL);
 
 #if LWIP_DNS
+	if (xSemaphoreTake(dnssemHandle, 5000) == pdFALSE) {
+		printf("httpc_get_internal_dns: semaphore TIMEOUT\n");
+	}
+
 	err = dns_gethostbyname(server_name, &req->remote_addr, httpc_dns_found, req);
+	if (err != ERR_OK) {
+		printf("httpc_get_internal_dns: DNS lookup TIMEOUT of %s\n", server_name);
+	}
+	xSemaphoreGive(dnssemHandle);
+
 #else
   err = ipaddr_aton(server_name, &req->remote_addr) ? ERR_OK : ERR_ARG;
 #endif
@@ -968,7 +977,7 @@ char* clientresult(httpc_result_t err) {
 
 uint32_t http_content_len = 0;
 char rxbuffer[540];
-char domain_name[30];
+char fs_domainname[30];
 err_t error;
 
 err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *hdr, u16_t hdr_len, u32_t content_len) {
@@ -1095,23 +1104,24 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 	connection1->timeout_ticks = 1;
 
-	strcpy(domain_name, host);
+	strcpy(fs_domainname, host);
 	strcpy(rxbuffer, filename);
 
 //	printf("http_dlclient: domain=%s, rxbuffer=%s, flash_add=0x%08x\n", domain_name, rxbuffer, flash_memptr);
 
 	down_total = 0;
 	expectedapage = 0;
-	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
+	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
 			HttpClientFileResultCallback, &connection1);
 	if (error != HTTPC_RESULT_OK) {
 		printf("httpc_get_file_dns: returned, err=%d\n", error);
 	}
 }
 
-// request a webpage
-int hc_open(char *servername, char *page, char Postvars, void *returpage) {
+// request a webpage (from the control server)
+int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 	err_t error;
+	uint32_t dnsip;
 
 	connection2 = &conn2;	// point to static
 	settings2 = &set2;		// point to static
@@ -1124,11 +1134,18 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
 
 	connection2->timeout_ticks = 1;
 
-	if ((isalnum(*servername) || (*servername == '/'))) {
-		strcpy(domain_name, servername);
+	if ((isalnum(*fileservername) || (*fileservername == '/'))) {		// dns syntax not too bad
+		if (dnslookup(fileservername, &dnsip) != 0) { 					// error in lookup;
+			printf("hc_open: servername DNS lookup failed\n");
+			strcpy(fs_domainname, HTTP_CONTROL_SERVER);					// revert to ctl srv
+		}
+		else {
+			strcpy(fs_domainname, fileservername);
+		}
 	} else {
-		strcpy(domain_name, SERVER_DESTINATION);
+		strcpy(fs_domainname, HTTP_CONTROL_SERVER);
 	}
+
 
 	if ((isalnum(*page) || (*page == '/'))) {
 		strcpy(rxbuffer, page);			// rxbuffer has url
@@ -1136,11 +1153,11 @@ int hc_open(char *servername, char *page, char Postvars, void *returpage) {
 		strcpy(rxbuffer, "/");
 	}
 
-//	printf("hc_open: domain=%s, rxbuffer=%s\n", domain_name, rxbuffer);
+//	printf("hc_open: domain=%s, rxbuffer=%s\n", fs_domainname, rxbuffer);
 
 	down_total = 0;
 	expectedapage = 1;
-	error = httpc_get_file_dns(domain_name, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
+	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
 			HttpClientPageResultCallback, &connection2);
 }
 

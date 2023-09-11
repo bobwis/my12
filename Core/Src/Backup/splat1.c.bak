@@ -72,6 +72,8 @@ const uint8_t pgaset[] = { 0, 1, 2, 3, 4, 5, 6, 7, 6, 7 };		// maps from 0..9 ga
 //
 //////////////////////////////////////////////
 void cycleleds(void) {
+	volatile int delay;
+
 	const uint16_t pattern[] = {
 	LED_D1_Pin,
 	LED_D1_Pin | LED_D2_Pin,
@@ -83,17 +85,24 @@ void cycleleds(void) {
 
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(600);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_SET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
-	osDelay(500);
+	for (delay = 0; delay < 0xC00000; delay++)
+		;
+
 	for (i = 0; i < 5; i++) {
 		HAL_GPIO_WritePin(GPIOD, pattern[i], GPIO_PIN_RESET);
-		osDelay(140);
+		for (delay = 0; delay < 0x400000; delay++)
+			;
 	}
 }
 
@@ -135,6 +144,10 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
+
+	if (gain > 6) {		// might be a DC jump
+		sigsuppress = 8;		// prevent trigger for a while
+	}
 
 	if (gain > 7) {
 		pgacmd[0] = 0x4101;			// write to channel reg select ch1
@@ -202,7 +215,7 @@ int bumppga(int i) {
 	}
 	if (pgagain < 0)		// safety
 		pgagain = 0;
-	if (pcb == SPLATBOARD1) {		/// this doesn't have the boost function
+	if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
 		if (pgagain > 7) {
 			pgagain = 7;			// reached max gain
 		}
@@ -494,48 +507,73 @@ HAL_StatusTypeDef getpressure3115(void) {
 HAL_StatusTypeDef initpressure3115(void)	// returns 1 on bad MPL3115, 0 on good.
 {
 	int i, step;
-	uint8_t data[8];
-	HAL_StatusTypeDef result;
+	volatile uint8_t data[8];
+	volatile HAL_StatusTypeDef result;
+
+	HAL_I2C_DeInit(&hi2c1);
+	HAL_I2C_Init(&hi2c1);
 
 	result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x0c, 1, &data[0], 1, 1000); // rd who am i register
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 1\n\r");
 		return (result);
 	}
-	if (data[0] != 0xc4)		// not the default MPL3115 ID
-		return (HAL_ERROR);
+
+	if (data[0] != 0xc4) {		// not the default MPL3115 ID)
+		printf("MPL3115 unexpected ID returned\n\r");
+		return (result);
+	}
 
 //HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
 #if 0
-	if (HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) {0x26, 0x3}, 2, 1000) != HAL_OK) {// set force software reset
-		printf("I2C HAL returned error 2a\n\r");
-	}
+if (HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) {0x26, 0x3}, 2, 1000) != HAL_OK) {// set force software reset
+	printf("I2C HAL returned error 2a\n\r");
+}
 
-	step = 0;
-	for (i = 0; i < 50; i++) {
-		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
-		if (result != HAL_OK) {
-			printf("Splat1-1 I2C HAL returned error %d\n\r", result);
-			return (result);
-		}
-		if (data[0] & 0x8) {
-			step = 1;
-			break;
-		}
-		osDelay(1);
-	} // for
+step = 0;
+for (i = 0; i < 50; i++) {
+	result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
+	if (result != HAL_OK) {
+		printf("Splat1-1 I2C HAL returned error %d\n\r", result);
+		return (result);
+	}
+	if (data[0] & 0x8) {
+		step = 1;
+		break;
+	}
+	osDelay(1);
+} // for
 //	if (step == 0) {
 //		printf("MPL3115A2 Pressure sensor not found\n\r");
 //		return (1);
 //	}
 #endif
-	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x38 }, 2, 1000);
-	// set pressure mode OSR=128 pressure sense
+
+osDelay(550);
+	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x04 /*0x38*/}, 2, 5000); // RST bit
+// HAL always return error - unknown reason
+//	if (result != HAL_OK) {
+//		printf("I2C HAL returned error 2b\n\r");
+//		return (result);
+//	}
+
+	osDelay(550);
+
+	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x26, 0x01 }, 2, 1000); // initiate active measurement start
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 2b\n\r");
 		return (result);
 	}
-
+/*
+	for (i = 0; i < 20; i++) {
+		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
+		printf("CTLREG1=0x%0x2\n\r", data[0]);
+		if (result != HAL_OK) {
+			printf("Splat1-1 I2C HAL returned error %d\n\r", result);
+			return (result);
+		}
+	}
+*/
 	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x13, 0x07 }, 2, 1000); // enbl data flags pressure sense
 	if (result != HAL_OK) {
 		printf("I2C HAL returned error 3\n\r");
@@ -575,7 +613,6 @@ void init_esp() {
 	int waitforoutput;
 
 	printf("init_esp32_c3_13\n");
-
 	stat = HAL_UART_Receive_DMA(&huart6, &espch, 1);		// set up RX
 	if (stat != HAL_OK) {
 		printf("init_esp: huart6 error\n");
@@ -608,14 +645,15 @@ uart6_rxdone() {
 }
 
 void esp_cmd(unsigned char *buffer) {
-	unsigned char txbuf[16];\
+	unsigned char txbuf[16];
+
 	volatile int len;
 	HAL_StatusTypeDef stat;
 
 	strcpy(txbuf, buffer);
 	strcat(txbuf, "\r\n");
 	len = strlen(txbuf);
-	printf("Sending ESP: %s\n", txbuf);
+//	printf("Sending ESP: %s\n", txbuf);
 
 	stat = HAL_UART_Transmit_DMA(&huart6, &txbuf[0], len);	// send the command
 //	stat = HAL_UART_Transmit(&huart6, &txbuf[0], len, 1000);	// send the command
@@ -627,24 +665,37 @@ void esp_cmd(unsigned char *buffer) {
 void test_esp() {
 	static unsigned char getstatus[] = "AT+GMR";
 	HAL_StatusTypeDef stat;
-	int waitforoutput;
+	int j, waitforoutput;
 
-	printf("Testing if ESP responds to command:-\n");
+	j = 0;
+	printf("test_esp: Check if ESP responds to command:-\n");
 	osDelay(200);
 	esp_cmd(getstatus);	// send the command
 
-	for (waitforoutput = 0; waitforoutput < 1000; waitforoutput++) {
-		printfromesp();		// try to empty anything in the buffer
+	for (waitforoutput = 0; waitforoutput < 10000; waitforoutput++) {
+		j = j + printfromesp();		// try to empty anything in the buffer
 		osDelay(1);
+	}
+	if (j > 10) {
+		printf("test_esp: ESP *is* talking with us\n");
+	} else {
+			printf("test_esp: ESP NOT responding\n");
 	}
 }
 
-void printfromesp() {
+int printfromesp() {
+	int i = 0;
+
 	while (espoutindex != esprxindex) {
+		i++;
+
+		espoutindex++;
 		putchar(esprxdatabuf[espoutindex++]);
+
 		if (espoutindex > sizeof(esprxdatabuf))
 			espoutindex = 0;
 	}
+	return i;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -661,6 +712,8 @@ void init_ds2485(void) {
 //HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData, uint16_t Size, uint32_t Timeout)
 
 	printf("init_ds2485\n");
+	HAL_I2C_DeInit(&hi2c1);
+	HAL_I2C_Init(&hi2c1);
 
 	data[0] = 0xAA;		// Read status cmd
 	data[1] = 0x01;		// cmd len
@@ -744,11 +797,7 @@ void test_ds2485() {
 void initsplat(void) {
 	int i, j, k;
 
-	cycleleds();
-	osDelay(500);
-	printf("Initsplat: LED cycle\n");
-
-	if (pcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
+	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");
 		initdualmux();
 		osDelay(500);
@@ -774,18 +823,19 @@ void initsplat(void) {
 	}
 	osDelay(500);
 
-	if ((pcb == LIGHTNINGBOARD1) || (pcb == LIGHTNINGBOARD2)) {
+	if (circuitboardpcb == LIGHTNINGBOARD2) {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
-		{
+				{
 			Error_Handler();
 		}
-
 		test_ds2485();
 		init_esp();
 		osDelay(500);
 		test_esp();
 		osDelay(200);
+	} else if (circuitboardpcb == LIGHTNINGBOARD1) {
+		test_ds2485();
 	}
 
 	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
