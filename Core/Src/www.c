@@ -449,7 +449,7 @@ void getpage(char page[64]) {
 void initialapisn() {
 	int i, j;
 	char localip[32];
-	char params[64];
+	char params[78];
 
 	j = 1;
 	sprintf(localip, "%u:%u:%u:%u", (uint) (myip & 0xFF), (uint) ((myip & 0xFF00) >> 8),

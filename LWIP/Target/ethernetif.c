@@ -130,6 +130,7 @@ ETH_TxPacketConfig TxConfig;
 
 /* Private function prototypes -----------------------------------------------*/
 static void ethernetif_input(void const * argument);
+static void RMII_Thread( void const * argument );
 int32_t ETH_PHY_IO_Init(void);
 int32_t ETH_PHY_IO_DeInit (void);
 int32_t ETH_PHY_IO_ReadReg(uint32_t DevAddr, uint32_t RegAddr, uint32_t *pRegVal);
@@ -343,6 +344,15 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
 /* USER CODE BEGIN LOW_LEVEL_INIT */
 
 /* USER CODE END LOW_LEVEL_INIT */
+
+  if(HAL_GetREVID() == 0x1000)
+  {
+    /*
+      This thread will keep resetting the RMII interface until good frames are received
+    */
+    osThreadDef(RMII_Watchdog, RMII_Thread, osPriorityRealtime, 0, configMINIMAL_STACK_SIZE);
+    osThreadCreate (osThread(RMII_Watchdog), NULL);
+  }
 }
 
 /**
@@ -927,3 +937,30 @@ __weak void ethernetif_notify_conn_changed(struct netif *netif)
 }
 /* USER CODE END 8 */
 
+void RMII_Thread( void const * argument )
+{
+  (void) argument;
+
+  for(;;)
+  {
+    /* some unicast good packets are received */
+    if(heth.Instance->MMCRGUFCR > 0U)
+    {
+      /* RMII Init is OK: Delete the Thread */
+      osThreadTerminate(NULL);
+    }
+    else if(heth.Instance->MMCRFCECR > 10U)
+    {
+      /* ETH received too many packets with CRC errors, resetting RMII */
+      SYSCFG->PMC &= ~SYSCFG_PMC_MII_RMII_SEL;
+      SYSCFG->PMC |= SYSCFG_PMC_MII_RMII_SEL;
+
+      heth.Instance->MMCCR |= ETH_MMCCR_CR;
+    }
+    else
+    {
+      /* Delay 200 ms */
+      osDelay(200);
+    }
+  }
+}

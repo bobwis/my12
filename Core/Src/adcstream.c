@@ -62,8 +62,6 @@ static int32_t wdacc = 0;	// window difference accumulator
 static int32_t wmeanacc = 0;	// window mean accumulator
 static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-
-
 /* Stores the handle of the task that will be notified when the
  transmission is complete. */
 volatile TaskHandle_t xTaskToNotify = NULL;
@@ -316,8 +314,6 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)// adc conversion done
 }
 #endif
 
-
-
 // ADC DMA conversion complete, called via Timer 5 interrupt as a proxy IRQ
 //void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
 void ADC_Conv_complete(void) {
@@ -328,7 +324,6 @@ void ADC_Conv_complete(void) {
 	uint16_t thiswindiff;
 	uint16_t thissamp = 0;
 	uint16_t lastthresh;
-
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
@@ -375,9 +370,8 @@ void ADC_Conv_complete(void) {
 				sigsend = 1; // the real trigger
 				pretrigcnt++;
 			} else {
-				if (((abs(meanwindiff) + pretrigthresh)) > lastthresh)
-				{
-				pretrigcnt++;
+				if (((abs(meanwindiff) + pretrigthresh)) > lastthresh) {
+					pretrigcnt++;
 				}
 			}
 			lastmeanwindiff = abs(meanwindiff);
@@ -437,8 +431,8 @@ void ADC_Conv_complete(void) {
 extern TIM_HandleTypeDef htim5;
 void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA complete)
 {
-
 	timestamp = TIM2->CNT;			// real time
+
 #if 0
 	{
 		static uint32_t last = 0;
@@ -456,6 +450,29 @@ void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA c
 		}
 
 		last = timestamp;
+	}
+#endif
+#if 0	// debug looking gofr correlation between GPS time in seconds and PPS puls
+	static unsigned char gpssec, gpsnow;
+	volatile static unsigned int i = 0;
+	volatile static uint32_t avg = 0, min = -1, max = 0, sum = 0;
+
+	if ((gpsnow = statuspkt.NavPvt.sec) != gpssec) {		// seonds has changed
+		i++;
+		if (i > (256 + 60)) {
+			avg = sum >> 8;
+			sum = 0;
+			i = 0;
+		} else {
+			if (i >= 60) {
+				if (timestamp > max)
+					max = timestamp;
+				if (timestamp < min)
+					min = timestamp;
+				sum += timestamp;
+				gpssec = gpsnow;
+			}
+		}
 	}
 #endif
 	TIM5->DIER = 0x01;
