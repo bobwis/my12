@@ -69,7 +69,7 @@ extern struct statpkt {
 	uint32_t clktrim;		// Nominal 108MHz clock is actually this frequency
 	uint16_t uid;			// 16 bits used
 	uint16_t adcpktssent;	// Number of ADC pks sent in this trigger event
-	uint16_t adctrigoff;	// adc trigger threshold above noise
+	uint16_t adctrigoff;	// adc trigger threshold above noise. also 3 LSB bits of gain >> 12
 	uint16_t adcbase;		// average background level seen by ADC
 	uint32_t sysuptime;		// number of seconds system up from boot uptime
 	uint32_t netuptime;		// number of seconds network up

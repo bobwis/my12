@@ -61,6 +61,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 volatile unsigned long rtos_debug_timer = 0;		// freeRTOS debug
+static int trigs = 0;
 
 const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255,128,128,0,255,128 }; */
 { 114, 89, 141, 101, 114, 127, 102, 127, 89, 127, 128, 113, 141, 101, 128, 113, 128, 127, 128, 127, 153, 113, 114, 140,
@@ -1970,17 +1971,22 @@ void netif_link_callbk_fn(struct netif *netif) {
 // check the GPS PPS and also for Lock
 checkgps(int diff) {
 	static uint32_t lastcap = 0;
+	static int trimerrcnt = 0;
 
-	if (lptask_init_done)  {
+	if (lptask_init_done) {
 		if ((lastcap != CCLK) && (abs(CCLK - lastcap) < 3156)) {		// its a real reading +- 15ppm (60 Deg C)
 			statuspkt.reserved2 &= ~0x0002;		// No PPS error
 			statuspkt.clktrim = movavg(diff);
+			trimerrcnt = 0;
 		} else {
-			statuspkt.reserved2 |= 0x0002;		// There is a PPS error
-			statuspkt.clktrim = CCLK;
-			if (statuspkt.sysuptime > 30)
-				printf("108MHz Clocktrim was outside bounds: %u\n", lastcap);
-			lastcap = CCLK;
+			if (trimerrcnt++ > 3) {
+				trimerrcnt = 0;
+				statuspkt.reserved2 |= 0x0002;		// There is a PPS error
+				statuspkt.clktrim = CCLK;
+				if (statuspkt.sysuptime > 120)
+					printf("108MHz Clocktrim was outside bounds: %u\n", lastcap);
+				lastcap = CCLK;
+			}
 		}
 
 		if (gpslocked != 0) {			// gps is locked
@@ -1997,22 +2003,22 @@ checkgps(int diff) {
 }
 
 // dma for DAC finished callback
-	void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac) {
-		HAL_DAC_Stop_DMA(hdac, DAC_CHANNEL_1);
-	}
+void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac) {
+	HAL_DAC_Stop_DMA(hdac, DAC_CHANNEL_1);
+}
 
-	void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps (on external signal)
-		uint32_t diff;
-		static uint32_t lastcap = 0;
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps (on external signal)
+	uint32_t diff;
+	static uint32_t lastcap = 0;
 
-		if (htim->Instance == TIM2) {
-			rtseconds = (statuspkt.NavPvt.sec + 1) % 60; // assume we get here before serial comms updates gps seconds field
+	if (htim->Instance == TIM2) {
+		rtseconds = (statuspkt.NavPvt.sec + 1) % 60; // assume we get here before serial comms updates gps seconds field
 
 #ifdef SPLAT1
-			if (!(ledsenabled)) {
-				HAL_GPIO_WritePin(GPIOD, LED_D1_Pin, GPIO_PIN_RESET);
-			} else
-				HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
+		if (!(ledsenabled)) {
+			HAL_GPIO_WritePin(GPIOD, LED_D1_Pin, GPIO_PIN_RESET);
+		} else
+			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
 #else
 	HAL_GPIO_TogglePin(GPIOB, LD1_Pin);		// green led
 #endif
@@ -2027,141 +2033,140 @@ checkgps(int diff) {
 					diff = t2cap[0] - lastcap;
 				}
 #else
-			diff = lastcap;
+		diff = lastcap;
 #endif
-			checkgps(diff);
-			// PPS running to get here but is the GPS locked
-			if (gpslocked != 0) {
-				lastcap = t2cap[0];			// dma has populated t2cap from Channel 3 trigger on Timer 2
+		checkgps(diff);
+		// PPS running to get here but is the GPS locked
+		if (gpslocked != 0) {
+			lastcap = t2cap[0];			// dma has populated t2cap from Channel 3 trigger on Timer 2
 
-				/*		printf("TIM2 IC Callback CCR3=%08x, [0]%08xu, [1]%08x diff=%u, clktrim=%08x",
-				 htim->Instance->CCR3, t2cap[0], lastcap, diff, statuspkt.clktrim);
-				 printf(" globaladcavg=%u\n",globaladcavg);
-				 */}
+			/*		printf("TIM2 IC Callback CCR3=%08x, [0]%08xu, [1]%08x diff=%u, clktrim=%08x",
+			 htim->Instance->CCR3, t2cap[0], lastcap, diff, statuspkt.clktrim);
+			 printf(" globaladcavg=%u\n",globaladcavg);
+			 */}
 
-		} else if (htim->Instance == TIM4) {
-			printf("Timer4 callback\n");
-		}
+	} else if (htim->Instance == TIM4) {
+		printf("Timer4 callback\n");
 	}
+}
 //	htim->Instance->SR = 0;		// cheat
 
-	/* USER CODE END Callback 1 */
+/* USER CODE END Callback 1 */
 
 // try to figure out what PCB is connected to the STM
 // PC0 and PF5
 // Change ths to LIGHTNINGBOARD1 for Colin's detector
-	void getboardpcb() {
-		if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
+void getboardpcb() {
+	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
 //		circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1
-			circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
-		} else {
-			circuitboardpcb = SPLATBOARD1;		// assumed
-		}
+		circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
+	} else {
+		circuitboardpcb = SPLATBOARD1;		// assumed
 	}
+}
 
-	void setupnotify() {
-		/* Store the handle of the calling task. */
-		xTaskToNotify = xTaskGetCurrentTaskHandle();
-	}
+void setupnotify() {
+	/* Store the handle of the calling task. */
+	xTaskToNotify = xTaskGetCurrentTaskHandle();
+}
 
-	void printaline(char *str) {
-		printf("%s----------------------------------------------------------------------------\n", str);
-	}
+void printaline(char *str) {
+	printf("%s----------------------------------------------------------------------------\n", str);
+}
 
-	/* USER CODE END 4 */
+/* USER CODE END 4 */
 
-	/* USER CODE BEGIN Header_StartDefaultTask */
-	/**
-	 * @brief  Function implementing the defaultTask thread.
-	 * @param  argument: Not used
-	 * @retval None
-	 */
-	/* USER CODE END Header_StartDefaultTask */
-	void StartDefaultTask(void const *argument) {
-		/* init code for USB_DEVICE */
-		MX_USB_DEVICE_Init();
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+ * @brief  Function implementing the defaultTask thread.
+ * @param  argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const *argument) {
+	/* init code for USB_DEVICE */
+	MX_USB_DEVICE_Init();
 
-		/* init code for LWIP */
-		MX_LWIP_Init();
-		/* USER CODE BEGIN 5 */
+	/* init code for LWIP */
+	MX_LWIP_Init();
+	/* USER CODE BEGIN 5 */
 
-		HAL_StatusTypeDef err;
-		struct dhcp *dhcp;
-		int i;
-		HAL_StatusTypeDef stat;
+	HAL_StatusTypeDef err;
+	struct dhcp *dhcp;
+	int i;
+	HAL_StatusTypeDef stat;
 //		uint16_t dacdata[64];
 
-		if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
-			swapboot();	//  swap the boot vector
-		} else {
-			stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
-		}
+	if ((i = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13)) == GPIO_PIN_SET) {		// blue button on stm board
+		swapboot();	//  swap the boot vector
+	} else {
+		stampboot();	// make sure this runing program is in the boot vector (debug can avoid it)
+	}
 
-		getboardpcb();		// find our daughterboard
-		printaline("\n");
-		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
-		STM32_UUID[2],
-		MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
-		crc_rom();
-		printaline("");
+	getboardpcb();		// find our daughterboard
+	printaline("\n");
+	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
+	STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	crc_rom();
+	printaline("");
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
-		strcpy(udp_target, HTTP_CONTROL_SERVER);
+	strcpy(udp_target, HTTP_CONTROL_SERVER);
 
 #ifdef SPLAT1
-		cycleleds();
-		init_nextion();			// initilise the LCD display
+	cycleleds();
+	init_nextion();			// initilise the LCD display
 #endif
 
-		if (!(netif_is_link_up(&gnetif))) {
-			printf("LAN interface appears disconnected\n\r");
-			for (i = 0; i < 50; i++) {
-				osDelay(50);
-				HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_SET);	// Splat D5 led on
-				osDelay(50);
-				HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
-			}
-#ifndef TESTING
-			printf("************* REBOOTING **************\n");
-			rebootme(0);
-#endif
+	if (!(netif_is_link_up(&gnetif))) {
+		printf("LAN interface appears disconnected\n\r");
+		for (i = 0; i < 50; i++) {
+			osDelay(50);
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_SET);	// Splat D5 led on
+			osDelay(50);
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
 		}
+#ifndef TESTING
+		printf("************* REBOOTING **************\n");
+		rebootme(0);
+#endif
+	}
 
-		globalfreeze = 0;		// Allow UDP streaming
+	globalfreeze = 0;		// Allow UDP streaming
 
-		netif = netif_default;
-		netif_set_link_callback(netif, netif_link_callbk_fn);
-		netif_set_status_callback(netif, netif_status_callbk_fn);
+	netif = netif_default;
+	netif_set_link_callback(netif, netif_link_callbk_fn);
+	netif_set_status_callback(netif, netif_status_callbk_fn);
 
-		t2cap[0] = 44444444;
+	t2cap[0] = 44444444;
 
-		statuspkt.uid = 0xFEED;		// 16 bits - this value gets replaced by data from the server
-		statuspkt.majorversion = MAJORVERSION;
-		statuspkt.minorversion = MINORVERSION;
-		statuspkt.build = BUILDNO;		// from build 10028 onwards
-		newbuild = BUILDNO;				// init to the same
-		statuspkt.udppknum = 0;
-		statuspkt.sysuptime = 0;
-		statuspkt.netuptime = 0;
-		statuspkt.gpsuptime = 0;
+	statuspkt.uid = 0xFEED;		// 16 bits - this value gets replaced by data from the server
+	statuspkt.majorversion = MAJORVERSION;
+	statuspkt.minorversion = MINORVERSION;
+	statuspkt.build = BUILDNO;		// from build 10028 onwards
+	newbuild = BUILDNO;				// init to the same
+	statuspkt.udppknum = 0;
+	statuspkt.sysuptime = 0;
+	statuspkt.netuptime = 0;
+	statuspkt.gpsuptime = 0;
 
-		statuspkt.adcpktssent = 0;
-		statuspkt.adctrigoff = TRIG_THRES;
+	statuspkt.adcpktssent = 0;
+	statuspkt.adctrigoff = TRIG_THRES;
 
-		statuspkt.adcudpover = 0;		// debug use count overruns
-		statuspkt.trigcount = 0;		// debug use adc trigger count
-		statuspkt.udpsent = 0;		// debug use adc udp sample packet sent count
+	statuspkt.adcudpover = 0;		// debug use count overruns
+	statuspkt.trigcount = 0;		// debug use adc trigger count
+	statuspkt.udpsent = 0;		// debug use adc udp sample packet sent count
 
 #ifdef TESTING
 statuspkt.bconf = 0x80000000;	// board config word
 #else
-		statuspkt.bconf = 0;
+	statuspkt.bconf = 0;
 #endif
 
 #ifdef SPLAT1
-		statuspkt.bconf |= 0x01;	// splat board version 1
+	statuspkt.bconf |= 0x01;	// splat board version 1
 #endif
 
-		statuspkt.bconf |= (circuitboardpcb << 8);
+	statuspkt.bconf |= (circuitboardpcb << 8);
 
 //		osDelay(100);
 
@@ -2175,50 +2180,50 @@ printf("*** TESTING BUILD USED ***\n");
 				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
 				udp_target, ips);
 #else
-		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
-		STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
-				udp_target, ips);
+	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
+	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
+			udp_target, ips);
 #endif
 #endif
 #ifdef SPLAT1
-		initsplat();
+	initsplat();
 #endif
 
-		stat = setupneo();
-		if (stat != HAL_OK) {
-			printf("Neo7 setup returned HAL error\n\r");	// but don't reboot
-		}
+	stat = setupneo();
+	if (stat != HAL_OK) {
+		printf("Neo7 setup returned HAL error\n\r");	// but don't reboot
+	}
 
-		printf("Setting up timers\n");
+	printf("Setting up timers\n");
 
-		if ( xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
-			/*printf("Initial semaphoregive failed\n")*/
-			;	// expect this to fail as part of the normal setup
-		}
+	if ( xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
+		/*printf("Initial semaphoregive failed\n")*/
+		;	// expect this to fail as part of the normal setup
+	}
 
-		HAL_TIM_Base_Start_IT(&htim6);		// basic packet timestamp 32 bits
+	HAL_TIM_Base_Start_IT(&htim6);		// basic packet timestamp 32 bits
 //		HAL_TIM_Base_Start_IT(&htim3);		// test timebase 1Hz pulse output
 //		HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_2);		// 1mS
 
-		TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_1, TIM_CCx_DISABLE);		// precision uS timer
-		TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_2, TIM_CCx_DISABLE);		// precision uS timer
-		TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);		// precision uS timer
+	TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_1, TIM_CCx_DISABLE);		// precision uS timer
+	TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_2, TIM_CCx_DISABLE);		// precision uS timer
+	TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);		// precision uS timer
 
-		HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_1);		// precision uS timer
-		HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_2);		// precision uS timer
-		HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_4);		// precision uS timer
+	HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_1);		// precision uS timer
+	HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_2);		// precision uS timer
+	HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_4);		// precision uS timer
 
 //HAL_TIM_IC_Init and HAL_TIM_IC_ConfigChannel
 //  (++) Input Capture :  HAL_TIM_IC_Start(), HAL_TIM_IC_Start_DMA(), HAL_TIM_IC_Start_IT()
 
 // capture on PB10 input
-		if ((err = HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_3, t2cap, (sizeof(t2cap) / 4))) != HAL_OK) {
-			printf("TIM_Base_Start_DMA err %i", err);
-			Error_Handler();
-		}
-		TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_3, TIM_CCx_ENABLE);	// capture precision timer
+	if ((err = HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_3, t2cap, (sizeof(t2cap) / 4))) != HAL_OK) {
+		printf("TIM_Base_Start_DMA err %i", err);
+		Error_Handler();
+	}
+	TIM_CCxChannelCmd(htim2.Instance, TIM_CHANNEL_3, TIM_CCx_ENABLE);	// capture precision timer
 
-		dhcp = netif_dhcp_data(netif);		// do not call this too early
+	dhcp = netif_dhcp_data(netif);		// do not call this too early
 #if 0
 	i = 0;
 	printf("DHCP in progress..\n");
@@ -2235,234 +2240,265 @@ printf("*** TESTING BUILD USED ***\n");
 		} // end if
 	} // end while
 #endif
-		ip_addr_t ip = { 0 };
-		ip = dhcp->offered_ip_addr;
-		myip = ip.addr;
-		if (myip == 0) {
-			printf("***** DHCP Failed ******\n");
-			osDelay(200);
-			rebootme(1);
+	ip_addr_t ip = { 0 };
+	ip = dhcp->offered_ip_addr;
+	myip = ip.addr;
+	if (myip == 0) {
+		printf("***** DHCP Failed ******\n");
+		osDelay(200);
+		rebootme(1);
+	}
+
+	printf("*****************************************\n");
+	printf("This unit's IP address is %d:%d:%d:%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
+			(myip & 0xFF000000) >> 24);
+	printf("*****************************************\n");
+
+	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
+	HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
+
+	initialapisn();								// get initial s/n and UDP target from http server; reboots if fails
+	osDelay(3000);		// wait for server to populate us (ZZZ)
+	// refresh the hardware watchdog reset system timer
+
+	if (http_downloading) {
+		printf("STM Downloading...\n");
+		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
+			osDelay(1000);
 		}
+		osDelay(5000);		// allow time for it to get to reboot if its going to
+	}
 
-		printf("*****************************************\n");
-		printf("This unit's IP address is %d:%d:%d:%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
-				(myip & 0xFF000000) >> 24);
-		printf("*****************************************\n");
-
-		// STM FIRWARE UPDATE CHECK AND DOWNLOAD
-		HAL_IWDG_Refresh(&hiwdg);						// refresh the hardware watchdog reset system timer
-
-		initialapisn();								// get initial s/n and UDP target from http server; reboots if fails
-		osDelay(3000);		// wait for server to populate us (ZZZ)
-		// refresh the hardware watchdog reset system timer
-
-		if (http_downloading) {
-			printf("STM Downloading...\n");
-			while (http_downloading) {
-				HAL_IWDG_Refresh(&hiwdg);
-				osDelay(1000);
-			}
-			osDelay(5000);		// allow time for it to get to reboot if its going to
+	nxt_update();		// check if LCD needs updating
+	if (http_downloading) {
+		printf("LCD Downloading...\n");
+		while (http_downloading) {
+			HAL_IWDG_Refresh(&hiwdg);
+			osDelay(1000);
 		}
+	}
 
-		nxt_update();		// check if LCD needs updating
-		if (http_downloading) {
-			printf("LCD Downloading...\n");
-			while (http_downloading) {
-				HAL_IWDG_Refresh(&hiwdg);
-				osDelay(1000);
-			}
-		}
+	osDelay(3000);		// wait for server to respond
 
-		osDelay(3000);		// wait for server to respond
+	vTaskResume(LPTaskHandle);		// allow it to start
 
-		vTaskResume(LPTaskHandle);		// allow it to start
-
-		printf("Starting httpd web server\n");
-		httpd_init();		// start the www server
-		init_httpd_ssi();	// set up the embedded tag handler
+	printf("Starting httpd web server\n");
+	httpd_init();		// start the www server
+	init_httpd_ssi();	// set up the embedded tag handler
 
 // tim7 drives DAC
 #if 1
-		printf("Warming up the sonic phaser\n");
+	printf("Warming up the sonic phaser\n");
 //		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, dacdata, sizeof(dacdata) >> 1, DAC_ALIGN_12B_L);
-		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
-		DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
-		HAL_TIM_Base_Start(&htim7);	// fast interval DAC timer sample rate
+	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
+	DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
+	HAL_TIM_Base_Start(&htim7);	// fast interval DAC timer sample rate
 #endif
 
-		setupnotify();
+	setupnotify();
 
-		udpdestip = locateip(HTTP_CONTROL_SERVER); // find a UDP target (this is NOT expected to be the final target)
-		if (udpdestip.addr == 0)    // can't find IP address from DNS name
-			rebootme(3);
+	udpdestip = locateip(HTTP_CONTROL_SERVER); // find a UDP target (this is NOT expected to be the final target)
+	if (udpdestip.addr == 0)    // can't find IP address from DNS name
+		rebootme(3);
 
-		main_init_done = 1; // let lptask now main has initialised
-		printf("Waiting for lptask to start\n");
-		while (lptask_init_done == 0)
-			osDelay(100); // hold off starting udp railgun until LPtask has initalised
+	main_init_done = 1; // let lptask now main has initialised
+	printf("Waiting for lptask to start\n");
+	while (lptask_init_done == 0)
+		osDelay(100); // hold off starting udp railgun until LPtask has initalised
 
-		startadc();		// start the ADC DMA loop
+	startadc();		// start the ADC DMA loop
 
-		while (1) {	//
-			startudp();	// should never return
-			printf("UDP stream exited!!!\n\r");
-			rebootme(4);
-		}
+	while (1) {	//
+		startudp();	// should never return
+		printf("UDP stream exited!!!\n\r");
+		rebootme(4);
 	}
+}
 
 // console Rx char
-	void uart2_rxdone() {
+void uart2_rxdone() {
 
-		xQueueSendToBackFromISR(consolerxq, &con_ch, NULL);
-		HAL_UART_Receive_IT(&huart2, &con_ch, 1);
-	}
+	xQueueSendToBackFromISR(consolerxq, &con_ch, NULL);
+	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
+}
 
 // error message when pps fault
-	void pps_stopped() {
-		gpslocked = 0;	// this is pretty ineffective, but its a start zzz
-		printf("PPS stuttering or not running?\n");
-		strcpy(lcd_err_msg, "\"PPS FAIL\"");
-		statuspkt.reserved2 |= 0x0002;			// use reserved2 to show CCLK errors
+void pps_stopped() {
+	gpslocked = 0;	// this is pretty ineffective, but its a start zzz
+	printf("PPS stuttering or not running?\n");
+	strcpy(lcd_err_msg, "\"PPS FAIL\"");
+	statuspkt.reserved2 |= 0x0002;			// use reserved2 to show CCLK errors
+}
+
+void printstatus(int verb) {
+	int i;
+
+	printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
+			(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
+	printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
+			pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000, nowtimestr);
+	if (verb == 2) {
+		for (i = 0; i < 12; i++) {
+			osDelay(0);
+			printf("meanwindiff:%d winmean:%d globaladcnoise:%d pretrigthresh:%d, triggthresh:%d\n", meanwindiff,
+					winmean, globaladcnoise, pretrigthresh, trigthresh);
+		}
+		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
+		STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	}
+}
+/* USER CODE END 5 */
+
+/* USER CODE BEGIN Header_StarLPTask */
+/**
+ * @brief Function implementing the LPTask thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_StarLPTask */
+void StarLPTask(void const *argument) {
+	/* USER CODE BEGIN StarLPTask */
+	static uint32_t lastpretrigcnt;
+	static int gpsbadcount = 0;
+	uint32_t reqtimer = 8000;
+	uint16_t tenmstimer = 0;
+	uint16_t onesectimer = 0;
+	int i, newthresh;
+	volatile int n;
+	char str[82] = { "empty" };
+	int16_t gainchanged;
+	int last3min = 0;
+	unsigned char inch;
+
+	statuspkt.adcudpover = 0;		// debug use count overruns
+	statuspkt.trigcount = 0;		// debug use adc trigger count
+	statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
+	gainchanged = 0;
+
+	consolerxq = xQueueCreate(80, sizeof(unsigned char));		// set up a console rx buffer
+	if (consolerxq == NULL) {
+		printf("Console Rx Queue not created... rebooting...\n");
+		rebootme(0);
 	}
 
-	/* USER CODE END 5 */
+	HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 
-	/* USER CODE BEGIN Header_StarLPTask */
-	/**
-	 * @brief Function implementing the LPTask thread.
-	 * @param argument: Not used
-	 * @retval None
-	 */
-	/* USER CODE END Header_StarLPTask */
-	void StarLPTask(void const *argument) {
-		/* USER CODE BEGIN StarLPTask */
-		static uint32_t lastpretrigcnt, trigs = 0;
-		static int gpsbadcount = 0;
-		uint32_t reqtimer = 8000;
-		uint16_t tenmstimer = 0;
-		uint16_t onesectimer = 0;
-		int i, n;
-		char str[82] = { "empty" };
-		int16_t gainchanged;
-		int last3min = 0;
-		unsigned char inch;
-
-		statuspkt.adcudpover = 0;		// debug use count overruns
-		statuspkt.trigcount = 0;		// debug use adc trigger count
-		statuspkt.udpsent = 0;	// debug use adc udp sample packet sent count
-		gainchanged = 0;
-
-		consolerxq = xQueueCreate(80, sizeof(unsigned char));		// set up a console rx buffer
-		if (consolerxq == NULL) {
-			printf("Console Rx Queue not created... rebooting...\n");
-			rebootme(0);
-		}
-
-		HAL_UART_Receive_IT(&huart2, &con_ch, 1);
-
-		osDelay(10);
-		if (http_downloading) {		// don't go further
-			while (http_downloading) {
-				osDelay(10);
-				HAL_IWDG_Refresh(&hiwdg);
-			}
-//		rebootme(0);
-		}
-
-		while (main_init_done == 0) {
-			lcd_starting();
+	osDelay(10);
+	if (http_downloading) {		// don't go further
+		while (http_downloading) {
+			osDelay(10);
 			HAL_IWDG_Refresh(&hiwdg);
 		}
+//		rebootme(0);
+	}
 
-		writelcdcmd("page 0");		// redraw page0
+	while (main_init_done == 0) {
+		lcd_starting();
+		HAL_IWDG_Refresh(&hiwdg);
+	}
 
-		HAL_TIM_Base_Start(&htim7);	// start audio synth sampling interval timer
+	writelcdcmd("page 0");		// redraw page0
+
+	HAL_TIM_Base_Start(&htim7);	// start audio synth sampling interval timer
 
 // timer 4 used to generate audio monotone to splat speaker, but PCB fault prevents it working
 //HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// HAL_TIM_OC_Start (TIM_HandleTypeDef* htim, uint32_t Channel)
 
-		lptask_init_done = 1;		// this lp task has done its initialisation
+	lptask_init_done = 1;		// this lp task has done its initialisation
 
-		for (;;) {							// The Low Priority Task forever loop
-			HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
-			osDelay(10);		// 10mSec
+	for (;;) {							// The Low Priority Task forever loop
+		HAL_IWDG_Refresh(&hiwdg);							// refresh the hardware watchdog reset system timer
+		osDelay(10);		// 10mSec
 
-			/***********************  Every 10mSec   *******************************/
+		/***********************  Every 10mSec   *******************************/
 //		tcp_tmr();
-			static uint32_t jabtrigcnt = 0;
+		static uint32_t jabtrigcnt = 0;
 
-			if (statuspkt.trigcount > (25 + jabtrigcnt)) { // spamming: > 25 packets sent in about 100mS
-				jabbertimeout = 10;		// 100mS seconds pause
-				if (agc) {
-					gainchanged = bumppga(-1);	// decrease gain
-				}
-				statuspkt.jabcnt++;
-				printf("Jabbering: %d, gain: %d\n", statuspkt.trigcount - jabtrigcnt, pgagain);
-				gainchanged = 0;		// can change trigger level following
-				if (pgagain == 0) {		// gain is at zero (gain 1)
-					if (trigthresh < 4085)
-						trigthresh += 10;
-				}
-
-				jabtrigcnt = statuspkt.trigcount;
-			} else {
-				if (jabbertimeout) {
-					jabbertimeout--;		// de-arm count
-				}
-				jabtrigcnt = statuspkt.trigcount;
+		if (statuspkt.trigcount > (25 + jabtrigcnt)) { // spamming: > 25 packets sent in about 100mS
+			jabbertimeout = 10;		// 100mS seconds pause
+			if (agc) {
+				gainchanged = bumppga(-1);	// decrease gain
+			}
+			statuspkt.jabcnt++;
+			printf("Jabbering: %d, gain: %d\n", statuspkt.trigcount - jabtrigcnt, pgagain);
+			gainchanged = 0;		// can change trigger level following
+			if (pgagain == 0) {		// gain is at zero (gain 1)
+				if (trigthresh < 4085)
+					trigthresh += 10;
 			}
 
-			reqtimer++;
-			tenmstimer++;
-			globaladcnoise = abs(meanwindiff);
-			pretrigthresh = 4 + (globaladcnoise >> 5);		// set the pretrigger level
+			jabtrigcnt = statuspkt.trigcount;
+		} else {
+			if (jabbertimeout) {
+				jabbertimeout--;		// de-arm count
+			}
+			jabtrigcnt = statuspkt.trigcount;
+		}
 
-			while (xQueueReceive(consolerxq, &inch, 0)) {
-				if (inch == 0x07) {  // control G
-					gpsfake = (gpsfake) ? 0 : 1;
-					printf("Fake GPS lock and UDP freeze is ");
-					if (gpsfake) {
-						printf("ON\n");
-						globalfreeze |= 2;
-					} else {
-						printf("OFF\n");
-						globalfreeze &= ~2;
-					}
-				}
+		reqtimer++;
+		tenmstimer++;
+		globaladcnoise = abs(meanwindiff);
+		i = trigthresh - 2;
+		if (i > 0)
+			pretrigthresh = i;
+		else
+			pretrigthresh = 1;		// set the pretrigger level
 
-				if (inch == 0x06) {  // control F
-					printf("UDP freeze is off\n");
-					globalfreeze = 0;
-				}
-
-				if (inch == 0x03) {		// control C,  AGC man/auto
-					agc = (agc) ? 0 : 1;
-					printf("AGC is ");
-					if (agc) {
-						printf("ON\n");
-					} else {
-						printf("OFF\n");
-					}
-				}
-				if ((isdigit(inch)) && (agc == 0)) {
-					setpgagain(inch - '0');
-					printf("Manually setting PGA gain to %c\n", inch);
-
+		while (xQueueReceive(consolerxq, &inch, 0)) {
+			if (inch == 0x07) {  // control G
+				gpsfake = (gpsfake) ? 0 : 1;
+				printf("Fake GPS lock and UDP freeze is ");
+				if (gpsfake) {
+					printf("ON\n");
+					globalfreeze |= 2;
 				} else {
-					__io_putchar(inch); // putchar(inch);	// echo console rx to tx
+					printf("OFF\n");
+					globalfreeze &= ~2;
 				}
 			}
+
+			if (inch == 0x06) {  // control F
+				printf("UDP freeze is off\n");
+				globalfreeze = 0;
+			}
+
+			if (inch == 0x12) {  // control R
+				printf("Reboot\n");
+				rebootme(0);
+			}
+
+			if (inch == 0x04) {  // control D
+				printstatus(2);
+			}
+
+			if (inch == 0x03) {		// control C,  AGC man/auto
+				agc = (agc) ? 0 : 1;
+				printf("AGC is ");
+				if (agc) {
+					printf("ON\n");
+				} else {
+					printf("OFF\n");
+				}
+			}
+			if ((isdigit(inch)) && (agc == 0)) {
+				setpgagain(inch - '0');
+				printf("Manually setting PGA gain to %c\n", inch);
+
+			} else {
+				__io_putchar(inch); // putchar(inch);	// echo console rx to tx
+			}
+		}
 
 #ifdef SPLAT1
-			if (!(ledsenabled)) {
-				HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
-			} else if (ledhang) {	// trigger led
-				ledhang--;
-				HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_SET);	// Splat D5 led on
-			} else {
-				HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
-			}
+		if (!(ledsenabled)) {
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
+		} else if (ledhang) {	// trigger led
+			ledhang--;
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_SET);	// Splat D5 led on
+		} else {
+			HAL_GPIO_WritePin(GPIOD, LED_D5_Pin, GPIO_PIN_RESET);	// Splat D5 led off
+		}
 #else
 		HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);		// onboard red led on
 	} else {
@@ -2474,31 +2510,31 @@ printf("*** TESTING BUILD USED ***\n");
 //		if (globaladcnoise == 0)
 //			globaladcnoise = statuspkt.adcbase;		// dont allow zero peaks
 
-			if (trigs != statuspkt.trigcount) {		// another tigger(s) has occured
-				trigs = statuspkt.trigcount;
-				strcpy(lcd_err_msg, "\"TRIGGER\"");
+		if (trigs != statuspkt.trigcount) {		// another tigger(s) has occured
+			trigs = statuspkt.trigcount;
+			strcpy(lcd_err_msg, "\"TRIGGER\"");
 
 //			HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// start audio buzz - broken on splat 1
 ///			HAL_TIM_Base_Start(&htim7);	// audio synth sampling interval timer
-				if (soundenabled) {
-					HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
-					DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
-				}
+			if (soundenabled) {
+				HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
+				DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
+			}
 
 #if 1
-				while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
-					printf("sem wait 1a\n");
-				}
-				strcpy(str, ctime(&epochtime));		// ctime
+			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
+				printf("sem wait 1a\n");
+			}
+			strcpy(str, ctime(&epochtime));		// ctime
 
-				n = 0;
-				i = 0;
-				while (i < strlen(str)) {
-					if ((str[i] != '\n') && (str[i] != '\r'))
-						trigtimestr[n++] = str[i];
-					i++;
-				}
-				trigtimestr[n] = '\0';
+			n = 0;
+			i = 0;
+			while (i < strlen(str)) {
+				if ((str[i] != '\n') && (str[i] != '\r'))
+					trigtimestr[n++] = str[i];
+				i++;
+			}
+			trigtimestr[n] = '\0';
 
 //			trigtimestr[strlen(str) - 1] = '\0';	// replace newline with terminator
 //			strcpy(trigtimestr, str);
@@ -2506,118 +2542,133 @@ printf("*** TESTING BUILD USED ***\n");
 //			sprintf(trigtimestr, "\"%s\"", str);
 //			sprintf(trigtimestr, "%u", epochtime);
 
-				if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore
-					printf("semaphore 1a release failed\n");
-				}
-#endif
-			}  // if (trigs != statuspkt.trigcount)
-#ifdef SPLAT1
-			processnex();		// process Nextion
-#endif
-
-			/**********************  Every 100mSec   *******************************/
-
-			if ((tenmstimer + 3) % 10 == 0) {
-
-#ifdef SPLAT1
-
-				// when no pga change needed - see if trig level is sensible and adjust it
-				if (gainchanged == 0) {		// gain not just changed
-					n = pretrigcnt - lastpretrigcnt;		// count pretriggers
-					if (n > 16) {				// far too many triggers in 100mS
-						if (agc) {
-							gainchanged = bumppga(-1);	// decrease gain
-							trigthresh += 2;
-						} else if (n > 4) {				// too many triggers in 100mS  // was 5
-							if (trigthresh < 4090)  // was 4095
-								trigthresh += 2;	// was +1
-						}
-					}
-
-					if (n == 0) {		// no triggers in last 100mS
-						if (trigthresh > MINTRIGTHRES)	// dont permit trigthresh < minimum
-							trigthresh--;
-					}
-					lastpretrigcnt = pretrigcnt;	// (dont worry about 2^32 wrap)
-
-#endif
-
-#ifdef SPLAT1
-
-					if ((!(lcd_initflag)) && (lastsec != onesectimer) && (lcd_currentpage == 0)) {
-						timeinfo = *localtime(&localepochtime);
-
-						lastsec = onesectimer;
-						lcd_time();		// display the clock on the LCD page 0
-
-						if (timeinfo.tm_yday != lastday) {
-							lcd_date();
-						}
-					} else if (lcd_currentpage == 1) {
-						lcd_showvars();
-					}
-
-#endif
-				}
+			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore
+				printf("semaphore 1a release failed\n");
 			}
+#endif
+		}  // if (trigs != statuspkt.trigcount)
+#ifdef SPLAT1
+		processnex();		// process Nextion
+#endif
 
-			/**********************  Every 1 Sec   *******************************/
+		/**********************  Every 100mSec   *******************************/
 
-			if ((tenmstimer + 60) % 100 == 0) { 	// every second on the 600mSec mark
+		if ((tenmstimer + 3) % 10 == 0) {
+
+#ifdef SPLAT1
+
+			// when no pga change needed - see if trig level is sensible and adjust it
+			if (gainchanged == 0) {		// gain not just changed
+				n = pretrigcnt - lastpretrigcnt;
+				lastpretrigcnt = pretrigcnt;	// (dont worry about 2^32 wrap)
+//				if (n > 0) {
+//					putchar('.');
+//				}
+//  nor gain changed
+
+				if ((n > PRETRIGCOUNTLIM) || (trigthresh > 30800)) {
+					if (agc) {
+						trigthresh++;	// far too many triggers in 100mS
+						gainchanged = bumppga(-1);	// decrease gain
+					} else {
+						trigthresh += 20;	// far too many triggers in 100mS
+					}
+				} else if (n > (PRETRIGCOUNTLIM >> 4)) {			// too many triggers in 100mS
+					trigthresh += 8;
+				} else if (n > (PRETRIGCOUNTLIM >> 2)) {				// too many triggers in 100mS
+					trigthresh += 2;
+				} else if (n > (PRETRIGCOUNTLIM )) {				// too many triggers in 100mS
+					trigthresh++;
+				} else if (trigthresh > MINTRIGTHRES)
+					trigthresh--;
+
+//				if (trigthresh - PRETRIGOFFSET > 0) {
+//					pretrigthresh = trigthresh - PRETRIGOFFSET;
+				/*			} else if (pretrigthresh > 1) {
+				 pretrigthresh--; */
+//				}
+				// safety
+				if (trigthresh > 100) {
+					trigthresh = 100;
+					gainchanged = bumppga(-1);	// decrease gain
+				}
+#endif
+
+#ifdef SPLAT1
+
+				if ((!(lcd_initflag)) && (lastsec != onesectimer) && (lcd_currentpage == 0)) {
+					timeinfo = *localtime(&localepochtime);
+
+					lastsec = onesectimer;
+					lcd_time();		// display the clock on the LCD page 0
+
+					if (timeinfo.tm_yday != lastday) {
+						lcd_date();
+					}
+				} else if (lcd_currentpage == 1) {
+					lcd_showvars();
+				}
+
+#endif
+			}
+		}
+		/**********************  Every 1 Sec   *******************************/
+
+		if ((tenmstimer + 60) % 100 == 0) { 	// every second on the 600mSec mark
 #define MAXTRIGS1S 10
-				gainchanged = 0;
-				if (agc) {
-					static uint32_t lastonesectrigs = 0;		// fast AGC to reduce gain
+			gainchanged = 0;
+			if (agc) {
+				static uint32_t lastonesectrigs = 0;		// fast AGC to reduce gain
 
 //				trigsin1sec = trigs - lastonesectrigs;
 
 //				if (trigsin1sec > MAXTRIGS1S)
 //					gainchanged = bumppga(-1);		/// this needs removing as its now all in 100mSec section
-					lastonesectrigs = trigs;
+				lastonesectrigs = trigs;
 
-				}
 			}
+		}
 
-			if ((tenmstimer + 11) % 100 == 0) {		// every second on the 110mSec mark
-				if (ledsenabled)
-					HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
-				else
-					HAL_GPIO_WritePin(GPIOD, LED_D2_Pin, GPIO_PIN_RESET);
+		if ((tenmstimer + 11) % 100 == 0) {		// every second on the 110mSec mark
+			if (ledsenabled)
+				HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			else
+				HAL_GPIO_WritePin(GPIOD, LED_D2_Pin, GPIO_PIN_RESET);
 #if 1
 
-				while (!(xSemaphoreTake(
-						ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
-					printf("sem wait 1b\n");
-				}
+			while (!(xSemaphoreTake(
+					ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
+				printf("sem wait 1b\n");
+			}
 
-				strcpy(str, ctime(&epochtime));
-				str[strlen(str) - 1] = '\0';	// replace newline with terminator
-				sprintf(nowtimestr, "\"%s\"", str);
+			strcpy(str, ctime(&epochtime));
+			str[strlen(str) - 1] = '\0';	// replace newline with terminator
+			sprintf(nowtimestr, "\"%s\"", str);
 #else
 						sprintf(nowtimestr, "\"%u\"", epochtime);
 #endif
-				sprintf(tempstr, "%d.%d", temperature, tempfrac);
-				sprintf(pressstr, "%d.%d", pressure, pressfrac);
+			sprintf(tempstr, "%d.%d", temperature, tempfrac);
+			sprintf(pressstr, "%d.%d", pressure, pressfrac);
 
-				// construct detector status for webpage
-				sprintf(statstr,
-						"\"<b>Uptime</b> %d <b>secs<br><br>Last trigger</b> %s<br><br><b>Triggers</b> %d<br><br><b>Noise</b> %d<br><br><b>ADC Base</b> %d<br><br><b>Trig Offset</b> %d<br><br>\"",
-						statuspkt.sysuptime, trigtimestr, statuspkt.trigcount, abs(meanwindiff) & 0xfff,
-						(globaladcavg & 0xfff), trigthresh);
+			// construct detector status for webpage
+			sprintf(statstr,
+					"\"<b>Uptime</b> %d <b>secs<br><br>Last trigger</b> %s<br><br><b>Triggers</b> %d<br><br><b>Noise</b> %d<br><br><b>ADC Base</b> %d<br><br><b>Trig Offset</b> %d<br><br>\"",
+					statuspkt.sysuptime, trigtimestr, statuspkt.trigcount, abs(meanwindiff) & 0xfff,
+					(globaladcavg & 0xfff), trigthresh);
 
-				if (gpslocked) {
-					sprintf(gpsstr, "\"Locked: %d Sats<br>Lon: %d<br>Lat: %d\"", statuspkt.NavPvt.numSV,
-							statuspkt.NavPvt.lon, statuspkt.NavPvt.lat);
-				} else {
-					strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");  // for http
-				}
+			if (gpslocked) {
+				sprintf(gpsstr, "\"Locked: %d Sats<br>Lon: %d<br>Lat: %d\"", statuspkt.NavPvt.numSV,
+						statuspkt.NavPvt.lon, statuspkt.NavPvt.lat);
+			} else {
+				strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");  // for http
+			}
 
-				if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore
-					printf("semaphore 1b release failed\n");
-				}
-				onesectimer++;
+			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore
+				printf("semaphore 1b release failed\n");
+			}
+			onesectimer++;
 
-				//////////// generate web page data
+			//////////// generate web page data
 #if 0
 				if (xSemaphoreTake(ssicontentHandle,( TickType_t ) 100 ) == pdTRUE) {	// take the ssi generation semaphore (portMAX_DELAY == infinite)
 					/*printf("We have the semaphore\n")*/;
@@ -2625,110 +2676,115 @@ printf("*** TESTING BUILD USED ***\n");
 					printf("semaphore take failed\n");
 				}
 #endif
-				while (!(xSemaphoreTake(ssicontentHandle,
-						(TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
-					printf("sem wait 1c\n");
-				}
-
-				{
-					//printf("sem1 wait done\n");
-				}
-
-				if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
-					printf("semaphore 1c release failed\n");
-				}
-				lcd_trigplot();		// update lcd trigger and noise plots
-
-			}		// if 1 second timer hit
-
-			if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
-				lcd_gps();		// display the GPS on the LCD page 0
+			while (!(xSemaphoreTake(ssicontentHandle,
+					(TickType_t ) 25) == pdTRUE)) {// give the ssi generation semaphore (portMAX_DELAY == infinite)
+				printf("sem wait 1c\n");
 			}
 
-			/**********************  Every 10 Secs   *******************************/
+			{
+				//printf("sem1 wait done\n");
+			}
 
-			if ((tenmstimer + 27) % 1000 == 0) {		// every 10 seconds
+			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {	// give the ssi generation semaphore
+				printf("semaphore 1c release failed\n");
+			}
+			lcd_trigplot();		// update lcd trigger and noise plots
 
+		}		// if 1 second timer hit
+
+		if ((tenmstimer + 50) % 100 == 0) {		// every second	- offset
+			lcd_gps();		// display the GPS on the LCD page 0
+		}
+
+		/**********************  Every 10 Secs   *******************************/
+
+		if ((tenmstimer + 27) % 1000 == 0) {		// every 10 seconds
+
+			if (globaladcnoise < MAXPGANOISE) {		// no triggers in last 100mS
+				gainchanged = bumppga(1);
+			}
 //			tftp_example_init_client();
 
 // check PPS signal is actually running, compare rtseconds with gps seconds
-				if (gpslocked) {
-					if (rtseconds > 0) {		// rtseconds not just 0, ie clicked over the minute
-						if ((rtseconds - statuspkt.NavPvt.sec) > 1)		// not expected
-							pps_stopped();
-					} else	// rtseconds == 0
-					if (!((statuspkt.NavPvt.sec == 59) || (statuspkt.NavPvt.sec == 0)))  // not okay
+			if (gpslocked) {
+				if (rtseconds > 0) {		// rtseconds not just 0, ie clicked over the minute
+					if ((rtseconds - statuspkt.NavPvt.sec) > 1)		// not expected
 						pps_stopped();
-				} else
-					// unlocked
-					statuspkt.reserved2 &= ~0x0002;		// clear PPS error (but it could still be there)
+				} else	// rtseconds == 0
+				if (!((statuspkt.NavPvt.sec == 59) || (statuspkt.NavPvt.sec == 0)))  // not okay
+					pps_stopped();
+			} else
+				// unlocked
+				statuspkt.reserved2 &= ~0x0002;		// clear PPS error (but it could still be there)
 
 #ifdef SPLAT1
+// this sees if we should bump the PGA gain up
+#define MINTRIGS10S 10
+#if 0
+			gainchanged = 0;
+			if (agc) {
+				static uint32_t prevtrigs = 0;	// 8	// slow AGC to increase PGA gain
+				static uint32_t trigsin10sec = 0;
 
-#define MINTRIGS10S 2
-				gainchanged = 0;
-				if (agc) {
-					static uint32_t prevtrigs = 0;	// 8	// slow AGC to increase PGA gain
-					static uint32_t trigsin10sec = 0;
-
-					trigsin10sec = trigs - prevtrigs;
-					// set the PGA using number of detections in 10 seconds as the reference
-					//			if (trigthresh <= pretrigthresh)		// 7 only bump UP gain if trig threshold above pretrigger is still low
-					if (trigsin10sec < MINTRIGS10S) {
+				trigsin10sec = trigs - prevtrigs;
+				// set the PGA using number of detections in 10 seconds as the reference
+				//			if (trigthresh <= pretrigthresh)		// 7 only bump UP gain if trig threshold above pretrigger is still low
+				if (trigsin10sec < MINTRIGS10S) {
+					if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
+						if (pgagain != 7) 	// max gain
+							gainchanged = bumppga(1);
+					} else {	// Lightingboard
 						if (trigthresh < (4095 - 5))
-							trigthresh += 5;		// increase thresh before gain bumps up
+							trigthresh += 8;		// increase thresh before gain bumps up to suppress glitch
 						gainchanged = bumppga(1);
 					}
-					prevtrigs = trigs;
 				}
+				prevtrigs = trigs;
+			}
+#endif
 
 #endif
 
-				/**********************  Every 30 Secs   *******************************/
-				if ((tenmstimer + 44) > 3000) {		// reset timer after 30 seconds
-					tenmstimer = 0;
+			/**********************  Every 30 Secs   *******************************/
+			if ((tenmstimer + 44) > 3000) {		// reset timer after 30 seconds
+				tenmstimer = 0;
 
-					if (gpsgood == 0) {	// gps is not talking to us
-						printf("GPS serial comms problem?\n");
-						if (gpsbadcount++ > 9) {
-							printf("GPS bad - rebooting...\n");
-							osDelay(3000);
-							rebootme(5);
-						}
-					} else
-						gpsbadcount = 0;
-					gpsgood = 0;			// reset the good flag
+				if (gpsgood == 0) {	// gps is not talking to us
+					printf("GPS serial comms problem?\n");
+					if (gpsbadcount++ > 9) {
+						printf("GPS bad - rebooting...\n");
+						osDelay(3000);
+						rebootme(5);
+					}
+				} else
+					gpsbadcount = 0;
+				gpsgood = 0;			// reset the good flag
 
 #ifdef SPLAT1
-					if (psensor == MPL115A2) {
-						if (getpressure115() != HAL_OK) {
-							printf("MPL115A2 error\n\r");
-						}
-					} else if (psensor == MPL3115A2) {
-						if (getpressure3115() != HAL_OK) {
-							printf("MPL3115A2 error\n\r");
-						}
+				if (psensor == MPL115A2) {
+					if (getpressure115() != HAL_OK) {
+						printf("MPL115A2 error\n\r");
 					}
+				} else if (psensor == MPL3115A2) {
+					if (getpressure3115() != HAL_OK) {
+						printf("MPL3115A2 error\n\r");
+					}
+				}
 
-					printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
-							(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
-					printf(
-							"triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n",
-							trigs, pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature,
-							tempfrac / 1000, nowtimestr);
+				printstatus(1);
 
 #else
 printf("triggers=%04d,    ------------------------------------------- %s", trigs,ctime(&epochtime));
 #endif
-				} // end if 30 second timer
+			} // end if 30 second timer
 
-				/**********************  Every 3 minutes   *******************************/
-				if (((onesectimer + 21) % 180 == 0) && (last3min != onesectimer)) {
-					last3min = onesectimer;	// prevent multiple calls while inside this second
+			/**********************  Every 3 minutes   *******************************/
+			if (((onesectimer + 21) % 180 == 0) && (last3min != onesectimer)) {
+				last3min = onesectimer;	// prevent multiple calls while inside this second
 
-					if (boosttrys > 0)	// timer for boost gain oscillating
-						boosttrys--;
-					lcd_pressplot();	// add a point to the pressure plot
+				if (boosttrys > 0)	// timer for boost gain oscillating
+					boosttrys--;
+				lcd_pressplot();	// add a point to the pressure plot
 #if 0
 			requestapisn();			//update s/n and udp target (reboot on fail)
 
@@ -2737,124 +2793,124 @@ printf("triggers=%04d,    ------------------------------------------- %s", trigs
 				rebootme(0);
 			}
 #endif
-				}
+			}
 
-				/**********************  Every 15 minutes  *******************************/
-				if (onesectimer > 900) {			// 15 mins
-					onesectimer = 0;
+			/**********************  Every 15 minutes  *******************************/
+			if (onesectimer > 900) {			// 15 mins
+				onesectimer = 0;
 #if 1
-					requestapisn();			//update s/n and udp target (reboot on fail)
+				requestapisn();			//update s/n and udp target (reboot on fail)
 
-					if (lcdupneeded()) {
-						printf("LCD update required, wait for reboot and download..\n");
-						rebootme(0);
-					}
-#endif
+				if (lcdupneeded()) {
+					printf("LCD update required, wait for reboot and download..\n");
+					rebootme(0);
 				}
+#endif
 			}
 		}
-		/* USER CODE END StarLPTask */
 	}
+	/* USER CODE END StarLPTask */
+}
 
-	/* Callback01 function */
-	void Callback01(void const *argument) {
-		/* USER CODE BEGIN Callback01 */
-		printf("Callback01\n");
-		/* USER CODE END Callback01 */
-	}
+/* Callback01 function */
+void Callback01(void const *argument) {
+	/* USER CODE BEGIN Callback01 */
+	printf("Callback01\n");
+	/* USER CODE END Callback01 */
+}
 
-	/**
-	 * @brief  Period elapsed callback in non blocking mode
-	 * @note   This function is called  when TIM12 interrupt took place, inside
-	 * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-	 * a global variable "uwTick" used as application time base.
-	 * @param  htim : TIM handle
-	 * @retval None
-	 */
-	void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-		/* USER CODE BEGIN Callback 0 */
-		extern void ADC_Conv_complete(void);
+/**
+ * @brief  Period elapsed callback in non blocking mode
+ * @note   This function is called  when TIM12 interrupt took place, inside
+ * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+ * a global variable "uwTick" used as application time base.
+ * @param  htim : TIM handle
+ * @retval None
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	/* USER CODE BEGIN Callback 0 */
+	extern void ADC_Conv_complete(void);
 #ifdef configGENERATE_RUN_TIME_STATS
 
-		if (htim->Instance == TIM14) {				// TIM14 used for RTOS profiling
+	if (htim->Instance == TIM14) {				// TIM14 used for RTOS profiling
 //		printf("T14 PeriodElapsedCallback\n");
-			rtos_debug_timer++;
-			return;
-		}
+		rtos_debug_timer++;
+		return;
+	}
 #endif
 
-		if (htim->Instance == TIM5) {// TIM5 interrupt is used as hook to run ADC_Conv_complete() at a lower IRQ  priority than dmacomplete
+	if (htim->Instance == TIM5) {// TIM5 interrupt is used as hook to run ADC_Conv_complete() at a lower IRQ  priority than dmacomplete
 
 //		printf("T5\n");
-			ADC_Conv_complete();			// It is a one-shot
-			return;
-		}
+		ADC_Conv_complete();			// It is a one-shot
+		return;
+	}
 
-		if (htim->Instance == TIM2) {
-			printf("T2P PeriodElapsedCallback %lu %lu\n", t2cap[0], statuspkt.clktrim);
-			return;
-		}
-		if (htim->Instance == TIM3) {
-			printf("T3 PeriodElapsedCallback\n");
-			return;
-		}
+	if (htim->Instance == TIM2) {
+		printf("T2P PeriodElapsedCallback %lu %lu\n", t2cap[0], statuspkt.clktrim);
+		return;
+	}
+	if (htim->Instance == TIM3) {
+		printf("T3 PeriodElapsedCallback\n");
+		return;
+	}
 
-		if (htim->Instance == TIM6) { // 1 second (internally timed, not compensated by GPS)
+	if (htim->Instance == TIM6) { // 1 second (internally timed, not compensated by GPS)
 //		printf("T6 PeriodElapsedCallback %u SR=%u\n", myfullcomplete, TIM6->SR);
-			t1sec++;
-			statuspkt.sysuptime++;
-			if (netup)
-				statuspkt.netuptime++;
-			if (gpslocked) {
-				statuspkt.gpsuptime++;
-				/*	if (epochvalid == 0) */{
-					statuspkt.epochsecs = calcepoch32();
-					epochvalid = 1;
-				}
-			} else {
-				statuspkt.gpsuptime = 0;	// gps uptime is zero
-				statuspkt.epochsecs = 0;	// make epoch time obviously wrong
-				epochvalid = 0;
+		t1sec++;
+		statuspkt.sysuptime++;
+		if (netup)
+			statuspkt.netuptime++;
+		if (gpslocked) {
+			statuspkt.gpsuptime++;
+			/*	if (epochvalid == 0) */{
+				statuspkt.epochsecs = calcepoch32();
+				epochvalid = 1;
 			}
-			return;
+		} else {
+			statuspkt.gpsuptime = 0;	// gps uptime is zero
+			statuspkt.epochsecs = 0;	// make epoch time obviously wrong
+			epochvalid = 0;
 		}
-
-		/* USER CODE END Callback 0 */
-		if (htim->Instance == TIM12) {
-			HAL_IncTick();
-		}
-		/* USER CODE BEGIN Callback 1 */
-		else {
-			printf("Unknown Timer Period Elapsed callback\n");
-		}
-		/* USER CODE END Callback 1 */
+		return;
 	}
 
-	/**
-	 * @brief  This function is executed in case of error occurrence.
-	 * @retval None
-	 */
-	void Error_Handler(void) {
-		/* USER CODE BEGIN Error_Handler_Debug */
-		/* User can add his own implementation to report the HAL error return state */
-		while (1) {
-			printf("HAL error (main.c 2343)\n");
-		}
-		/* USER CODE END Error_Handler_Debug */
+	/* USER CODE END Callback 0 */
+	if (htim->Instance == TIM12) {
+		HAL_IncTick();
 	}
+	/* USER CODE BEGIN Callback 1 */
+	else {
+		printf("Unknown Timer Period Elapsed callback\n");
+	}
+	/* USER CODE END Callback 1 */
+}
+
+/**
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
+	/* USER CODE BEGIN Error_Handler_Debug */
+	/* User can add his own implementation to report the HAL error return state */
+	while (1) {
+		printf("HAL error (main.c 2343)\n");
+	}
+	/* USER CODE END Error_Handler_Debug */
+}
 
 #ifdef  USE_FULL_ASSERT
-	/**
-	 * @brief  Reports the name of the source file and the source line number
-	 *         where the assert_param error has occurred.
-	 * @param  file: pointer to the source file name
-	 * @param  line: assert_param error line source number
-	 * @retval None
-	 */
-	void assert_failed(uint8_t *file, uint32_t line) {
-		/* USER CODE BEGIN 6 */
-		/* User can add his own implementation to report the file name and line number,
-		 tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-		/* USER CODE END 6 */
-	}
+/**
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
+	/* USER CODE BEGIN 6 */
+	/* User can add his own implementation to report the file name and line number,
+	 tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+	/* USER CODE END 6 */
+}
 #endif /* USE_FULL_ASSERT */

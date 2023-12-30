@@ -17,7 +17,10 @@
 #define ADCBUFSIZE (UDPBUFSIZE-ADCBUFHEAD)
 
 #define TRIG_THRES 100		// adc trigger level above avg noise (is calculated when running, not fixed)
-#define MINTRIGTHRES 6		// minimum trigger threshold
+#define MINTRIGTHRES 2		// minimum trigger threshold
+#define PRETRIGCOUNTLIM 1024	// number of pretriggers before reducinggain (every 100mS)
+#define PRETRIGOFFSET 2		// offset below trigthresh
+#define MAXPGANOISE 15		// PGA wont step up if noise > this
 
 typedef uint32_t adcbuffer[ADCBUFSIZE / 2];
 typedef uint16_t adc16buffer[ADCBUFSIZE];
@@ -60,10 +63,11 @@ extern uint8_t sendendstatus;	// flag from adc to udp to send status
 extern uint32_t globaladcnoise;
 extern uint16_t pretrigthresh;		// pretrigger threshold
 extern int16_t meanwindiff;	// sliding mean of window differences
+extern int16_t winmean;	// sliding window mean
 extern uint16_t lastmeanwindiff;
 extern uint16_t trigthresh;	// trigger threshold
 
-extern volatile uint32_t pretrigcnt;	// counter of pretrigger detections
+extern uint32_t pretrigcnt;	// counter of pretrigger detections
 extern int sigsuppress;		// countdown timer to suppress trigger
 
 extern volatile ADC_HandleTypeDef *globalhadc;	// dummy

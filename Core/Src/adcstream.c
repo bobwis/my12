@@ -39,9 +39,11 @@ uint8_t adcbatchid = 0;	// adc sequence number of a batch of 1..n consecutive tr
 uint8_t sendendstatus = 0; 	// flag to send end of capture status
 int jabbertimeout = 0;			// timeout for spamming trigger
 uint32_t ledhang = 0;
-int16_t meanwindiff = 0;	// sliding mean of window differences
+
 uint16_t lastmeanwindiff = 0;
-volatile uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
+int16_t winmean = 0;	// sliding window mean
+int16_t meanwindiff = 0;	// sliding mean of window differences
+uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
 int sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
@@ -57,7 +59,7 @@ static uint32_t samplecnt = 0;
 static uint8_t adcbufnum = 0;		// adc sequence number
 static int32_t windiff[WINSIZE] = { 0 };		// past window differences from the window mean
 static uint16_t lastsamp[WINSIZE] = { 0 };		// last sample saved to calc global mean
-static int16_t winmean = 0;	// sliding window mean
+
 static int32_t wdacc = 0;	// window difference accumulator
 static int32_t wmeanacc = 0;	// window mean accumulator
 static BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -361,14 +363,14 @@ void ADC_Conv_complete(void) {
 			thiswindiff = abs(thissamp - winmean);			// find difference from window mean
 			wdacc = wdacc - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
 
-			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences
+			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences (used for globalnoise)
 			windiff[j] = meanwindiff;	// store latest window mean of differences
 
 			lastthresh = lastmeanwindiff + trigthresh;
 
 			if (abs(meanwindiff) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
 				sigsend = 1; // the real trigger
-				pretrigcnt++;
+
 			} else {
 				if (((abs(meanwindiff) + pretrigthresh)) > lastthresh) {
 					pretrigcnt++;
@@ -380,6 +382,10 @@ void ADC_Conv_complete(void) {
 //			gpioeset(GPIO_PIN_12);
 
 		} // end for i
+		if (sigsend) {
+			trigthresh += 2;
+			pretrigcnt += 201;
+		}
 	}
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers
 	if (sigsend) {

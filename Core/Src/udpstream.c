@@ -87,7 +87,8 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 
 //	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);
-	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh | ((pgagain & 7) << 12);
+//	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh;
+	statuspkt.adctrigoff = (trigthresh & 0xFFF) | ((pgagain & 7) << 12);
 
 #if 0
 	while (ps->ref > 0) { // old packet not finished with yet
