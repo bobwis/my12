@@ -145,10 +145,6 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
 
-	if (gain > 6) {		// might be a DC jump
-		sigsuppress = 100;		// prevent trigger for 100 ADC buffer times
-	}
-
 	if (gain > 7) {
 		pgacmd[0] = 0x4101;			// write to channel reg select ch1
 	} else {
@@ -205,38 +201,28 @@ int initpga() {
 int bumppga(int i) {
 	volatile int gain;
 
-	gain = pgagain;
 	if (!((i == 1) || (i == -1))) {
-//		printf("bumppga: invalid step %d\n", i);
+		printf("bumppga: invalid step %d\n", i);
+		return(0);
 	}
-	if ((pgagain > 9) || (pgagain < 0)) {
+
+	if ((pgagain < 0) || (pgagain > 9)) {
 		printf("bumppga: invalid gain %d\n", pgagain);
-		pgagain = 0;
+		pgagain = 1;	// falls though so can result in gain=0 or gain=2
 	}
-	if (pgagain < 0)		// safety
-		pgagain = 0;
-	if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
-		if (pgagain > 7) {
-			pgagain = 7;			// reached max gain
+
+	gain = pgagain + i;
+
+	if ((circuitboardpcb == SPLATBOARD1) && (gain > 7)){		/// this doesn't have the boost function
+		return(0);			// reached max gain
 		}
 
-		if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
-			gain = gain + i;
+	if (!((gain < 0) || (gain > 9))) {	// there is room to change
+			sigsuppress = 2000;		// approx 0.5 seconds (allow adcbase to avg new level)
 			setpgagain(gain);
 			return (i);
 		}
-	} else { // not SPLAT1
-//	printf("bumppga: req: %d, gain=%d\n", i, gain);
-		if (pgagain > 9) {
-			pgagain = 9;			// reached max gain
-		}
-		if (!(((gain <= 0) && (i < 0)) || ((gain >= 9) && (i > 0)))) {	// there is room to change
-			gain = gain + i;
-			setpgagain(gain);
-			return (i);
-		}
-	}
-	return (0);
+	return(0);
 }
 
 //////////////////////////////////////////////

@@ -192,6 +192,21 @@ void lcd_uart_init(int baud) {
 #endif
 }
 
+// attempt to prevent trigger from LCD write noise when thegain is high
+void trigpause(int charcount) {
+#if 0
+	if (pgagain >= 7) {
+		if (charcount > 1) {
+			if (sigsuppress < 2000)	// not already suppressing
+				sigsuppress = 2000;		// approx 0.25 sec
+		} else {
+			if (sigsuppress < 1000)	// not already suppressing
+				sigsuppress = 1000;	// approx 0.125 sec
+		}
+	}
+#endif
+}
+
 // send reset command to LCD  (LCD's own init will start it again at 9600)
 void lcd_reset() {
 	HAL_StatusTypeDef stat;
@@ -236,6 +251,7 @@ inline int lcd_putc(uint8_t ch) {
 	if (wait_armtx() == -1)
 		return (-1);
 	txdmadone = 0;	// TX in progress
+	trigpause(1);
 	stat = HAL_UART_Transmit_DMA(&huart5, &ch, 1);
 	if (stat != HAL_OK) {
 		printf("lcd_putc: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
@@ -257,7 +273,7 @@ int lcd_writeblock(uint8_t *buf, int len) {
 	txdmadone = 0;	// TX in progress
 
 //	myhexDump("NXT:", buf, len);
-
+	trigpause(len);
 	stat = HAL_UART_Transmit_DMA(&huart5, buf, len);
 	if (stat != HAL_OK) {
 		printf("lcd_writeblock: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
@@ -285,6 +301,7 @@ int lcd_puts(char *str) {
 	txdmadone = 0;	// TX in progress
 //	printf("lcd_puts: len=%d, [%s]\n", i, str);
 
+	trigpause(96);
 	stat = HAL_UART_Transmit_DMA(&huart5, buffer, i);
 	if (stat != HAL_OK) {
 		printf("lcd_puts: Err %d HAL_UART_Transmit_DMA uart5\n", stat);
@@ -1017,7 +1034,7 @@ void lcd_showvars(void) {
 		sprintf(str, "%d", (globaladcavg & 0xfff));  // base
 		setlcdtext("t8.txt", str);
 //		sprintf(str, "%d", abs(meanwindiff) & 0xfff);  // noise
-		sprintf(str, "%d/%d/%d", abs(meanwindiff) & 0xfff, trigthresh & 0xfff, pretrigthresh & 0xfff);  // trigger threshold
+		sprintf(str, "%d/%d/%d", abs(meanwindiff) & 0xfff, trigthresh & 0xfff, pretrigthresh & 0xfff); // trigger threshold
 		setlcdtext("t7.txt", str);
 		sprintf(str, "%d", pgagain);	// gain
 		setlcdtext("t6.txt", str);
@@ -1244,7 +1261,8 @@ void lcd_controls(void) {
 //		setlcdtext("t2.txt", "LCD Brightness");
 //	sprintf(str,"%s Control Server IP: %lu.%lu.%lu.%lu",  HTTP_CONTROL_SERVER, ip & 0xff, (ip & 0xff00) >> 8,
 //			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
-		sprintf(str, "Hs:%s:%i\\rDs:%s\\rUs:%s:%i",HTTP_CONTROL_SERVER,DOWNLOAD_PORT,fs_domainname,udp_target,UDP_PORT_NO);
+		sprintf(str, "Hs:%s:%i\\rDs:%s\\rUs:%s:%i", HTTP_CONTROL_SERVER, DOWNLOAD_PORT, fs_domainname, udp_target,
+				UDP_PORT_NO);
 		setlcdtext("t3.txt", str);
 	}
 }

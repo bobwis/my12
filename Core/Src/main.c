@@ -2590,7 +2590,8 @@ void StarLPTask(void const *argument) {
 				// safety
 				if (trigthresh > 100) {
 					trigthresh = 100;
-					gainchanged = bumppga(-1);	// decrease gain
+					if (agc)
+						gainchanged = bumppga(-1);	// decrease gain
 				}
 #endif
 
@@ -2701,7 +2702,8 @@ void StarLPTask(void const *argument) {
 		if ((tenmstimer + 27) % 1000 == 0) {		// every 10 seconds
 
 			if (globaladcnoise < MAXPGANOISE) {		// no triggers in last 100mS
-				gainchanged = bumppga(1);
+				if (agc)
+					gainchanged = bumppga(1);
 			}
 //			tftp_example_init_client();
 
@@ -2732,7 +2734,8 @@ void StarLPTask(void const *argument) {
 				if (trigsin10sec < MINTRIGS10S) {
 					if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
 						if (pgagain != 7) 	// max gain
-							gainchanged = bumppga(1);
+							if (agc)
+								gainchanged = bumppga(1);
 					} else {	// Lightingboard
 						if (trigthresh < (4095 - 5))
 							trigthresh += 8;		// increase thresh before gain bumps up to suppress glitch
