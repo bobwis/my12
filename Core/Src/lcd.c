@@ -196,6 +196,7 @@ void lcd_uart_init(int baud) {
 void trigpause(int charcount) {
 #if 0
 	if (pgagain >= 7) {
+		taskENTER_CRITICAL();	//
 		if (charcount > 1) {
 			if (sigsuppress < 2000)	// not already suppressing
 				sigsuppress = 2000;		// approx 0.25 sec
@@ -203,6 +204,7 @@ void trigpause(int charcount) {
 			if (sigsuppress < 1000)	// not already suppressing
 				sigsuppress = 1000;	// approx 0.125 sec
 		}
+		taskEXIT_CRITICAL();
 	}
 #endif
 }
@@ -263,9 +265,7 @@ inline int lcd_putc(uint8_t ch) {
 // send a binary block to the LCD
 int lcd_writeblock(uint8_t *buf, int len) {
 	HAL_StatusTypeDef stat;
-	volatile int i;
 	uint32_t reg;
-	uint8_t by;
 
 	if (wait_armtx() == -1)
 		return (-1);
@@ -417,7 +417,7 @@ int writelcdcmd(char *str) {
 // send some text to a lcd text object
 int setlcdtext(char id[], char string[]) {
 	int i;
-	char str[106];
+	char str[140];
 	volatile int result = 0;
 
 	sprintf(str, "%s=\"%s\"", id, string);
@@ -1019,7 +1019,6 @@ void lcd_date() {
 // populate the page2 vars
 void lcd_showvars(void) {
 	unsigned char str[96];
-	unsigned long board;
 	static uint16_t toggle = 0;
 
 	switch (toggle) {
@@ -1252,7 +1251,7 @@ void lcd_pressplot() {
 
 // refresh the entire control page on the lcd
 void lcd_controls(void) {
-	unsigned char str[120];
+	unsigned char str[130];
 
 	osDelay(100);
 	if (our_currentpage == 4) {		// if currently displaying on LCD

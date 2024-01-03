@@ -30,7 +30,7 @@ uint32_t t2cap[1];  // dma writes t2 capture value on 1pps edge
 unsigned int dmabufno = 0;	// the last filled buffer 0 or 1
 
 unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
-volatile unsigned int sigsend = 0;	// flag to tell udp to send sample packet
+volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
 uint32_t globaladcavg = 0;		// adc average over milli-secs
 uint32_t globaladcnoise = 0;	// adc noise peaks average over milli-secs
 uint16_t pretrigthresh = TRIG_THRES;		// pretrigger threshold
@@ -44,7 +44,7 @@ uint16_t lastmeanwindiff = 0;
 int16_t winmean = 0;	// sliding window mean
 int16_t meanwindiff = 0;	// sliding mean of window differences
 uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
-int sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
+volatile uint16_t sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
 

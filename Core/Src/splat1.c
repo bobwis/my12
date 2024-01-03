@@ -218,7 +218,9 @@ int bumppga(int i) {
 		}
 
 	if (!((gain < 0) || (gain > 9))) {	// there is room to change
+			taskENTER_CRITICAL();	// discables interrupts
 			sigsuppress = 2000;		// approx 0.5 seconds (allow adcbase to avg new level)
+		    taskEXIT_CRITICAL();
 			setpgagain(gain);
 			return (i);
 		}

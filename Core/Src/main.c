@@ -2573,12 +2573,12 @@ void StarLPTask(void const *argument) {
 					} else {
 						trigthresh += 20;	// far too many triggers in 100mS
 					}
-				} else if (n > (PRETRIGCOUNTLIM >> 4)) {			// too many triggers in 100mS
-					trigthresh += 8;
+				} else if (n > (PRETRIGCOUNTLIM >> 1)) {				// too many triggers in 100mS
+						trigthresh += 4;
 				} else if (n > (PRETRIGCOUNTLIM >> 2)) {				// too many triggers in 100mS
-					trigthresh += 2;
-				} else if (n > (PRETRIGCOUNTLIM )) {				// too many triggers in 100mS
-					trigthresh++;
+							trigthresh += 2;
+				} else if (n > (PRETRIGCOUNTLIM >> 3)) {			// too many triggers in 100mS
+					trigthresh += 1;
 				} else if (trigthresh > MINTRIGTHRES)
 					trigthresh--;
 
