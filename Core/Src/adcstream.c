@@ -47,6 +47,7 @@ uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
 volatile uint16_t sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
+extern volatile uint32_t trigcomp;		// trigger threshold compensation provided by the server
 
 /* blow are vars used by the ADC capture function */
 
@@ -366,7 +367,7 @@ void ADC_Conv_complete(void) {
 			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences (used for globalnoise)
 			windiff[j] = meanwindiff;	// store latest window mean of differences
 
-			lastthresh = lastmeanwindiff + trigthresh;
+			lastthresh = lastmeanwindiff + trigthresh + trigcomp;		// trigger threshold compensation provided by the server;
 
 			if (abs(meanwindiff) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
 				sigsend = 1; // the real trigger

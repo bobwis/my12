@@ -2795,11 +2795,13 @@ printf("triggers=%04d,    ------------------------------------------- %s", trigs
 				printf("LCD update required, wait for reboot and download..\n");
 				rebootme(0);
 			}
+			if ((polltime < 1) || polltime > 900))
+				polltime = 900;	// default 15 mins
 #endif
 			}
 
 			/**********************  Every 15 minutes  *******************************/
-			if (onesectimer > 900) {			// 15 mins
+			if (onesectimer > polltime) {			// 15 mins
 				onesectimer = 0;
 #if 1
 				requestapisn();			//update s/n and udp target (reboot on fail)

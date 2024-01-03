@@ -36,6 +36,8 @@ char udp_target[64];	// dns or ip address of udp target
 char stmuid[96] = { 0 };	// STM UUID
 ip_addr_t remoteip = { 0 };
 int expectedapage = 0;
+uint32_t polltime = 900;	// polling server timer in seconds
+volatile uint32_t trigcomp = 0;		// trigger threshold compensation provided by the server
 
 // The cgi handler is called when the user changes something on the webpage
 void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params,
@@ -300,8 +302,8 @@ int parsep2(char *buf, char *match, int type, void *value) {
 // callback with the page
 void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
-	volatile uint32_t sn;
-	volatile int nconv, res, res2, res3;
+	volatile uint32_t sn, trigmod, pollmod;
+	volatile int nconv, res, res2, res3, res4;
 	volatile int p1;
 	volatile char p2[256];
 	volatile char s1[16];
@@ -338,6 +340,22 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
 						res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
 						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
+
+						res4 = parsep2(&p2[1], "tt", 2, &trigmod);
+						if (res4 == 0) {
+							printf("Server -> Trigger level modifier %d\n", trigmod);
+							if (trigmod < 4050) {
+								trigcomp = trigmod;
+							}
+						}
+
+						res4 = parsep2(&p2[1], "pt", 2, &pollmod);
+						if (res4 == 0) {
+							printf("Server -> Poll interval modifier %d\n", pollmod);
+							if (!(pollmod < 1) || (pollmod > 900)) {
+								polltime = pollmod;
+							}
+						}
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
