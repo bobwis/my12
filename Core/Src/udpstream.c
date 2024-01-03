@@ -21,6 +21,7 @@ extern uint32_t t1sec;
 uint8_t gpslocked = 0;
 uint8_t epochvalid = 0;
 unsigned int globalfreeze;		// freeze udp streaming
+extern volatile uint32_t trigcomp;
 
 struct ip4_addr udpdestip;		// udp dst ipv4 address
 char ips[16]; // string version of IP address
@@ -88,7 +89,7 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *
 
 //	statuspkt.adctrigoff = ((TRIG_THRES + (abs(globaladcnoise - statuspkt.adcbase))) & 0xFFF); //  | ((pgagain & 7) << 12);
 //	statuspkt.adctrigoff = abs(meanwindiff - lastmeanwindiff) + trigthresh;
-	statuspkt.adctrigoff = (trigthresh & 0xFFF) | ((pgagain & 0xF) << 12);
+	statuspkt.adctrigoff = ((trigthresh + trigcomp) & 0xFFF) | ((pgagain & 0xF) << 12);
 
 #if 0
 	while (ps->ref > 0) { // old packet not finished with yet

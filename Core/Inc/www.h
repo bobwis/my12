@@ -14,5 +14,6 @@ extern osSemaphoreId ssicontentHandle;
 
 extern char stmuid[96];
 extern ip_addr_t remoteip;
+extern uint32_t polltime;
 
 #endif /* WWW_H_ */
