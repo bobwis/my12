@@ -35,7 +35,10 @@
 #else
 #define BUILDNO BUILD+1000	// 16 bits  "S/W build number" of the lightning detector
 #endif
-
+/*
+ * see 	circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1	line 2063 in main.c
+ *  circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev
+ */
 #ifdef SPLAT1
 // Pressures sensor type fitted
 #define MPL115A2	1
