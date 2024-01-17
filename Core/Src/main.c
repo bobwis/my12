@@ -2336,13 +2336,13 @@ void printstatus(int verb) {
 
 	printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
 			(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
-	printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
-			pgagain, globaladcnoise, trigthresh, pressure, pressfrac / 4, temperature, tempfrac / 1000, nowtimestr);
+	printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, tcomp:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
+			pgagain, globaladcnoise, trigthresh, trigcomp, pressure, pressfrac / 4, temperature, tempfrac / 1000, nowtimestr);
 	if (verb == 2) {
 		for (i = 0; i < 12; i++) {
 			osDelay(0);
-			printf("meanwindiff:%d winmean:%d globaladcnoise:%d pretrigthresh:%d, triggthresh:%d\n", meanwindiff,
-					winmean, globaladcnoise, pretrigthresh, trigthresh);
+			printf("meanwindiff:%d winmean:%d globaladcnoise:%d pretrigthresh:%d, triggthresh:%d, tcomp:%02d\n", meanwindiff,
+					winmean, globaladcnoise, pretrigthresh, trigthresh, trigcomp);
 		}
 		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 		STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);

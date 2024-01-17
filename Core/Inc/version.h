@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 27
+#define MINORVERSION 28
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -29,7 +29,7 @@
 #endif
 
 // 21 May 2023 - updated IDE
-#define BUILD 10044
+#define BUILD 10045
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else

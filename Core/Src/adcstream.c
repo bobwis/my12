@@ -47,7 +47,7 @@ uint32_t pretrigcnt = 0;  // count of pre trigger (sensitive) events
 volatile uint16_t sigsuppress = 0;		// count down timer for suppresion of trigger (when changing gain)
 volatile uint32_t timestamp;	// ADC DMA complete timestamp
 volatile ADC_HandleTypeDef *globalhadc;	// dummy
-extern volatile uint32_t trigcomp;		// trigger threshold compensation provided by the server
+
 
 /* blow are vars used by the ADC capture function */
 
@@ -373,7 +373,7 @@ void ADC_Conv_complete(void) {
 				sigsend = 1; // the real trigger
 
 			} else {
-				if (((abs(meanwindiff) + pretrigthresh)) > lastthresh) {
+				if (((abs(meanwindiff) + pretrigthresh) + trigcomp) > lastthresh) {
 					pretrigcnt++;
 				}
 			}

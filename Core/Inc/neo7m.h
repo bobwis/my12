@@ -126,7 +126,7 @@ extern char lcdfile[32];
 extern char fwfilename[32];
 extern char loaderhost[48];
 extern uint32_t lcdlen;
-
+extern volatile uint32_t trigcomp;		// trigger threshold compensation provided by the server
 extern uint32_t dl_filecrc;
 extern int lptask_init_done;		// zero when lptask is not finished its init
 extern char lcd_err_msg[16];
