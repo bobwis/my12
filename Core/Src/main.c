@@ -1918,7 +1918,7 @@ err_leds(int why) {
 
 void rebootme(int why) {
 	volatile unsigned int i;
-
+	   NVIC_SystemReset();		// first, try using the NVIC
 	while (1) {
 #ifdef HARDWARE_WATCHDOG
 		__disable_irq();			// mask all interrupts

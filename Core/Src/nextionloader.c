@@ -297,7 +297,7 @@ int lcdupneeded() {
 			printf("LCD server build %d, lcd has %d\n",srvlcdbld,lcd_sys0);
 			return (1);
 		}
-		printf("LCD firmware %d matched server\n",srvlcdbld);
+//		printf("LCD firmware %d matched last server result\n",srvlcdbld);
 	} else {
 		printf("LCD firmware match bypassed\n");
 	}

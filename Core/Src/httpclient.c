@@ -1156,7 +1156,14 @@ int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 //	printf("hc_open: domain=%s, rxbuffer=%s\n", fs_domainname, rxbuffer);
 
 	down_total = 0;
-	expectedapage = 1;
+	expectedapage++;
+	if (expectedapage > 2)	// the requests are not being answered
+	{
+		printf("hc_open expectedapage number exceed limit, rebooting..\n");
+		writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NET FAIL -1\"");
+		osDelay(5000);
+		rebootme();
+	}
 	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
 			HttpClientPageResultCallback, &connection2);
 }

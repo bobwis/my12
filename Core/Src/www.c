@@ -310,122 +310,122 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
 	struct ip4_addr newip;
 	err_t err;
-	;
 
 //	printf("returnpage:\n");
-	if (expectedapage) {
-		if (errorm == 0) {
-//			printf("returnpage: errorm=%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
+	if (errorm == 0) {
+		if (expectedapage) {
+			expectedapage = 0;
+			res = 0;
+
+//			printf("returnpage: =%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 //			printf("Server replied: \"%.*s\"\n", charcount, content);
 			s1[0] = '\0';
 			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
-			if (nconv != EOF) {
-				switch (nconv) {
 
-				case 4: 							// converted  4 fields
-					// this param is for a variable number of string tokens
-					if (p2[0] == '{') {		// its the start of enclosed params
-						res = 0;
-						res2 = 0;
-						res3 = 0;
-						res |= parsep2(&p2[1], "fw", 1, fwfilename);
-						res |= parsep2(&p2[1], "bld", 2, &newbuild);
-						res |= parsep2(&p2[1], "crc1", 3, &crc1);  // low addr
-						res |= parsep2(&p2[1], "crc2", 3, &crc2);
+			switch (nconv) {
 
-						res2 |= parsep2(&p2[1], "srv", 1, &loaderhost);
-						res2 |= parsep2(&p2[1], "n2", 3, &n2);
-						res2 |= parsep2(&p2[1], "s1", 1, s1);
+			case EOF:
+				printf("returnpage: nconv == EOF errno=%d\n", errorm);
+				break;
 
-						res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
-						res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
-						res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
+			case 4: 							// converted  4 fields
+				// this param is for a variable number of string tokens
+				if (p2[0] == '{') {		// its the start of enclosed params
+					res = 0;
+					res2 = 0;
+					res3 = 0;
+					res |= parsep2(&p2[1], "fw", 1, fwfilename);
+					res |= parsep2(&p2[1], "bld", 2, &newbuild);
+					res |= parsep2(&p2[1], "crc1", 3, &crc1);		// low addr
+					res |= parsep2(&p2[1], "crc2", 3, &crc2);
 
-						res4 = parsep2(&p2[1], "tt", 2, &trigmod);
-						if (res4 == 0) {
-							printf("Server -> Trigger level modifier %d\n", trigmod);
-							if (trigmod < 4050) {
-								trigcomp = trigmod;
-							}
+					res2 |= parsep2(&p2[1], "srv", 1, &loaderhost);
+					res2 |= parsep2(&p2[1], "n2", 3, &n2);
+					res2 |= parsep2(&p2[1], "s1", 1, s1);
+
+					res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
+					res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
+					res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
+
+					res4 = parsep2(&p2[1], "tt", 2, &trigmod);
+					if (res4 == 0) {
+						printf("Server -> Trigger level modifier %d\n", trigmod);
+						if (trigmod < 4050) {
+							trigcomp = trigmod;
 						}
+					}
 
-						res4 = parsep2(&p2[1], "pt", 2, &pollmod);
-						if (res4 == 0) {
-							printf("Server -> Poll interval modifier %d\n", pollmod);
-							if (!(pollmod < 1) || (pollmod > 900)) {
-								polltime = pollmod;
-							}
+					res4 = parsep2(&p2[1], "pt", 2, &pollmod);
+					if (res4 == 0) {
+						printf("Server -> Poll interval modifier %d\n", pollmod);
+						if (!(pollmod < 1) || (pollmod > 900)) {
+							polltime = pollmod;
 						}
+					}
 
 //						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
 
-					} // else ignore it
-					  // fall through
+				} // else ignore it
+				  // fall through
 
-				case 3: 							// converted  3 fields
-					if (p1 == 1) {		// reboot
-						printf("Server -> commands a reboot...\n");
-						osDelay(500);
-						rebootme(6);
-					}
+			case 3:				  // converted  3 fields
+				if (p1 == 1) {		// reboot
+					printf("Server -> commands a reboot...\n");
+					osDelay(500);
+					rebootme(6);
+				}
 
-					if (p1 == 2) {		// freeze the UDP streaming
-						globalfreeze |= 1;
-						printf("Server -> commands a streaming freeze\n");
-					} else
-						globalfreeze &= ~1;
-					// falls through
+				if (p1 == 2) {		// freeze the UDP streaming
+					globalfreeze |= 1;
+					printf("Server -> commands a streaming freeze\n");
+				} else
+					globalfreeze &= ~1;
+				// falls through
 
-				case 2: 							// converted  2 fields
+			case 2:		// converted  2 fields
 #ifdef TESTING
 				strcpy(udp_target, HTTP_CONTROL_SERVER);
 #endif
-					if (strlen(udp_target) < 7) {					// bad url or ip address
-						strcpy(udp_target, HTTP_CONTROL_SERVER);				// default it
-					}
+				if (strlen(udp_target) < 7) {					// bad url or ip address
+					strcpy(udp_target, HTTP_CONTROL_SERVER);					// default it
+				}
 //					newip = locateip(udp_target);
 // 			try altrnate method below. The above fails and times out (occasionally even triggering watchdog....)
-					newip.addr = 0;
-					err = dns_gethostbyname(udp_target, &newip, NULL, 0);
-					if (err == ERR_OK) {
-						if ((newip.addr > 0) && (newip.addr != udpdestip.addr)) {
-							printf("******* Target UDP host just changed ********\n ");
-							udpdestip = newip;
-						}
+				newip.addr = 0;
+				err = dns_gethostbyname(udp_target, &newip, NULL, 0);
+				if (err == ERR_OK) {
+					if ((newip.addr > 0) && (newip.addr != udpdestip.addr)) {
+						printf("******* Target UDP host just changed ********\n ");
+						udpdestip = newip;
 					}
-					printf("Server -> Target UDP host: %s %d:%d:%d:%d\n", udp_target, udpdestip.addr & 0xFF,
-							(udpdestip.addr & 0xFF00) >> 8, (udpdestip.addr & 0xFF0000) >> 16,
-							(udpdestip.addr & 0xFF000000) >> 24);
-
-					// falls through
-
-				case 1: 							// converted the first field which is the serial number
-					if (statuspkt.uid != sn) {
-						statuspkt.uid = sn;
-						printf("Server -> Serial Number: %u\n", statuspkt.uid);
-					}
-					break;
-
-				default:
-					printf("Wrong number of params from Server -> %d\n", nconv);
-					down_total = 0;
-					nxt_abort = 1;
-					flash_abort = 1;
-					http_downloading = NOT_LOADING;
-					break;
 				}
-			} else {
-				printf("returnpage: (error returned) errno=%d\n", errorm);
-			}
+				printf("Server -> Target UDP host: %s %d:%d:%d:%d\n", udp_target, udpdestip.addr & 0xFF,
+						(udpdestip.addr & 0xFF00) >> 8, (udpdestip.addr & 0xFF0000) >> 16,
+						(udpdestip.addr & 0xFF000000) >> 24);
+
+				// falls through
+
+			case 1:					// converted the first field which is the serial number
+				if (statuspkt.uid != sn) {
+					statuspkt.uid = sn;
+					printf("Server -> Serial Number: %u\n", statuspkt.uid);
+				}
+				break;
+
+			default:
+				printf("Wrong number of params from Server -> %d\n", nconv);
+				down_total = 0;
+				nxt_abort = 1;
+				flash_abort = 1;
+				http_downloading = NOT_LOADING;
+				break;
+			} // end case
+
 			// this has to happen last
-			if (!res) {		// build changed?
+			if (res) {		// build changed?
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
 			}
-#if 1
 			if ((statuspkt.uid != 0xfeed) && (newbuild != BUILDNO) && (http_downloading == NOT_LOADING)) {// the stm firmware version advertised is different to this one running now
-#else
-				if (1) {
-#endif
 				if (lptask_init_done == 0) {		// if running, reboot before trying to load
 //			tftloader(filename, host, crc1, crc2);
 					osDelay(1000);
@@ -435,9 +435,10 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 					rebootme(0);
 				}
 			}
-		}
+		} // end if expectedpag
+	} else {
+		printf("returnpage: (error returned) errno=%d\n", errorm); // end if errorrm
 	}
-	expectedapage = 0;
 }
 
 // sends a URL request to a http server
@@ -458,6 +459,8 @@ void getpage(char page[64]) {
 //			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
 	printf("Polling the control server: %s\n", HTTP_CONTROL_SERVER);
 	result = hc_open(HTTP_CONTROL_SERVER, page, postvars, NULL);
+	if (result != 0)
+		printf("Result from getpage was %d\n", result);
 //	printf("httpclient: result=%d\n", result);
 
 }
@@ -489,7 +492,9 @@ void initialapisn() {
 			osDelay(2);
 		}
 		j++;
-		if (j > 5) {
+		if (j > 3) {
+			writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"NET FAIL -2\"");
+			osDelay(5000);
 			printf("initialapisn: ************* ABORTED **************\n");
 			rebootme(8);
 		}
