@@ -334,12 +334,12 @@ void ADC_Conv_complete(void) {
 //	gpioeset(GPIO_PIN_0);
 
 	if (dmabufno == 1) {		// second buffer is ready
-		buf = &((*pktbuf)[(UDPBUFSIZE / 4)]);
+		buf = (adcbuffer*) &((*pktbuf)[(UDPBUFSIZE / 4)]);
 	} else {
 		buf = pktbuf;
 	}
 
-	adcbuf16 = &((uint16_t*) *buf)[8];
+	adcbuf16 = (adc16buffer*) &((uint16_t*) *buf)[8];
 	(*buf)[3] = timestamp;		// this may not get set until now
 	(*buf)[1] = (statuspkt.uid << 16) | (adcbatchid << 8) | (rtseconds << 2) | (adcbufnum++ & 3);// ADC completed packet counter (24 bits)
 	(*buf)[2] = statuspkt.epochsecs; // statuspkt.NavPvt.iTOW;
@@ -490,12 +490,14 @@ void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA c
 }
 
 // these two are the real DMA Conversion complete interrupts
-void ADC_MultiModeDMAConvM0Cplt(ADC_HandleTypeDef *hadc) {
+void ADC_MultiModeDMAConvM0Cplt(DMA_HandleTypeDef *hdma) {
+	ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef*) hdma->Parent;
 	dmabufno = 0;
 	ADC_ConvCpltCallback(hadc);
 }
 
-void ADC_MultiModeDMAConvM1Cplt(ADC_HandleTypeDef *hadc) {
+void ADC_MultiModeDMAConvM1Cplt(DMA_HandleTypeDef *hdma) {
+	ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef*) hdma->Parent;
 
 	dmabufno = 1;
 	ADC_ConvCpltCallback(hadc);
@@ -533,10 +535,10 @@ void startadc() {
 		(*pktbuf)[i] = 0xaaaaaaaa;
 	}
 
-	adcbuf1 = &(*pktbuf)[ADCBUFHEAD / 4];	// leave room in start of first buffer
-	adcbuf2 = &(*pktbuf)[(ADCBUFHEAD / 4) + (ADCBUFSIZE / 4) + (ADCBUFHEAD / 4)];	// leave room in start of 2nd buffer
+	adcbuf1 = (adcbuffer*) &(*pktbuf)[ADCBUFHEAD / 4];	// leave room in start of first buffer
+	adcbuf2 = (adcbuffer*) &(*pktbuf)[(ADCBUFHEAD / 4) + (ADCBUFSIZE / 4) + (ADCBUFHEAD / 4)];	// leave room in start of 2nd buffer
 
-	adcstat = HAL_ADCEx_MultiModeStart_DBDMA(&hadc1, adcbuf1, adcbuf2, (ADCBUFSIZE / 2));	// len in 16bit words
+	adcstat = HAL_ADCEx_MultiModeStart_DBDMA(&hadc1, (uint32_t*) adcbuf1, (uint32_t*) adcbuf2, (ADCBUFSIZE / 2));	// len in 16bit words
 
 //	adcstat = HAL_ADCEx_MultiModeStart_DBDMA(&hadc1, adcbufdum1, adcbufdum2, (ADCBUFSIZE / 4));		// DEBUG
 //		printf("ADC_MM_Start returned %u\r\n", adcstat);

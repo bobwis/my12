@@ -39,8 +39,8 @@ void ADC_MultiModeDMAConvCplt(DMA_HandleTypeDef *hdma);
 void ADC_MultiModeDMAError(DMA_HandleTypeDef *hdma);
 void ADC_MultiModeDMAHalfConvCplt(DMA_HandleTypeDef *hdma);
 
-void ADC_MultiModeDMAConvM0Cplt(ADC_HandleTypeDef *hadc);
-void ADC_MultiModeDMAConvM1Cplt(ADC_HandleTypeDef *hadc);
+void ADC_MultiModeDMAConvM0Cplt(DMA_HandleTypeDef *hdma);
+void ADC_MultiModeDMAConvM1Cplt(DMA_HandleTypeDef *hdma);
 
 void startadc(void);
 
