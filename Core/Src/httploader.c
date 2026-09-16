@@ -21,6 +21,8 @@
 #include "splat1.h"
 #include "adcstream.h"
 #include "altcp.h"
+#include "lcd.h"
+#include "nextionloader.h"
 
 #include "eeprom.h"
 #include "tftp/tftp_loader.h"

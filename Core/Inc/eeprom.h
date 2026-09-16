@@ -44,6 +44,8 @@ extern uint32_t flash_findcrc(void *base, int length);
 extern void* memclose(void);
 extern int memread(void *buf, size_t size, size_t count, volatile void *mem);
 extern int flash_memwrite(const uint8_t buf[], size_t size, size_t len, volatile void *mem);
+extern void swapboot(void);
+extern void stampboot(void);
 
 extern int down_total;
 
