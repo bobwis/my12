@@ -22,6 +22,7 @@
 #include "lcd.h"
 #include "nextionloader.h"
 #include "tftp/tftp_loader.h"
+#include "lwip/dns.h"
 
 //#include "httpd.h"
 
