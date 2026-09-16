@@ -407,8 +407,12 @@ void swapboot() {
 }
 
 // not implemented
-static void* memread() {
-
+int memread(void *buf, size_t size, size_t count, volatile void *mem) {
+	(void) buf;
+	(void) size;
+	(void) count;
+	(void) mem;
+	return -1;
 }
 
 // write tp flash with data at memptr

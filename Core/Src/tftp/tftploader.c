@@ -70,7 +70,8 @@ static void* tftp_open(const char *fname, const char *mode, u8_t is_write) {
 }
 
 static void tftp_close(void *memptr) {
-	memclose(memptr);
+	LWIP_UNUSED_ARG(memptr);
+	memclose();
 }
 
 static int tftp_read(void *memptr, void *buf, int bytes) {
@@ -86,7 +87,7 @@ static int tftp_read(void *memptr, void *buf, int bytes) {
 static int tftp_write(void *memptr, struct pbuf *p) {
 	putchar('.');
 	while (p != NULL) {
-		if (memwrite(p->payload, 1, p->len, memptr) != (size_t) p->len) {
+		if (flash_memwrite(p->payload, 1, p->len, memptr) != (size_t) p->len) {
 			return -1;
 		}
 		p = p->next;
