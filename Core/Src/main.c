@@ -1982,7 +1982,7 @@ void crc_rom() {
 	printf("         CRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
 }
 
-err_leds(int why) {
+void err_leds(int why) {
 	volatile int i;
 
 	for (;;) {
@@ -2080,7 +2080,7 @@ void netif_link_callbk_fn(struct netif *netif) {
 }
 
 // check the GPS PPS and also for Lock
-checkgps(int diff) {
+void checkgps(int diff) {
 	static uint32_t lastcap = 0;
 	static int trimerrcnt = 0;
 

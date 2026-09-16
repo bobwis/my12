@@ -528,7 +528,7 @@ void* memclose() {
 		flash_abort = 0;
 		http_downloading = NOT_LOADING;
 		down_total = 0;		// unfreeze main
-		return;
+		return ((void*) 0);
 	}
 
 	if (q_index > 0) {			// unfinished residual write still needed

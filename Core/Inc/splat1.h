@@ -41,6 +41,6 @@ HAL_StatusTypeDef getpressure115(void);
 HAL_StatusTypeDef getpressure3115(void);
 void cycleleds(void);
 int printfromesp();
-extern int uart6_rxdone(void);
+extern void uart6_rxdone(void);
 
 #endif /* SPLAT1_H_ */

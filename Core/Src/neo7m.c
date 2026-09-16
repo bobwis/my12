@@ -725,7 +725,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 #define  HAL_UART_ERROR_DMA              ((uint32_t)0x00000010U)    /*!< DMA transfer error      */
 #define  HAL_UART_ERROR_RTO              ((uint32_t)0x00000020U)    /*!< Receiver Timeout error  */
 #endif
-HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	HAL_StatusTypeDef stat;
 	uint8_t ch;
 	int error;

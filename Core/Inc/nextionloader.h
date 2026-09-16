@@ -69,7 +69,7 @@ extern int nxt_abort;			// 1 == abort
 int lcdupneeded();
 void printlwiperr(err_t err);
 int lcd_rxdma();
-int nxt_update(void);
+void nxt_update(void);
 int nxt_sendres(void);
 int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err);
 

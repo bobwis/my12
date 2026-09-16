@@ -164,7 +164,7 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 	if (err != ERR_OK) {
 		putchar('@');
 		printlwiperr(err);
-		return;
+		return (-1);
 	}
 
 //	printf("nxt_rx_callback1: nxt_abort=%d, blockssent=%d, nxt_blocksacked=%d, q->len=%d\n", nxt_abort, blockssent,	nxt_blocksacked, p->len);
@@ -305,7 +305,7 @@ int lcdupneeded() {
 }
 
 ///  Check if LCD needs updating and update it if so
-nxt_update() {
+void nxt_update() {
 	uint32_t lcdbld;
 	int i;
 

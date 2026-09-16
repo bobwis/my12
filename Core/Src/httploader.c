@@ -87,7 +87,7 @@ int stm_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 	if (err != ERR_OK) {
 		putchar('#');
 		printlwiperr(err);
-		return;
+		return (-1);
 	}
 
 	for (q = p; q != NULL; q = q->next) {
