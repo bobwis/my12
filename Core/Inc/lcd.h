@@ -73,6 +73,8 @@ void lcd_starting();
 int writelcdcmd(char *str);
 void lcd_showvars(void);
 void init_nextion();
+void lcd_startdl(int filesize);
+int lcd_writeblock(uint8_t *buf, int len);
 
 
 #endif /* INC_LCD_H_ */
