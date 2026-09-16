@@ -51,9 +51,9 @@ PUTCHAR_PROTOTYPE {
 	/* e.g. write a character to the EVAL_COM1 and Loop until the end of transmission */
 	{
 		if (ch == '\n')
-			HAL_UART_Transmit(&huart2, "\r\n", 2, 10);
+			HAL_UART_Transmit(&huart2, (uint8_t*) "\r\n", 2, 10);
 		else
-		HAL_UART_Transmit(&huart2, &ch, 1, 10);
+		HAL_UART_Transmit(&huart2, (uint8_t*) &ch, 1, 10);
 
 	return ch;
 	}

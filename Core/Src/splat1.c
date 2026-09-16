@@ -135,7 +135,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register a mapped value
 //	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
 
-	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
 		printf("setpgagain: SPI Error1: %d pgacmd[0]=0x%0x\n", stat, pgacmd[0]);
 	}
 	osDelay(5);
@@ -153,7 +153,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	}
 //	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
 
-	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
 		printf("setpgagain: SPI Error2: %d\n", stat);
 	}
 
@@ -181,7 +181,7 @@ int initpga() {
 	osDelay(5);
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
-	if ((stat = HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0 }, 1, 1000)) != HAL_OK) {	// nop cmd
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) (uint16_t[] ) { 0 }, 1, 1000)) != HAL_OK) {	// nop cmd
 		printf("initpga: SPI error 2: %d\n\r", stat);
 		return (1);
 	}
@@ -190,7 +190,7 @@ int initpga() {
 
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
-	if ((stat = HAL_SPI_Transmit(&hspi2, (uint16_t[] ) { 0x4100 }, 1, 1000)) != HAL_OK) {	// set the channel to ch0
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) (uint16_t[] ) { 0x4100 }, 1, 1000)) != HAL_OK) {	// set the channel to ch0
 		printf("initpga: SPI error 2: %d\n\r", stat);
 		return (1);
 	}
