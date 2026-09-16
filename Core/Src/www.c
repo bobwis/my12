@@ -147,7 +147,7 @@ const char *tagname[] = { "temp", "pressure", "time", "led1", "sw1A", "sw1B", "s
 int i, j;
 
 // the tag callback handler
-tSSIHandler tag_callback(int index, char *newstring, int maxlen) {
+u16_t tag_callback(int index, char *newstring, int maxlen) {
 //  LOCK_TCPIP_CORE();
 	if (ledsenabled) {
 		HAL_GPIO_TogglePin(GPIOD, LED_D3_Pin);
@@ -459,7 +459,7 @@ void getpage(char page[64]) {
 //	printf("\n%s Control Server IP: %lu.%lu.%lu.%lu\n", HTTP_CONTROL_SERVER, (ip.addr) & 0xff, ((ip.addr) & 0xff00) >> 8,
 //			((ip.addr) & 0xff0000) >> 16, ((ip.addr) & 0xff000000) >> 24);
 	printf("Polling the control server: %s\n", HTTP_CONTROL_SERVER);
-	result = hc_open(HTTP_CONTROL_SERVER, page, postvars, NULL);
+	result = hc_open(HTTP_CONTROL_SERVER, page, 0, NULL);
 	if (result != 0)
 		printf("Result from getpage was %d\n", result);
 //	printf("httpclient: result=%d\n", result);
