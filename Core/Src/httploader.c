@@ -61,7 +61,7 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 
 	printf("httploader: fliename=%s, host=%s, crc1=%u, crc2=%u\n", filename, host, crc1, crc2);
 
-	flash_memptr = flash_load_address;
+	flash_memptr = (void*) flash_load_address;
 	flash_filelength = 0;
 
 	sprintf(newfilename, "/firmware/%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
