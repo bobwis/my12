@@ -287,7 +287,7 @@ int _write(int file, unsigned char *ptr, int len) {
 		}
 	} else {
 		for (DataIdx = 0; DataIdx < len; DataIdx++) {
-			HAL_UART_Transmit(&huart5, /*(uint8_t*)*/*ptr++, 1, 10);
+			HAL_UART_Transmit(&huart5, ptr++, 1, 10);
 		}
 	}
 	return len;
