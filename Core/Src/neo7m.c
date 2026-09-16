@@ -30,6 +30,8 @@
 #include <time.h>
 #include "lcd.h"
 #include "cmsis_os.h"
+#include "main.h"
+#include "httpclient.h"
 
 typedef uint8_t byte;
 
