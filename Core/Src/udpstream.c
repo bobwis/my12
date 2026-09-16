@@ -61,7 +61,7 @@ void myreboot(char *msg) {
 	return (err);
 }
 
-void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_addr *addr, u16_t port) {
+void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
 	volatile err_t err;
 	if (p != NULL) {
 		/* send received packet back to sender */
@@ -163,7 +163,7 @@ int dnslookup(char *name, struct ip4_addr *ip) {
 //			printf(".");
 			if (ip_ready) {		// is it done?
 				if (ip_ready == -1) {
-					ip->addr = "127.0.0.1";	// safe ?
+					IP4_ADDR(ip, 127, 0, 0, 1);	// safe ?
 					printf("dnslookup: failed 1\n");
 					return (ERR_TIMEOUT);	// not always timeout, but some error
 				}
@@ -172,7 +172,7 @@ int dnslookup(char *name, struct ip4_addr *ip) {
 				return (ERR_OK);
 			}
 		}
-		ip->addr = "127.0.0.1";	// safe ?
+		IP4_ADDR(ip, 127, 0, 0, 1);	// safe ?
 		printf("dnslookup: failed 2\n");
 		return (-1);	// Timed out
 		break;
