@@ -252,8 +252,12 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
   netif->hwaddr[4] =  heth.Init.MACAddr[4];
   netif->hwaddr[5] =  heth.Init.MACAddr[5];
 
-  /* maximum transfer unit */
-  netif->mtu = ETH_MAX_PAYLOAD;
+  /* maximum transfer unit - deliberately reduced from ETH_MAX_PAYLOAD (1500)
+   * so IP_FRAG splits large UDP packets into two fragments before they hit
+   * the wire. The actual value and full rationale are defined as
+   * NETIF_MTU_OVERRIDE in LWIP/Target/lwipopts.h (USER CODE BEGIN 1 section,
+   * so it survives CubeMX regeneration) - change it there, not here. */
+  netif->mtu = NETIF_MTU_OVERRIDE;
 
   /* Accept broadcast address and ARP traffic */
   /* don't set NETIF_FLAG_ETHARP if this device is not an ethernet one */

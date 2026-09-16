@@ -186,6 +186,18 @@
 #define LWIP_SO_RCVTIMEO 100
 #define ETH_RX_BUFFER_SIZE 1536
 
+/* Netif MTU override: our ~1500-byte UDP status/data packets (see UDPBUFSIZE
+ * in Core/Inc/adcstream.h) were being dropped by some hops on the path to the
+ * server. Lowering the netif's MTU below that packet size makes lwIP's
+ * IP_FRAG (enabled by default - see opt.h) split each one into two smaller
+ * IP fragments before it ever reaches the Ethernet driver, with no change to
+ * any application code. 1000 gives ~500 bytes of margin under the RFC 8200
+ * IPv6 minimum-MTU floor (1280 bytes) on both resulting fragments (996 and
+ * 524 bytes on the wire). Applied in LWIP/Target/ethernetif.c, in
+ * low_level_init(): netif->mtu = NETIF_MTU_OVERRIDE; - change the value here,
+ * not there. */
+#define NETIF_MTU_OVERRIDE 1000
+
 #ifdef TESTING
 #define LWIP_DEBUG
 #define LWIP_PLATFORM_DIAG(x) do {printf x;} while(0)
