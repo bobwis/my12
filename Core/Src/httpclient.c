@@ -1039,7 +1039,7 @@ void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 	returnpage(rxbuffer, down_total, err);
 }
 
-int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
+err_t HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
 	char *buf;
 	struct pbuf *q;
 	int count = 0, tlen = 0, len = 0;
@@ -1050,11 +1050,11 @@ int HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf 
 		nxt_rx_callback(arg, pcb, p, err);
 	}
 
-	return (0);
+	return ERR_OK;
 }
 
 // build a webpage from pbufs
-void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
+err_t HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
 	int i;
 	char *buf;
 	struct pbuf *q;
@@ -1066,7 +1066,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 	if (err != ERR_OK) {
 		putchar('^');
 		printlwiperr(err);
-		return;
+		return err;
 	}
 
 	for (q = p; q != NULL; q = q->next) {
@@ -1092,6 +1092,7 @@ void HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf
 		}
 //		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, tlen);
 	}
+	return ERR_OK;
 }
 
 // download a file
