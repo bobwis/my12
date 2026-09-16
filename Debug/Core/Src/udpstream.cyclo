@@ -1,0 +1,9 @@
+../Core/Src/udpstream.c:135:6:dnsfound	1
+../Core/Src/udpstream.c:31:6:myreboot	1
+../Core/Src/udpstream.c:41:17:sendudp	3
+../Core/Src/udpstream.c:64:6:myudp_recv	3
+../Core/Src/udpstream.c:81:16:sendstatus	1
+../Core/Src/udpstream.c:124:6:sendtimedstatus	3
+../Core/Src/udpstream.c:143:5:dnslookup	9
+../Core/Src/udpstream.c:189:24:locateip	3
+../Core/Src/udpstream.c:213:6:startudp	14

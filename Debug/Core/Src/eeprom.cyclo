@@ -1,0 +1,16 @@
+../Core/Src/eeprom.c:346:6:stampboot	6
+../Core/Src/eeprom.c:40:5:ReadEE	2
+../Core/Src/eeprom.c:62:5:WriteEE	2
+../Core/Src/eeprom.c:101:6:testeeprom	5
+../Core/Src/eeprom.c:166:6:printflasherr	10
+../Core/Src/eeprom.c:139:19:UnlockFlash	2
+../Core/Src/eeprom.c:152:19:LockFlash	2
+../Core/Src/eeprom.c:206:19:EraseFlash	10
+../Core/Src/eeprom.c:276:19:WriteFlashWord	4
+../Core/Src/eeprom.c:321:5:WriteFlash32k	6
+../Core/Src/eeprom.c:379:6:swapboot	4
+../Core/Src/eeprom.c:412:5:memread	1
+../Core/Src/eeprom.c:421:5:flash_writeword	3
+../Core/Src/eeprom.c:437:5:flash_memwrite	15
+../Core/Src/eeprom.c:520:7:memclose	12
+../Core/Src/eeprom.c:637:10:flash_findcrc	1
