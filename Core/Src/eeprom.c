@@ -14,6 +14,10 @@
 #include "eeprom.h"
 #include "stm32f7xx_hal.h"
 #include "httpclient.h"
+#include "miscutils.h"
+
+// forward declaration: defined further down this file, used earlier by UnlockFlash()
+void printflasherr(void);
 
 uint32_t flash_load_address = LOADER_BASE_MEM1;
 void *flash_memptr = (void*) 0;
