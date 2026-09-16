@@ -2405,7 +2405,7 @@ printf("*** TESTING BUILD USED ***\n");
 #if 1
 	printf("Warming up the sonic phaser\n");
 //		HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, dacdata, sizeof(dacdata) >> 1, DAC_ALIGN_12B_L);
-	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
+	HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*) phaser_wav, sizeof(phaser_wav),
 	DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);
 	HAL_TIM_Base_Start(&htim7);	// fast interval DAC timer sample rate
 #endif
@@ -2633,7 +2633,7 @@ void StarLPTask(void const * argument)
 //			HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// start audio buzz - broken on splat 1
 ///			HAL_TIM_Base_Start(&htim7);	// audio synth sampling interval timer
 			if (soundenabled) {
-				HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, phaser_wav, sizeof(phaser_wav),
+				HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*) phaser_wav, sizeof(phaser_wav),
 				DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
 			}
 
