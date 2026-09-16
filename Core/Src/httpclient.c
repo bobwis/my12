@@ -60,6 +60,11 @@
 #include "eeprom.h"
 #include "httpclient.h"
 #include "nextionloader.h"
+#include "udpstream.h"
+#include "www.h"
+
+// defined in httploader.c; no shared header exists for that module
+extern int stm_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err);
 
 #if LWIP_TCP && LWIP_CALLBACK_API
 
@@ -1121,7 +1126,7 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 // request a webpage (from the control server)
 int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 	err_t error;
-	uint32_t dnsip;
+	struct ip4_addr dnsip;
 
 	connection2 = &conn2;	// point to static
 	settings2 = &set2;		// point to static

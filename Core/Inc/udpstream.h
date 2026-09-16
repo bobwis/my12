@@ -12,6 +12,8 @@
 
 void startudp();
 
+extern int dnslookup(char *name, struct ip4_addr *ip);
+
 
 
 #define UDP_PORT_NO 5000

@@ -9,6 +9,7 @@
 #define WWW_H_
 
 void httpclient(char*);
+void returnpage(volatile char *content, volatile u16_t charcount, int errorm);
 
 extern osSemaphoreId ssicontentHandle;
 

@@ -70,5 +70,7 @@ int lcdupneeded();
 void printlwiperr(err_t err);
 int lcd_rxdma();
 int nxt_update(void);
+int nxt_sendres(void);
+int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err);
 
 #endif /* INC_NEXTIONLOADER_H_ */
