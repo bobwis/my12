@@ -331,8 +331,8 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 		return (-1);
 	}
 	for (i = 0; i < 0x2000; i++) {		// 0x2000 words is 0x8000 bytes
-		if (res = WriteFlashWord(startadd + i, datablock[i])) {
-			printf("WriteEE Failed at %d\n", startadd + i);
+		if (res = WriteFlashWord((uint32_t) startadd + i, datablock[i])) {
+			printf("WriteEE Failed at %d\n", (uint32_t) startadd + i);
 			return (-1);
 		}
 	}
@@ -346,7 +346,7 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 void stampboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
-	uint32_t *newadd, options, addr;
+	uint32_t newadd, options, addr;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 
@@ -379,17 +379,15 @@ void stampboot() {
 void swapboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
-	uint32_t *newadd, options;
+	uint32_t newadd, options;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 	HAL_FLASH_OB_Unlock();
 
-	// swap boot address (maybe)
+	// swap boot address
 
 	newadd = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;	// toggle boot segment start add
-	if (*newadd != 0xffffffff) {	// if new area is not an empty region
-		OBInitStruct.BootAddr0 = newadd;	// change boot address
-	}
+	OBInitStruct.BootAddr0 = newadd;	// change boot address
 	OBInitStruct.BootAddr1 = (OBInitStruct.BootAddr0 == 0x2000) ? 0x2040 : 0x2000;// flip alternate (this is only used if boot pin inverted)
 
 	OBInitStruct.USERConfig |= FLASH_OPTCR_nDBOOT;		// disable mirrored flash dual boot
@@ -423,7 +421,7 @@ int memread(void *buf, size_t size, size_t count, volatile void *mem) {
 int flash_writeword(uint32_t worddata) {
 	HAL_StatusTypeDef res;
 
-	if ((res = WriteFlashWord(flash_memptr, worddata)) != 0) {
+	if ((res = WriteFlashWord((uint32_t) flash_memptr, worddata)) != 0) {
 		printf("memwrite: WriteFlash error\n");
 		return (-1);
 	}
@@ -552,7 +550,7 @@ void* memclose() {
 		return ((void*) 0);
 	}
 
-	xcrc = flash_findcrc(flash_load_address, flash_filelength);
+	xcrc = flash_findcrc((void*) flash_load_address, flash_filelength);
 	if ((dl_filecrc != xcrc) && (dl_filecrc != 0xffffffff)) {
 		down_total = 0;		// unfreeze main
 		printf(
