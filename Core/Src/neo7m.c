@@ -29,6 +29,7 @@
 #include "adcstream.h"
 #include <time.h>
 #include "lcd.h"
+#include "cmsis_os.h"
 
 typedef uint8_t byte;
 

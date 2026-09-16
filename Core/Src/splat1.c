@@ -31,6 +31,7 @@
 #include "adcstream.h"
 #include "main.h"
 #include <time.h>
+#include "cmsis_os.h"
 
 #ifdef SPLAT1
 
