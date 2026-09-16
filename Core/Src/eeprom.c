@@ -173,7 +173,7 @@ void printflasherr() {
 	case FLASH_ERROR_ERS:
 		msg = "Erasing Sequence";
 		break;
-	case FLASH_ERROR_PGP:
+	case HAL_FLASH_ERROR_PGP:	// legacy alias FLASH_ERROR_PGP is broken in stm32_hal_legacy.h (aliases to nonexistent HAL_FLASH_ERROR_PGS)
 		msg = "Programming Parallelism";
 		break;
 	case FLASH_ERROR_PGA:
