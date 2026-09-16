@@ -9,7 +9,7 @@
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:470:8:xStreamBufferSpacesAvailable	3
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:494:8:xStreamBufferBytesAvailable	3
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:506:8:xStreamBufferSend	16
-../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:610:8:xStreamBufferSendFromISR	9
+../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:610:8:xStreamBufferSendFromISR	8
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:713:8:xStreamBufferReceive	14
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:817:8:xStreamBufferNextMessageLengthBytes	6
 ../Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c:861:8:xStreamBufferReceiveFromISR	9

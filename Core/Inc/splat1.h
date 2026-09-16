@@ -37,5 +37,9 @@ extern int nxt_abort;			// 1 == nextion loader abort
 extern int psensor;		// pressure sensor type
 
 extern const int pgamult[];		// maps from 0..7 gain control to the PGA
+HAL_StatusTypeDef getpressure115(void);
+HAL_StatusTypeDef getpressure3115(void);
+void cycleleds(void);
+int printfromesp();
 
 #endif /* SPLAT1_H_ */

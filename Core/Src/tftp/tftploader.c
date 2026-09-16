@@ -66,7 +66,7 @@ static void* tftp_open_mem(const unsigned int memaddress, u8_t is_write) {
 
 static void* tftp_open(const char *fname, const char *mode, u8_t is_write) {
 	LWIP_UNUSED_ARG(mode);
-	return tftp_open_mem(fname, is_write);
+	return tftp_open_mem((unsigned long)fname, is_write);
 }
 
 static void tftp_close(void *memptr) {

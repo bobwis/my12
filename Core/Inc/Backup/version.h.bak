@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 22
+#define MINORVERSION 28
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -28,14 +28,17 @@
 #define SPLAT1
 #endif
 
-// 22 Nov 2022
-#define BUILD 10039
+// 21 May 2023 - updated IDE
+#define BUILD 10046
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
 #define BUILDNO BUILD+1000	// 16 bits  "S/W build number" of the lightning detector
 #endif
-
+/*
+ * see 	circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1	line 2063 in main.c
+ *  circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev
+ */
 #ifdef SPLAT1
 // Pressures sensor type fitted
 #define MPL115A2	1
@@ -68,6 +71,7 @@
 
 #define SPLATBOARD1	11
 #define SPLATBOARD2 12
+// see 2136 in main.c - needs manual substitution of LIGHTNINGBOARD version
 #define LIGHTNINGBOARD1	21
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0

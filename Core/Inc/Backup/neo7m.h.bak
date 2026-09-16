@@ -69,7 +69,7 @@ extern struct statpkt {
 	uint32_t clktrim;		// Nominal 108MHz clock is actually this frequency
 	uint16_t uid;			// 16 bits used
 	uint16_t adcpktssent;	// Number of ADC pks sent in this trigger event
-	uint16_t adctrigoff;	// adc trigger threshold above noise
+	uint16_t adctrigoff;	// adc trigger threshold above noise. also 4 bits of gain >> 12
 	uint16_t adcbase;		// average background level seen by ADC
 	uint32_t sysuptime;		// number of seconds system up from boot uptime
 	uint32_t netuptime;		// number of seconds network up
@@ -89,7 +89,7 @@ extern struct statpkt {
 	// bits 0..2 are Splat revision present (0 == no Spalt board fitted)
 	// bits 3..4 are Pressure / Temp Sensor type.  0 = none, 1 = MPL3115, 2 = MPL115A2
 	uint32_t bconf;			// the board configuration
-	uint32_t reserved2;
+	uint32_t reserved2;		// used to flag GPS and PPS state
 	uint32_t telltale1;		// end of packet marker
 } __attribute__((aligned(4),packed))  volatile statuspkt;
 
@@ -126,10 +126,13 @@ extern char lcdfile[32];
 extern char fwfilename[32];
 extern char loaderhost[48];
 extern uint32_t lcdlen;
-
+extern volatile uint32_t trigcomp;		// trigger threshold compensation provided by the server
 extern uint32_t dl_filecrc;
 extern int lptask_init_done;		// zero when lptask is not finished its init
 extern char lcd_err_msg[16];
+
+
+uint32_t calcepoch32();
 
 #endif /* NEO7M_H_ */
 

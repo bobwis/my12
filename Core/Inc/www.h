@@ -16,4 +16,8 @@ extern char stmuid[96];
 extern ip_addr_t remoteip;
 extern uint32_t polltime;
 
+void requestapisn();
+void init_httpd_ssi();
+void initialapisn();
+
 #endif /* WWW_H_ */

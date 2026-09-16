@@ -45,6 +45,7 @@ struct tm now;		// gps time updated every second
 time_t epochtime;	// gps time updated every second
 time_t last_trig_time = 0;	// last trigger time (to one second)
 
+
 unsigned int gpsgood = 0;	// GPS comms status
 static const unsigned char UBXGPS_HEADER[] = { 0xB5, 0x62, 0x01, 0x07 };
 static const unsigned char UBXGPS_HEADER2[] = { 0xB5, 0x62, 0x0a, 0x04 };

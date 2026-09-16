@@ -66,5 +66,13 @@ extern volatile int lcd_sys0;
 extern int txdmadone;
 extern volatile int lcd_txblocked;
 
+void lcd_trigplot();
+void lcd_gps(void);
+void lcd_pressplot();
+void lcd_starting();
+int writelcdcmd(char *str);
+void lcd_showvars(void);
+void init_nextion();
+
 
 #endif /* INC_LCD_H_ */

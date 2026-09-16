@@ -84,4 +84,6 @@ extern char fs_domainname[30];
 int hc_open(char *servername, char *page, char Postvars, void *returpage);
 void http_dlclient(char *filename, char *host, void *flash_memptr);
 
+void rebootme(int why);
+
 #endif //  __HTTPCLIENT_H

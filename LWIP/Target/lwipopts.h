@@ -73,6 +73,8 @@
 #define MEM_SANITY_CHECK 1
 /*----- Default Value for LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT: 0 ---*/
 #define LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT 1
+/*----- Default Value for F7 devices: 0x20048000 -----*/
+#define LWIP_RAM_HEAP_POINTER 0x20048000
 /*----- Default Value for MEMP_NUM_PBUF: 16 ---*/
 #define MEMP_NUM_PBUF 24
 /*----- Default Value for MEMP_NUM_RAW_PCB: 4 ---*/

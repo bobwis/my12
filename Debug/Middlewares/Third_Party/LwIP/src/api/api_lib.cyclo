@@ -1,4 +1,5 @@
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:579:1:netconn_recv_data	15
+../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1089:1:netconn_close_shutdown	3
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:703:1:netconn_recv_data_tcp	11
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:149:1:netconn_new_with_proto_and_callback	7
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:192:1:netconn_prepare_delete	3
@@ -22,5 +23,5 @@
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:974:1:netconn_write_partly	1
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1125:1:netconn_close	3
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1139:1:netconn_err	2
-../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1163:1:netconn_shutdown	3
+../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1163:1:netconn_shutdown	1
 ../Middlewares/Third_Party/LwIP/src/api/api_lib.c:1274:1:netconn_gethostbyname	5

@@ -131,7 +131,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
 
-	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register
+	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register a mapped value
 //	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
 
 	if ((stat = HAL_SPI_Transmit(&hspi2, &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
@@ -144,10 +144,6 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
-
-	if (gain > 6) {		// might be a DC jump
-		sigsuppress = 8;		// prevent trigger for a while
-	}
 
 	if (gain > 7) {
 		pgacmd[0] = 0x4101;			// write to channel reg select ch1
@@ -205,38 +201,30 @@ int initpga() {
 int bumppga(int i) {
 	volatile int gain;
 
-	gain = pgagain;
 	if (!((i == 1) || (i == -1))) {
-//		printf("bumppga: invalid step %d\n", i);
+		printf("bumppga: invalid step %d\n", i);
+		return(0);
 	}
-	if ((pgagain > 9) || (pgagain < 0)) {
+
+	if ((pgagain < 0) || (pgagain > 9)) {
 		printf("bumppga: invalid gain %d\n", pgagain);
-		pgagain = 0;
+		pgagain = 1;	// falls though so can result in gain=0 or gain=2
 	}
-	if (pgagain < 0)		// safety
-		pgagain = 0;
-	if (circuitboardpcb == SPLATBOARD1) {		/// this doesn't have the boost function
-		if (pgagain > 7) {
-			pgagain = 7;			// reached max gain
+
+	gain = pgagain + i;
+
+	if ((circuitboardpcb == SPLATBOARD1) && (gain > 7)){		/// this doesn't have the boost function
+		return(0);			// reached max gain
 		}
 
-		if (!(((gain <= 0) && (i < 0)) || ((gain >= 7) && (i > 0)))) {	// there is room to change
-			gain = gain + i;
+	if (!((gain < 0) || (gain > 9))) {	// there is room to change
+			taskENTER_CRITICAL();	// discables interrupts
+			sigsuppress = 2000;		// approx 0.5 seconds (allow adcbase to avg new level)
+		    taskEXIT_CRITICAL();
 			setpgagain(gain);
 			return (i);
 		}
-	} else { // not SPLAT1
-//	printf("bumppga: req: %d, gain=%d\n", i, gain);
-		if (pgagain > 9) {
-			pgagain = 9;			// reached max gain
-		}
-		if (!(((gain <= 0) && (i < 0)) || ((gain >= 9) && (i > 0)))) {	// there is room to change
-			gain = gain + i;
-			setpgagain(gain);
-			return (i);
-		}
-	}
-	return (0);
+	return(0);
 }
 
 //////////////////////////////////////////////
@@ -626,7 +614,7 @@ void init_esp() {
 		printfromesp();		// try to empty anything in the buffer
 		osDelay(1);
 	}
-	osDelay(200);	// wait for prnt to finish
+	osDelay(200);	// wait for print to finish
 	printf("\n");
 }
 
@@ -639,7 +627,7 @@ uart6_rxdone() {
 	if (esprxindex >= sizeof(esprxdatabuf))
 		esprxindex = 0;
 	if (esprxindex == espoutindex) {	// overrun
-		printf("*** ESP RX overrun......\n");
+//		printf("*** ESP RX overrun......\n");
 		esprxindex = i;
 	}
 }
@@ -672,15 +660,17 @@ void test_esp() {
 	osDelay(200);
 	esp_cmd(getstatus);	// send the command
 
-	for (waitforoutput = 0; waitforoutput < 10000; waitforoutput++) {
+	for (waitforoutput = 0; waitforoutput < 1000; waitforoutput++) {
 		j = j + printfromesp();		// try to empty anything in the buffer
 		osDelay(1);
 	}
+
 	if (j > 10) {
 		printf("test_esp: ESP *is* talking with us\n");
-	} else {
-			printf("test_esp: ESP NOT responding\n");
 	}
+// finished testing
+	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
+
 }
 
 int printfromesp() {
@@ -690,7 +680,7 @@ int printfromesp() {
 		i++;
 
 		espoutindex++;
-		putchar(esprxdatabuf[espoutindex++]);
+//		putchar(esprxdatabuf[espoutindex++]);
 
 		if (espoutindex > sizeof(esprxdatabuf))
 			espoutindex = 0;
@@ -823,7 +813,7 @@ void initsplat(void) {
 	}
 	osDelay(500);
 
-	if (circuitboardpcb == LIGHTNINGBOARD2) {
+	if (circuitboardpcb == LIGHTNINGBOARD2)  {
 		huart6.Init.BaudRate = 115200;
 		if (HAL_UART_Init(&huart6) != HAL_OK)		// UART6 is ESP, was GPS on Splat1
 				{
@@ -831,13 +821,12 @@ void initsplat(void) {
 		}
 		test_ds2485();
 		init_esp();
-		osDelay(500);
+		osDelay(100);
 		test_esp();
-		osDelay(200);
+		osDelay(100);
 	} else if (circuitboardpcb == LIGHTNINGBOARD1) {
 		test_ds2485();
 	}
-
-	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);		// inhibit the ESP - put it into reset
 }
+
 #endif
