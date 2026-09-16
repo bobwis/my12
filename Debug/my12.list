@@ -41,17 +41,17 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  18 .debug_rnglists 00005f22  00000000  00000000  0012fb60  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .debug_macro  0004acee  00000000  00000000  00135a82  2**0
+ 19 .debug_macro  0004acf5  00000000  00000000  00135a82  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 20 .debug_line   000943a4  00000000  00000000  00180770  2**0
+ 20 .debug_line   000943a6  00000000  00000000  00180777  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_str    0013a42e  00000000  00000000  00214b14  2**0
+ 21 .debug_str    0013a446  00000000  00000000  00214b1d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 22 .comment      00000043  00000000  00000000  0034ef42  2**0
+ 22 .comment      00000043  00000000  00000000  0034ef63  2**0
                   CONTENTS, READONLY
- 23 .debug_frame  0000d900  00000000  00000000  0034ef88  2**2
+ 23 .debug_frame  0000d900  00000000  00000000  0034efa8  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 24 .debug_line_str 00000049  00000000  00000000  0035c888  2**0
+ 24 .debug_line_str 00000049  00000000  00000000  0035c8a8  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -51323,8 +51323,8 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
  80156b6:	f894 2035 	ldrb.w	r2, [r4, #53]	@ 0x35
   netif->hwaddr[5] =  heth.Init.MACAddr[5];
  80156ba:	7959      	ldrb	r1, [r3, #5]
-  netif->mtu = ETH_MAX_PAYLOAD;
- 80156bc:	f240 53dc 	movw	r3, #1500	@ 0x5dc
+  netif->mtu = NETIF_MTU_OVERRIDE;
+ 80156bc:	f44f 737a 	mov.w	r3, #1000	@ 0x3e8
  80156c0:	85a3      	strh	r3, [r4, #44]	@ 0x2c
     netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;
  80156c2:	f042 030a 	orr.w	r3, r2, #10
@@ -51464,7 +51464,7 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
  80157c4:	e7ca      	b.n	801575c <ethernetif_init+0x168>
   LWIP_ASSERT("netif != NULL", (netif != NULL));
  80157c6:	4b19      	ldr	r3, [pc, #100]	@ (801582c <ethernetif_init+0x238>)
- 80157c8:	f240 221b 	movw	r2, #539	@ 0x21b
+ 80157c8:	f240 221f 	movw	r2, #543	@ 0x21f
  80157cc:	4918      	ldr	r1, [pc, #96]	@ (8015830 <ethernetif_init+0x23c>)
  80157ce:	4819      	ldr	r0, [pc, #100]	@ (8015834 <ethernetif_init+0x240>)
  80157d0:	f010 fcac 	bl	802612c <iprintf>
@@ -51752,7 +51752,7 @@ u32_t sys_now(void)
 {
  8015a10:	b530      	push	{r4, r5, lr}
   struct pbuf_custom *p = LWIP_MEMPOOL_ALLOC(RX_POOL);
- 8015a12:	f240 3277 	movw	r2, #887	@ 0x377
+ 8015a12:	f240 327b 	movw	r2, #891	@ 0x37b
 {
  8015a16:	b083      	sub	sp, #12
  8015a18:	4604      	mov	r4, r0
