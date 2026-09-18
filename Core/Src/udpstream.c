@@ -14,6 +14,7 @@
 #include "ip_addr.h"
 #include "lwip/dns.h"
 #include "lwip/prot/dns.h"
+#include <string.h>
 
 #define pbuf_free pbuf_free_callback
 
@@ -59,6 +60,74 @@ void myreboot(char *msg) {
 	} else
 		busycount = 0;
 	return (err);
+}
+
+/* Software send queue for triggered ADC sample packets.
+ *
+ * p1/p2 (the actual ADC/DMA ping-pong buffers) used to be handed straight to
+ * sendudp() and the ADC-facing code spun (while(pd->ref != 1)) waiting for
+ * the network stack to fully release that exact physical memory before the
+ * next sample could reuse it. That was always a tight fit with only 2
+ * buffers, and got worse once fragmentation started requiring two TX
+ * completions per sample instead of one - under a fast trigger burst it
+ * could spin forever, blocking this task (and everything at equal-or-lower
+ * priority) indefinitely.
+ *
+ * Now the ADC-facing code (in startudp()'s notified branch) does a single
+ * fixed-size ~1.4KB memcpy into the next free queue slot and returns
+ * immediately - p1/p2 are free for the ADC's own DMA ping-pong right away,
+ * with no dependency on network completion at all. A separate, non-blocking
+ * drain step (called every loop iteration, whether triggered or on timeout)
+ * sends from the queue whenever the oldest slot's dedicated pbuf shows the
+ * previous send from that slot has actually finished.
+ *
+ * Sized for the ~50-packet trigger bursts this system produces, with margin.
+ * Deliberately a plain static array (not FreeRTOS-heap-backed): the queue at
+ * this depth would consume nearly the entire ~96KB FreeRTOS heap in one
+ * allocation if done via pvPortMalloc/xQueueCreate, starving every other
+ * allocation in the firmware. It sits instead in RAM that's otherwise
+ * entirely unused (~208KB free per the current linker map).
+ */
+#define SEND_QUEUE_DEPTH 64
+static uint8_t sendqueuebuf[SEND_QUEUE_DEPTH][UDPBUFSIZE];
+static struct pbuf *sendqueuepbuf[SEND_QUEUE_DEPTH];
+static uint8_t sq_head = 0;	// next slot the producer (trigger handler) will fill
+static uint8_t sq_tail = 0;	// next slot the consumer (drain) will send
+static uint8_t sq_count = 0;	// number of samples currently queued, unsent
+
+// Copy a completed trigger sample into the send queue. Fast and bounded -
+// never waits on anything. If the queue is already full (network can't keep
+// up even with SEND_QUEUE_DEPTH slots of buffering), drops the sample and
+// counts it, matching the existing sigsend/adcudpover overrun idiom in
+// adcstream.c for the same "producer outpaced consumer" situation.
+static void enqueue_sample(void *payload) {
+	if (sq_count >= SEND_QUEUE_DEPTH) {
+		statuspkt.adcudpover++;	// queue full, drop this sample
+		return;
+	}
+	memcpy(sendqueuebuf[sq_head], payload, UDPBUFSIZE);
+	((uint8_t*) sendqueuebuf[sq_head])[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
+	((uint8_t*) sendqueuebuf[sq_head])[0] = statuspkt.udppknum & 0xff;
+	((uint8_t*) sendqueuebuf[sq_head])[1] = (statuspkt.udppknum & 0xff00) >> 8;
+	((uint8_t*) sendqueuebuf[sq_head])[2] = (statuspkt.udppknum & 0xff0000) >> 16;
+	statuspkt.udppknum++;		// UDP packet number - assigned in production order
+	sq_head = (sq_head + 1) % SEND_QUEUE_DEPTH;
+	sq_count++;
+}
+
+// Send at most one queued sample per call, and only if the network stack has
+// fully released this slot's pbuf from whatever it last sent from it. Never
+// blocks - if the oldest slot isn't ready yet, skip and try again next time
+// this is called (every loop iteration in startudp(), so very soon).
+static void drain_sendqueue(struct udp_pcb *pcb) {
+	if ((sq_count == 0) || (sendqueuepbuf[sq_tail]->ref != 1)) {
+		return;
+	}
+	sendudp(pcb, sendqueuepbuf[sq_tail], &udpdestip, UDP_PORT_NO);
+	statuspkt.udpsent++;		// debug use adc udp sample packet sent count
+	statuspkt.adcpktssent++;	// UDP sample packet counter
+	sq_tail = (sq_tail + 1) % SEND_QUEUE_DEPTH;
+	sq_count--;
 }
 
 void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
@@ -215,7 +284,6 @@ void startudp() {		// destination UDP target IP address
 	struct pbuf *pd, *p1, *p2, *ps;
 	uint32_t ulNotificationValue = 0;
 	const TickType_t xMaxBlockTime = pdMS_TO_TICKS(1000);
-	volatile err_t err;
 	int i;
 
 //printf("Startudp:\n");
@@ -267,6 +335,16 @@ void startudp() {		// destination UDP target IP address
 	}
 	ps->payload = &statuspkt;	// point at status / GPS data
 
+	// dedicated, permanently-held pbuf per send queue slot (same pattern as p1/p2/ps)
+	for (i = 0; i < SEND_QUEUE_DEPTH; i++) {
+		sendqueuepbuf[i] = pbuf_alloc(PBUF_TRANSPORT, UDPBUFSIZE, PBUF_REF);
+		if (sendqueuepbuf[i] == NULL) {
+			printf("startudp: sendqueue pbuf %d alloc failed!\n", i);
+			return;
+		}
+		sendqueuepbuf[i]->payload = sendqueuebuf[i];
+	}
+
 	osDelay(5000);
 
 	statuspkt.auxstatus1 = 0;
@@ -304,20 +382,8 @@ void startudp() {		// destination UDP target IP address
 				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 				pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
 
-				((uint8_t*) (pd->payload))[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
-				((uint8_t*) (pd->payload))[0] = statuspkt.udppknum & 0xff;
-				((uint8_t*) (pd->payload))[1] = (statuspkt.udppknum & 0xff00) >> 8;
-				((uint8_t*) (pd->payload))[2] = (statuspkt.udppknum & 0xff0000) >> 16;
-
-				while (pd->ref != 1) {	// old packet not finished with yet
-					printf("*******send sample failed p->ref = %d *******\n", pd->ref);
-				}
-
-				err = sendudp(pcb, pd, &udpdestip, UDP_PORT_NO);		// send the sample packet
-
-				statuspkt.udpsent++;	// debug no of sample packets set
-				statuspkt.adcpktssent++;	// UDP sample packet counter
-				statuspkt.udppknum++;		// UDP packet number
+				enqueue_sample(pd->payload);	// fast fixed-size copy; pd is free for the ADC again immediately
+				drain_sendqueue(pcb);		// opportunistically send whatever in the queue is ready
 #if 0
 				while (ps->ref != 1) { // old status packet not finished with yet
 					printf("******* end sample status: ps->ref = %d *******\n", ps->ref);
@@ -337,6 +403,7 @@ void startudp() {		// destination UDP target IP address
 		/* The transmission ended as expected. */
 		else {
 			/* The call to ulTaskNotifyTake() timed out. */
+			drain_sendqueue(pcb);	// keep working through any backlog during quiet periods too
 			sendtimedstatus(ps, pcb, adcbatchid);
 //			printf("ulNotificationValue = %d\n",ulNotificationValue );
 		}

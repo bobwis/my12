@@ -181,7 +181,12 @@
 #define TCPIP_MBOX_SIZE 64
 #define DEFAULT_TCP_RECVMBOX_SIZE 64
 #define DEFAULT_RAW_RECVMBOX_SIZE 64
-#define MEMP_NUM_PBUF 32
+/* MEMP_NUM_PBUF sizes the pool backing PBUF_REF/PBUF_ROM header-only pbuf
+ * structs (pbuf_alloc's PBUF_RAM/PBUF_POOL types use separate pools/heap and
+ * don't count against this). Permanently-held REF/ROM pbufs in this project:
+ * p1, p2, ps (udpstream.c, 3) plus the SEND_QUEUE_DEPTH dedicated pbufs added
+ * for the sample send queue (udpstream.c, 64) = 67; sized to 96 for margin. */
+#define MEMP_NUM_PBUF 96
 #define LWIP_TCPIP_TIMEOUT 100
 #define LWIP_SO_RCVTIMEO 100
 #define ETH_RX_BUFFER_SIZE 1536

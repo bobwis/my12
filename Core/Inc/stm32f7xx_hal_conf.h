@@ -31,6 +31,13 @@
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 
+/* Ethernet TX DMA descriptor ring depth, default 4 (see ETH_TX_DESC_CNT's
+ * #ifndef guard in stm32f7xx_hal_eth.h). Bumped so IP_FRAG's two fragments
+ * per outgoing sample packet (see NETIF_MTU_OVERRIDE in lwipopts.h), each
+ * needing its own 2-buffer-node descriptor slot, can't exhaust the ring on
+ * their own during a fast burst of samples. */
+#define ETH_TX_DESC_CNT 16U
+
 /* ########################## Module Selection ############################## */
 /**
   * @brief This is the list of modules to be used in the HAL driver
