@@ -73,8 +73,17 @@
 #define MEM_SANITY_CHECK 1
 /*----- Default Value for LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT: 0 ---*/
 #define LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT 1
-/*----- Default Value for F7 devices: 0x20048000 -----*/
-#define LWIP_RAM_HEAP_POINTER 0x20048000
+/* LWIP_RAM_HEAP_POINTER removed: it pinned lwIP's mem.c heap to a hardcoded
+ * address (0x20048000) *inside* the same internal SRAM everything else uses -
+ * mem.c's own comment says this mechanism is for relocating the heap to
+ * EXTERNAL memory, which this board doesn't have. The linker has no idea
+ * that address is "reserved", so as .bss has grown over time the margin
+ * between the end of .bss and this fixed address shrank silently with no
+ * build-time warning, until they collided and corrupted both regions
+ * (see the "heap element ..." assertions in mem.c). Removing this define
+ * falls back to mem.c's own default (a normal, linker-placed static array,
+ * mem.c:378-380) which can never overlap anything else, no matter how much
+ * static RAM the firmware uses in the future. */
 /*----- Default Value for MEMP_NUM_PBUF: 16 ---*/
 #define MEMP_NUM_PBUF 24
 /*----- Default Value for MEMP_NUM_RAW_PCB: 4 ---*/
