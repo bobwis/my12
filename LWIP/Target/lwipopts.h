@@ -168,8 +168,11 @@
 #define HTTPD_USE_CUSTOM_FSDATA 1
 /*----- Value in opt.h for LWIP_STATS: 1 -----*/
 #define LWIP_STATS 0
-/*----- Value in opt.h for CHECKSUM_GEN_UDP: 1 -----*/
-#define CHECKSUM_GEN_UDP 0
+/* CHECKSUM_GEN_UDP must be done in software: HW checksum insertion is per-Ethernet-frame and
+ * produces a wrong checksum once a datagram is split into multiple IP fragments (see ethernetif.c
+ * TxConfig.ChecksumCtrl, now ETH_CHECKSUM_IPHDR_INSERT). Software computes it once, correctly,
+ * over the whole datagram before fragmentation. */
+#define CHECKSUM_GEN_UDP 1
 /*----- Value in opt.h for CHECKSUM_GEN_ICMP6: 1 -----*/
 #define CHECKSUM_GEN_ICMP6 0
 /*----- Value in opt.h for CHECKSUM_CHECK_IP: 1 -----*/

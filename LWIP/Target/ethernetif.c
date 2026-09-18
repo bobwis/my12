@@ -231,7 +231,10 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
 
   memset(&TxConfig, 0 , sizeof(ETH_TxPacketConfig));
   TxConfig.Attributes = ETH_TX_PACKETS_FEATURES_CSUM | ETH_TX_PACKETS_FEATURES_CRCPAD;
-  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_PAYLOAD_INSERT_PHDR_CALC;
+  /* IP-header-only HW checksum: full HW UDP/TCP checksum insertion is computed per-Ethernet-frame,
+   * which is wrong once a datagram is IP-fragmented across multiple frames (see udpstream.c/lwipopts.h
+   * CHECKSUM_GEN_UDP, which now generates the UDP checksum in software over the whole datagram instead). */
+  TxConfig.ChecksumCtrl = ETH_CHECKSUM_IPHDR_INSERT;
   TxConfig.CRCPadCtrl = ETH_CRC_PAD_INSERT;
 
   /* End ETH HAL Init */
