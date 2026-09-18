@@ -27,6 +27,7 @@
 #include "stm32f7xx_hal.h"
 #include "Nextion.h"
 #include "httpclient.h"
+#include "altcp.h"
 
 /**
  * @addtogroup CoreAPI

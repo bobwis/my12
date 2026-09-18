@@ -42,8 +42,6 @@ extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c1;
 extern UART_HandleTypeDef huart6;
 
-extern inline int cycinc(int index, int limit);
-
 // user interface
 uint16_t ledsenabled = 1, soundenabled = 1;
 
@@ -132,11 +130,11 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_RESET);	// select the PGA
 	osDelay(5);
 
-	pgacmd[0] = 0x4000 | (pgaset[gain]);		// write to gain register a mapped value
+	pgacmd[0] = 0x4000 | (pgaset[gain]);        // write to gain register a mapped value
 //	printf("setpgagain: gain=%d pgacmd[0]=0x%0x\n",gain,pgacmd[0]);
 
-	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {	// select gain
-		printf("setpgagain: SPI Error1: %d pgacmd[0]=0x%0x\n", stat, pgacmd[0]);
+	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {    // select gain
+		printf("setpgagain: SPI Error1: %d pgacmd[0]=0x%04x\n", (int)stat, (unsigned int)pgacmd[0]);
 	}
 	osDelay(5);
 //printf("PGA Gain set to %d\n",pgagain & 7);
@@ -152,6 +150,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 		pgacmd[0] = 0x4100;		// write to channel reg select ch0
 	}
 //	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
+	printf("setpgagain: channel pgacmd[0]=0x%04x\n", (unsigned int)pgacmd[0]);
 
 	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
 		printf("setpgagain: SPI Error2: %d\n", stat);
@@ -243,12 +242,11 @@ void initdualmux(void) {
 
 // MPL115 low precision pressure sensor, uses floating point, crashes!!
 HAL_StatusTypeDef getpressure115(void) {
-	uint8_t dat, data[8], dataout[8];
+	uint8_t data[8];
 	int i;
 	HAL_StatusTypeDef result;
-	volatile double ffrac, p, t, n;
+	double ffrac, p, t, n;
 	uint16_t pr, tr;
-	uint8_t testdat[8];
 
 	result = HAL_I2C_Master_Transmit(&hi2c1, 0x60 << 1, (uint8_t[] ) { 0x12, 0x00 }, 2, 1000);
 	// CMD Start Conversion
@@ -347,7 +345,6 @@ HAL_StatusTypeDef getpressure115(void) {
 // the cheap pressure sensor
 HAL_StatusTypeDef initpressure115(void) {
 	uint8_t data[8];
-	int16_t wdata[4];
 	int16_t a0co, b1co, b2co, c12co;
 	HAL_StatusTypeDef result;
 #if 0
@@ -417,7 +414,7 @@ HAL_StatusTypeDef getpressure3115(void) {
 	HAL_StatusTypeDef result;
 	volatile uint32_t p, t;
 //	double ffp, ffn, ffrac;
-	volatile uint32_t ifp, ifn, ifrac;
+	volatile uint32_t ifn, ifrac;
 
 	data[0] = 0x55;
 	for (trys = 0; trys < 4; trys++) {
@@ -495,9 +492,8 @@ HAL_StatusTypeDef getpressure3115(void) {
 
 HAL_StatusTypeDef initpressure3115(void)	// returns 1 on bad MPL3115, 0 on good.
 {
-	int i, step;
-	volatile uint8_t data[8];
-	volatile HAL_StatusTypeDef result;
+	uint8_t data[8];
+	HAL_StatusTypeDef result;
 
 	HAL_I2C_DeInit(&hi2c1);
 	HAL_I2C_Init(&hi2c1);
@@ -555,8 +551,8 @@ osDelay(550);
 	}
 /*
 	for (i = 0; i < 20; i++) {
-		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);	// rd control reg 1
-		printf("CTLREG1=0x%0x2\n\r", data[0]);
+		result = HAL_I2C_Mem_Read(&hi2c1, 0x60 << 1, 0x26, 1, &data[0], 1, 1000);    // rd control reg 1
+		printf("CTLREG1=0x%02x\n\r", (unsigned int)data[0]);
 		if (result != HAL_OK) {
 			printf("Splat1-1 I2C HAL returned error %d\n\r", result);
 			return (result);
@@ -602,7 +598,7 @@ void init_esp() {
 	int waitforoutput;
 
 	printf("init_esp32_c3_13\n");
-	stat = HAL_UART_Receive_DMA(&huart6, &espch, 1);		// set up RX
+	stat = HAL_UART_Receive_DMA(&huart6, (uint8_t*) &espch, 1);		// set up RX
 	if (stat != HAL_OK) {
 		printf("init_esp: huart6 error\n");
 	}
@@ -620,7 +616,6 @@ void init_esp() {
 }
 
 void uart6_rxdone() {
-	HAL_StatusTypeDef stat;
 	int i;
 
 	i = esprxindex;
@@ -639,21 +634,20 @@ void esp_cmd(unsigned char *buffer) {
 	volatile int len;
 	HAL_StatusTypeDef stat;
 
-	strcpy(txbuf, buffer);
-	strcat(txbuf, "\r\n");
-	len = strlen(txbuf);
+	strcpy((char*) txbuf, (char*) buffer);
+	strcat((char*) txbuf, "\r\n");
+	len = strlen((char*) txbuf);
 //	printf("Sending ESP: %s\n", txbuf);
 
 	stat = HAL_UART_Transmit_DMA(&huart6, &txbuf[0], len);	// send the command
 //	stat = HAL_UART_Transmit(&huart6, &txbuf[0], len, 1000);	// send the command
 	if (stat != HAL_OK) {
-		printf("esp_cmd: Tx uart6 error 0x%0x\n", stat);
+		printf("esp_cmd: Tx uart6 error 0x%08x\n", (unsigned int)stat);
 	}
 }
 
 void test_esp() {
 	static unsigned char getstatus[] = "AT+GMR";
-	HAL_StatusTypeDef stat;
 	int j, waitforoutput;
 
 	j = 0;
@@ -773,7 +767,6 @@ void readp_ds2485(int b) {
 }
 
 void test_ds2485() {
-	int d;
 
 	init_ds2485();
 	osDelay(80);
@@ -786,7 +779,6 @@ void test_ds2485() {
 //
 //////////////////////////////////////////////
 void initsplat(void) {
-	int i, j, k;
 
 	if (circuitboardpcb == SPLATBOARD1) {		// only SPLAT1 has Muxes
 		printf("Initsplat: Dual Mux\n\r");

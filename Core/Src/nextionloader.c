@@ -134,7 +134,7 @@ int nxt_sendres() {
 	int res = 0;
 
 	if ((residual) && (nxt_abort == 0)) {				// residual data from last call to send first
-		if ((res = lcd_writeblock(nxtbuffer, residual)) == -1) {
+		if ((res = lcd_writeblock((uint8_t*) nxtbuffer, residual)) == -1) {
 			printf("nxt_sendres: failed\n");
 			nxt_abort = 1;
 		} else {
@@ -154,7 +154,7 @@ int nxt_sendres() {
 int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
 	char *buf;
 	struct pbuf *q;
-	volatile int i, pktlen, res, tlen = 0, len = 0, ch;
+	volatile int i, pktlen, res, len = 0, ch;
 	static int blockssent = 0;
 	static int qlentot = 0, tot_sent = 0;
 
@@ -181,7 +181,6 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 
 	for (q = p; q != NULL; q = q->next) {
 		qlentot += q->len;
-		tlen = q->tot_len;
 		len = q->len;
 
 		if (residual > 0) {
@@ -269,7 +268,6 @@ int nxt_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 
 // Get Nextion version and see if we are current
 int nxt_check() {
-	int res;
 
 	if (nex_model[0] == '\0') {
 //		printf("LCD Model number invalid\n)");
@@ -284,7 +282,7 @@ int nxt_check() {
 	}
 
 // find LCD sys0 value
-	if ((lcd_sys0 & 0xffff == 0) || ((lcd_sys0 & 0xffff) == 0xffff)) {
+	if (((lcd_sys0 & 0xffff) == 0) || ((lcd_sys0 & 0xffff) == 0xffff)) {
 		printf("LCD's stored buildno was invalid\n");
 		return (-2);
 	}
@@ -306,9 +304,6 @@ int lcdupneeded() {
 
 ///  Check if LCD needs updating and update it if so
 void nxt_update() {
-	uint32_t lcdbld;
-	int i;
-
 
 	if (nxt_check() == -1) {		// we could not identify LCD
 		printf("nxt_update: LCD not identified\n");

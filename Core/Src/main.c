@@ -1979,7 +1979,7 @@ void crc_rom() {
 
 	length = (uint32_t) &__fini_array_end - (uint32_t) base + ((uint32_t) &_edata - (uint32_t) &_sdata);
 	romcrc = xcrc32(base, length, xinit);
-	printf("         CRC=0x%08x, base=0x%08x, len=%d\n", romcrc, base, length);
+	printf("         CRC=0x%08x, base=0x%08x, len=%d\n", (unsigned int) romcrc, (unsigned int) (uintptr_t) base, (int) length);
 }
 
 void err_leds(int why) {
@@ -2028,7 +2028,6 @@ void err_leds(int why) {
 }
 
 void rebootme(int why) {
-	volatile unsigned int i;
 	   NVIC_SystemReset();		// first, try using the NVIC
 	while (1) {
 #ifdef HARDWARE_WATCHDOG
@@ -2095,7 +2094,7 @@ void checkgps(int diff) {
 				statuspkt.reserved2 |= 0x0002;		// There is a PPS error
 				statuspkt.clktrim = CCLK;
 				if (statuspkt.sysuptime > 120)
-					printf("108MHz Clocktrim was outside bounds: %u\n", lastcap);
+					printf("108MHz Clocktrim was outside bounds: %u\n", (unsigned int) lastcap);
 				lastcap = CCLK;
 			}
 		}
@@ -2291,11 +2290,11 @@ printf("*** TESTING BUILD USED ***\n");
 #if 1
 #ifdef TESTING
 		sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, TESTING Sw S/N=%d, Ver %d.%d, UDP Target=%s %s\"",
-				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
+				STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], (unsigned long) statuspkt.uid, BUILDNO, statuspkt.majorversion, statuspkt.minorversion,
 				udp_target, ips);
 #else
 	sprintf(snstr, "\"STM_UUID=%lx %lx %lx, Assigned S/N=%lu, Ver %d.%d, UDP Target=%s %s\"",
-	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
+	STM32_UUID[0], STM32_UUID[1], STM32_UUID[2], (unsigned long) statuspkt.uid, statuspkt.majorversion, statuspkt.minorversion,
 			udp_target, ips);
 #endif
 #endif
@@ -2364,8 +2363,8 @@ printf("*** TESTING BUILD USED ***\n");
 	}
 
 	printf("*****************************************\n");
-	printf("This unit's IP address is %d:%d:%d:%d\n", myip & 0xFF, (myip & 0xFF00) >> 8, (myip & 0xFF0000) >> 16,
-			(myip & 0xFF000000) >> 24);
+	printf("This unit's IP address is %d:%d:%d:%d\n", (int) (myip & 0xFF), (int) ((myip & 0xFF00) >> 8), (int) ((myip & 0xFF0000) >> 16),
+			(int) ((myip & 0xFF000000) >> 24));
 	printf("*****************************************\n");
 
 	// STM FIRWARE UPDATE CHECK AND DOWNLOAD
@@ -2448,15 +2447,15 @@ void pps_stopped() {
 void printstatus(int verb) {
 	int i;
 
-	printf("ID:%lu/(%d) %d:%d:%d:%d ", statuspkt.uid, BUILDNO, myip & 0xFF, (myip & 0xFF00) >> 8,
-			(myip & 0xFF0000) >> 16, (myip & 0xFF000000) >> 24);
+	printf("ID:%lu/(%d) %d:%d:%d:%d ", (unsigned long) statuspkt.uid, BUILDNO, (int) (myip & 0xFF), (int) ((myip & 0xFF00) >> 8),
+			(int) ((myip & 0xFF0000) >> 16), (int) ((myip & 0xFF000000) >> 24));
 	printf("triggers:%04d, gain:0x%02x, noise:%03d, thresh:%02d, tcomp:%02d, press:%03d.%03d, temp:%02d.%03d, time:%s\n", trigs,
-			pgagain, globaladcnoise, trigthresh, trigcomp, pressure, pressfrac / 4, temperature, tempfrac / 1000, nowtimestr);
+			(unsigned int) pgagain, (unsigned int) globaladcnoise, trigthresh, (unsigned int) trigcomp, (unsigned int) pressure, (unsigned int) (pressfrac / 4), (unsigned int) temperature, (unsigned int) (tempfrac / 1000), nowtimestr);
 	if (verb == 2) {
 		for (i = 0; i < 12; i++) {
 			osDelay(0);
 			printf("meanwindiff:%d winmean:%d globaladcnoise:%d pretrigthresh:%d, triggthresh:%d, tcomp:%02d\n", meanwindiff,
-					winmean, globaladcnoise, pretrigthresh, trigthresh, trigcomp);
+					winmean, (unsigned int) globaladcnoise, pretrigthresh, trigthresh, (unsigned int) trigcomp);
 		}
 		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 		STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
@@ -2480,7 +2479,7 @@ void StarLPTask(void const * argument)
 	uint32_t reqtimer = 8000;
 	uint16_t tenmstimer = 0;
 	uint16_t onesectimer = 0;
-	int i, newthresh;
+	int i;
 	volatile int n;
 	char str[82] = { "empty" };
 	int16_t gainchanged;
@@ -2537,7 +2536,7 @@ void StarLPTask(void const * argument)
 				gainchanged = bumppga(-1);	// decrease gain
 			}
 			statuspkt.jabcnt++;
-			printf("Jabbering: %d, gain: %d\n", statuspkt.trigcount - jabtrigcnt, pgagain);
+			printf("Jabbering: %d, gain: %d\n", (int) (statuspkt.trigcount - jabtrigcnt), pgagain);
 			gainchanged = 0;		// can change trigger level following
 			if (pgagain == 0) {		// gain is at zero (gain 1)
 				if (trigthresh < 4085)
@@ -2735,13 +2734,11 @@ void StarLPTask(void const * argument)
 #define MAXTRIGS1S 10
 			gainchanged = 0;
 			if (agc) {
-				static uint32_t lastonesectrigs = 0;		// fast AGC to reduce gain
 
 //				trigsin1sec = trigs - lastonesectrigs;
 
 //				if (trigsin1sec > MAXTRIGS1S)
 //					gainchanged = bumppga(-1);		/// this needs removing as its now all in 100mSec section
-				lastonesectrigs = trigs;
 
 			}
 		}
@@ -2764,20 +2761,20 @@ void StarLPTask(void const * argument)
 #else
 						sprintf(nowtimestr, "\"%u\"", epochtime);
 #endif
-			sprintf(tempstr, "%d.%d", temperature, tempfrac);
-			sprintf(pressstr, "%d.%d", pressure, pressfrac);
+			sprintf(tempstr, "%d.%d", (int) temperature, (int) tempfrac);
+			sprintf(pressstr, "%d.%d", (int) pressure, (int) pressfrac);
 
 			// construct detector status for webpage
 			sprintf(statstr,
 					"\"<b>Uptime</b> %d <b>secs<br><br>Last trigger</b> %s<br><br><b>Triggers</b> %d<br><br><b>Noise</b> %d<br><br><b>ADC Base</b> %d<br><br><b>Trig Offset</b> %d<br><br>\"",
-					statuspkt.sysuptime, trigtimestr, statuspkt.trigcount, abs(meanwindiff) & 0xfff,
-					(globaladcavg & 0xfff), trigthresh);
+					(int) statuspkt.sysuptime, trigtimestr, (int) statuspkt.trigcount, abs(meanwindiff) & 0xfff,
+					(int) (globaladcavg & 0xfff), trigthresh);
 
 			if (gpslocked) {
 				sprintf(gpsstr, "\"Locked: %d Sats<br>Lon: %d<br>Lat: %d\"", statuspkt.NavPvt.numSV,
-						statuspkt.NavPvt.lon, statuspkt.NavPvt.lat);
+						(int) statuspkt.NavPvt.lon, (int) statuspkt.NavPvt.lat);
 			} else {
-				strcpy(gpsstr, "\"<font color=red>**Lost GPS**<\/font>\"");  // for http
+				strcpy(gpsstr, "\"<font color=red>**Lost GPS**</font>\"");  // for http
 			}
 
 			if (xSemaphoreGive(ssicontentHandle) != pdTRUE) {		// give the ssi generation semaphore

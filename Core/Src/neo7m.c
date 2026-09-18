@@ -55,7 +55,7 @@ static const unsigned char UBXGPS_HEADER2[] = { 0xB5, 0x62, 0x0a, 0x04 };
 
 unsigned char PACKETstore[128];  //TODO, whats the max size of packet?
 
-struct statpkt __attribute__((aligned(4),packed))  volatile statuspkt;
+struct statpkt __attribute__((aligned(4)))  volatile statuspkt;
 
 int flag = 0;
 int neoispresent = 0;		// result of 1st polling
@@ -196,7 +196,7 @@ const long possibleBaudrates[] = {
 		};
 
 // Function, printing packet to the PC's serial in hexadecimal form
-void printPacket(byte *msg, byte *packet, byte len) {
+void printPacket(const byte *msg, byte *packet, byte len) {
 	char temp[3];
 	static int cnt = 0;
 
@@ -213,7 +213,7 @@ void printPacket(byte *msg, byte *packet, byte len) {
 }
 
 // Function, sending specified packed to the GPS receiver
-void sendPacket(byte *packet, byte len) {
+void sendPacket(const byte *packet, byte len) {
 #if 0
 	int i, ch;
 	char buf[64];
@@ -657,7 +657,6 @@ HAL_StatusTypeDef setupneo() {
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	const unsigned char offset = 6;
 //	unsigned char data;
-	volatile HAL_StatusTypeDef stat;
 	int len;
 
 //	printf("USART6 RxCpl");
@@ -690,7 +689,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 				neoispresent = 1;
 				break;
 			default:
-				printPacket("***** GPS: Unknown pkt Rx", PACKETstore, len);
+				printPacket((const byte*) "***** GPS: Unknown pkt Rx", PACKETstore, len);
 				break;
 			}
 		}
@@ -727,9 +726,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 #endif
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 	HAL_StatusTypeDef stat;
-	uint8_t ch;
 	int error;
-	volatile uint32_t reg;
 
 	// whatever the error try to clear it blindly
 	__HAL_UART_CLEAR_FEFLAG(huart);

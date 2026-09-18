@@ -18,10 +18,6 @@
 extern UART_HandleTypeDef huart5;
 
 
-// put a char
-extern inline int lcd_putc(uint8_t ch);
-
-
 // put a null terminated string
 extern int lcd_puts(char * str);
 

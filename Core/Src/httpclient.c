@@ -986,12 +986,9 @@ char fs_domainname[30];
 err_t error;
 
 err_t RecvHttpHeaderCallback(httpc_state_t *connection, void *arg, struct pbuf *hdr, u16_t hdr_len, u32_t content_len) {
-	int i;
-	char *buf;
 
 //	printf("RecvHttpHeaderCallback: len=%u, content len=%lu\n", hdr_len, content_len);
 //	printf("header=");
-	buf = hdr->payload;
 	http_content_len = content_len;
 //	for (i = 0; i < hdr_len; i++) {
 //		putchar(buf[i]);
@@ -1040,9 +1037,6 @@ void HttpClientPageResultCallback(void *arg, httpc_result_t httpc_result, u32_t 
 }
 
 err_t HttpClientFileReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
-	char *buf;
-	struct pbuf *q;
-	int count = 0, tlen = 0, len = 0;
 
 	if (http_downloading == FLASH_LOADING) {
 		stm_rx_callback(arg, pcb, p, err);
@@ -1058,7 +1052,7 @@ err_t HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbu
 	int i;
 	char *buf;
 	struct pbuf *q;
-	int count = 0, tlen = 0, len = 0;
+	int count = 0;
 
 //	printf("HttpClientPageReceiveCallback:\n");
 
@@ -1071,8 +1065,6 @@ err_t HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbu
 
 	for (q = p; q != NULL; q = q->next) {
 		count += q->len;
-		tlen = q->tot_len;
-		len = q->len;
 
 		buf = q->payload;
 		for (i = 0; i < q->len; i++) {
@@ -1090,7 +1082,7 @@ err_t HttpClientPageReceiveCallback(void *arg, struct altcp_pcb *pcb, struct pbu
 			putchar('!');
 			printlwiperr(err);
 		}
-//		printf("HttpClientPageReceiveCallback: chunk=%d, tlen=%d, len=%d, total=%d\n", count, tlen, len, tlen);
+//		printf("HttpClientPageReceiveCallback: chunk=%d, total=%d\n", count, count);
 	}
 	return ERR_OK;
 }
@@ -1140,7 +1132,7 @@ int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 
 	connection2->timeout_ticks = 1;
 
-	if ((isalnum(*fileservername) || (*fileservername == '/'))) {		// dns syntax not too bad
+	if ((isalnum((unsigned char) *fileservername) || (*fileservername == '/'))) {		// dns syntax not too bad
 		if (dnslookup(fileservername, &dnsip) != 0) { 					// error in lookup;
 			printf("hc_open: servername DNS lookup failed\n");
 			strcpy(fs_domainname, HTTP_CONTROL_SERVER);					// revert to ctl srv
@@ -1153,7 +1145,7 @@ int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 	}
 
 
-	if ((isalnum(*page) || (*page == '/'))) {
+	if ((isalnum((unsigned char) *page) || (*page == '/'))) {
 		strcpy(rxbuffer, page);			// rxbuffer has url
 	} else {
 		strcpy(rxbuffer, "/");
@@ -1172,6 +1164,7 @@ int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 	}
 	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
 			HttpClientPageResultCallback, &connection2);
+	return ((error == ERR_OK) ? 0 : -1);
 }
 
 #endif /* LWIP_TCP && LWIP_CALLBACK_API */

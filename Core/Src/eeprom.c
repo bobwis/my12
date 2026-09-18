@@ -61,7 +61,6 @@ int ReadEE(uint32_t address, uint32_t *Data) {
 //-----------------------------------------------------------------------------------
 int WriteEE(uint32_t address, uint32_t Data) {
 	uint32_t Address = EEPROM_START_ADDRESS;
-	uint32_t dataword;
 
 	if (address > PAGE_SIZE) {
 		return -1;
@@ -164,41 +163,36 @@ HAL_StatusTypeDef LockFlash() {
 
 // display the error
 void printflasherr() {
-	char *msg;
-	uint32_t err;
+    char msgbuf[64];
+    uint32_t err;
 
-	err = HAL_FLASH_GetError();
+    err = HAL_FLASH_GetError();
 
-	switch (err) {
-	case FLASH_ERROR_ERS:
-		msg = "Erasing Sequence";
-		break;
-	case HAL_FLASH_ERROR_PGP:	// legacy alias FLASH_ERROR_PGP is broken in stm32_hal_legacy.h (aliases to nonexistent HAL_FLASH_ERROR_PGS)
-		msg = "Programming Parallelism";
-		break;
-	case FLASH_ERROR_PGA:
-		msg = "Programming alignment";
-		break;
-	case FLASH_ERROR_WRP:
-		msg = "Write Protected";
-		break;
-	case FLASH_ERROR_OPERATION:
-		msg = "Operation";
-		break;
-	case FLASH_ERROR_RD:
-		msg = "Read Protection";
-		break;
-	default:
-		msg = NULL;
-		sprintf(msg, "Unknown err 0x%0x", err);
-		break;
-	}
-	if (msg == NULL) {
-		printf("Flash failed Unknown err 0x%0x\n", err);
-	} else {
-		printf("Flash operation failed: %s error\n", msg);
-	}
-	LockFlash();		// for safety
+    switch (err) {
+    case FLASH_ERROR_ERS:
+        snprintf(msgbuf, sizeof(msgbuf), "Erasing Sequence");
+        break;
+    case HAL_FLASH_ERROR_PGP:    // legacy alias FLASH_ERROR_PGP is broken in stm32_hal_legacy.h (aliases to nonexistent HAL_FLASH_ERROR_PGS)
+        snprintf(msgbuf, sizeof(msgbuf), "Programming Parallelism");
+        break;
+    case FLASH_ERROR_PGA:
+        snprintf(msgbuf, sizeof(msgbuf), "Programming alignment");
+        break;
+    case FLASH_ERROR_WRP:
+        snprintf(msgbuf, sizeof(msgbuf), "Write Protected");
+        break;
+    case FLASH_ERROR_OPERATION:
+        snprintf(msgbuf, sizeof(msgbuf), "Operation");
+        break;
+    case FLASH_ERROR_RD:
+        snprintf(msgbuf, sizeof(msgbuf), "Read Protection");
+        break;
+    default:
+        snprintf(msgbuf, sizeof(msgbuf), "Unknown err 0x%08x", (unsigned int)err);
+        break;
+    }
+    printf("Flash operation failed: %s error\n", msgbuf);
+    LockFlash();        // for safety
 }
 
 // erase flash sector(s)
@@ -226,7 +220,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 	}
 
 	dirty = 0;
-	for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
+	for (ptr = memptr; (uint32_t) ptr < ((uint32_t) memptr + 0x80000); ptr++) {		// 512K
 		if (*ptr != 0xffffffff) {
 			dirty = 1;
 			break;
@@ -235,7 +229,7 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 
 	if ((dirty) && (noterased)) {
 		osDelay(1000);
-		printf("Erasing Flash for %d sector(s) from %d\n", EraseInitStruct.NbSectors, EraseInitStruct.Sector);
+		printf("Erasing Flash for %u sector(s) from %u\n", (unsigned int) EraseInitStruct.NbSectors, (unsigned int) EraseInitStruct.Sector);
 
 		EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
 		EraseInitStruct.Banks = FLASH_BANK_1;
@@ -243,36 +237,18 @@ HAL_StatusTypeDef EraseFlash(void *memptr) {
 
 		res = HAL_FLASHEx_Erase(&EraseInitStruct, &SectorError);
 		if (SectorError != 0xffffffff) {
-			printf("Flash Erase failed sectorerror 0x%08x\n", SectorError);
+			printf("Flash Erase failed sectorerror 0x%08x\n", (unsigned int) SectorError);
 		}
 		if (res != HAL_OK) {
 			printf("EraseFlash: failed\n");
 			printflasherr();
 			dirty = 1;
-		} else {
-			printf("Flash successfully erased\n");
-			noterased = 0;
-
-			// check the erasure
-			dirty = 0;
-			for (ptr = memptr; ptr < (uint32_t) (memptr + 0x80000); ptr++) {		// 512K
-				if (*ptr != 0xffffffff) {
-					dirty = 1;
-					break;
-				}
-			}
-			if (dirty) {
-				noterased = 1;
-				printf("*** ERROR: Flash was erased but bits still dirty at 0x%08x\n",ptr);
-			}
 		}
-
-	} else {
-		printf("Flash erase unnecessary\n");
 	}
+
+	return (res);
 }
 
-// write 32 bits
 HAL_StatusTypeDef WriteFlashWord(uint32_t address, uint32_t data) {
 	HAL_StatusTypeDef res;
 	int trys;
@@ -284,7 +260,7 @@ HAL_StatusTypeDef WriteFlashWord(uint32_t address, uint32_t data) {
 
 	trys = 0;
 	__HAL_FLASH_ART_DISABLE();
-	while ((res = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data) != HAL_OK)) {
+	while ((res = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data)) != HAL_OK) {
 		printflasherr();		// deleteme
 		if (res == HAL_BUSY) {
 			if (trys > 3) {
@@ -300,7 +276,7 @@ HAL_StatusTypeDef WriteFlashWord(uint32_t address, uint32_t data) {
 
 		if (res != HAL_OK) {
 			printflasherr();
-			printf("WriteFlashWord: failed write at 0x%0x err=0x%x\n", address, res);
+			printf("WriteFlashWord: failed write at 0x%08x err=0x%x\n", (unsigned int)address, res);
 			__HAL_FLASH_ART_RESET();
 			__HAL_FLASH_ART_ENABLE();
 			return (res);
@@ -310,7 +286,7 @@ HAL_StatusTypeDef WriteFlashWord(uint32_t address, uint32_t data) {
 	__HAL_FLASH_ART_ENABLE();
 
 	if (*(uint32_t*) address != data) {
-		printf("WriteFlashWord: Failed at 0x%08x with data=%08x, read=0x%08x\n", address, data, *(uint32_t*) address);
+		printf("WriteFlashWord: Failed at 0x%08x with data=%08x, read=0x%08x\n", (unsigned int)address, (unsigned int)data, (unsigned int)*(uint32_t*) address);
 		return (HAL_ERROR);
 	}
 	return (HAL_OK);
@@ -331,22 +307,22 @@ int WriteFlash32k(void *startadd, uint32_t *datablock) {
 		return (-1);
 	}
 	for (i = 0; i < 0x2000; i++) {		// 0x2000 words is 0x8000 bytes
-		if (res = WriteFlashWord((uint32_t) startadd + i, datablock[i])) {
-			printf("WriteEE Failed at %d\n", (uint32_t) startadd + i);
+		if ((res = WriteFlashWord((uint32_t) startadd + i, datablock[i])) != 0) {
+			printf("WriteEE Failed at 0x%08x\n", (unsigned int)((uint32_t)startadd + i));
 			return (-1);
 		}
 	}
 	if (LockFlash() != HAL_OK) {
 		return (-1);
-		return (0);
 	}
+	return (0);
 }
 
 // make sure the boot vector points to this running program
 void stampboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
-	uint32_t newadd, options, addr;
+	uint32_t newadd, addr;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 
@@ -379,7 +355,7 @@ void stampboot() {
 void swapboot() {
 	HAL_StatusTypeDef res;
 	FLASH_OBProgramInitTypeDef OBInitStruct;
-	uint32_t newadd, options;
+	uint32_t newadd;
 
 	HAL_FLASHEx_OBGetConfig(&OBInitStruct);
 	HAL_FLASH_OB_Unlock();
@@ -426,7 +402,7 @@ int flash_writeword(uint32_t worddata) {
 		return (-1);
 	}
 	if (*(uint32_t*) flash_memptr != worddata) {
-		printf("memwrite: Readback error at %08x\n", flash_memptr);
+		printf("memwrite: Readback error at 0x%08x\n", (unsigned int)flash_memptr);
 		return (-1);
 	}
 	return (0);
@@ -459,6 +435,9 @@ printf("memwrite: count=%d, memptr=0x%x, totlen=%d, len=%d\n",count, flash_mempt
 
 	if ((!(flash_abort)) && (noterased)) {
 		res = EraseFlash(flash_memptr);
+		if (res != HAL_OK) {
+			printf("flash_memwrite: EraseFlash failed\n");
+		}
 		noterased = 0;
 	}
 
@@ -540,7 +519,7 @@ void* memclose() {
 		flash_writeword(residual);
 	}
 
-	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%0x total=%d\n", flash_load_address,
+	printf("eeprom memclose: flash_load_addr=0x%08x, filelength=%d, flash_memptr=0x%08x total=%d\n", (unsigned int) flash_load_address,
 			flash_filelength, (unsigned int) flash_memptr, down_total);
 	osDelay(1000);
 
@@ -555,7 +534,7 @@ void* memclose() {
 		down_total = 0;		// unfreeze main
 		printf(
 				"\n****************** Downloaded file/ROM CRC check failed ourcrc=0x%08x, filecrc=0x%08x Total=%d **********\n",
-				xcrc, dl_filecrc, down_total);
+				(unsigned int) xcrc, (unsigned int) dl_filecrc, down_total);
 #if 0
 ////////////////////////////		// test debug zzz
 		{
@@ -565,9 +544,9 @@ void* memclose() {
 			for (i = 0; i < flash_filelength; i += 4) {
 				p = (uint32_t*) (flash_load_address + i);
 				if (*p != patt) {
-					if (count < 8) {
-						printf("patt failed at 0x%08x, read 0x%08x, should be 0x%0x8\n", (uint32_t) p, *p, patt);
-					}
+						if (count < 8) {
+							printf("patt failed at 0x%08x, read 0x%08x, should be 0x%08x\n", (unsigned int)((uint32_t) p), (unsigned int)*p, (unsigned int)patt);
+						}
 					count++;
 				}
 				patt += 4;
@@ -631,6 +610,7 @@ void* memclose() {
 	}
 #endif
 	http_downloading = NOT_LOADING;
+	return ((void*) 0);
 }
 
 // calculate the crc over a range of memory
@@ -638,7 +618,6 @@ uint32_t flash_findcrc(void *base, int length) {
 	uint32_t crc, xinit = 0xffffffff;
 
 	crc = xcrc32(base, length, xinit);
-	printf("findcrc: crc=0x%08x, base=0x%08x, len=%d\n", crc, base, length);
+	printf("findcrc: crc=0x%08x, base=0x%08x, len=%d\n", (unsigned int) crc, (unsigned int) (uintptr_t) base, length);
 	return (crc);
 }
-

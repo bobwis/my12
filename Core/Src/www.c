@@ -43,8 +43,6 @@ volatile uint32_t trigcomp = 0;		// trigger threshold compensation provided by t
 // The cgi handler is called when the user changes something on the webpage
 void httpd_cgi_handler(struct fs_file *file, const char *uri, int count, char **http_cgi_params,
 		char **http_cgi_param_vals) {
-	const char id[15][6] = { "led1", "sw1A", "sw1B", "sw1C", "sw1D", "sw2A", "sw2B", "sw2C", "sw2D", "btn", "PG2",
-			"PG1", "PG0", "RF1", "AGC" };
 
 	int i, j, val;
 	char *ptr;
@@ -269,13 +267,13 @@ int parsep2(char *buf, char *match, int type, void *value) {
 				if (type == 1) {		// looking for a string
 					j = 0;
 					pch = value;
-					while ((buf[i]) && ((isalnum(buf[i])) || (buf[i] == '.') || (buf[i] == '_'))) {
+					while ((buf[i]) && ((isalnum((unsigned char) buf[i])) || (buf[i] == '.') || (buf[i] == '_'))) {
 						pch[j++] = buf[i++];
 					}
 					pch[j] = 0;
 					return ((j > 0) ? 0 : -1);
 				} else if (type == 2) { // uint32_t base 10 string
-					return ((sscanf(&buf[i], "%u", val) == 1) ? 0 : -1);
+					return ((sscanf(&buf[i], "%lu", val) == 1) ? 0 : -1);
 				} else if (type == 3) { // uint32_t hex string
 					return ((sscanf(&buf[i], "%lx", val) == 1) ? 0 : -1);
 				}
@@ -301,14 +299,13 @@ int parsep2(char *buf, char *match, int type, void *value) {
  */
 
 // callback with the page
-void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
-	char *errormsg[] = { "OK", "OUT_MEM", "TIMEOUT", "NOT_FOUND", "GEN_ERROR" };
-	volatile uint32_t sn, trigmod, pollmod;
-	volatile int nconv, res, res2, res3, res4;
-	volatile int p1;
-	volatile char p2[256];
-	volatile char s1[16];
-	volatile uint32_t crc1, crc2, n1 = 0, n2 = 0;
+void returnpage(char *content, u16_t charcount, int errorm) {
+	uint32_t sn, trigmod, pollmod;
+	int nconv, res, res2, res3, res4;
+	int p1;
+	char p2[256];
+	char s1[16];
+	uint32_t crc1, crc2, n2 = 0;
 	struct ip4_addr newip;
 	err_t err;
 
@@ -321,7 +318,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 //			printf("returnpage: =%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 //			printf("Server replied: \"%.*s\"\n", charcount, content);
 			s1[0] = '\0';
-			nconv = sscanf(content, "%5u%48s%u%255s", &sn, udp_target, &p1, &p2);
+			nconv = sscanf(content, "%5lu%48s%u%255s", &sn, udp_target, &p1, p2);
 
 			switch (nconv) {
 
@@ -350,7 +347,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 					res4 = parsep2(&p2[1], "tt", 2, &trigmod);
 					if (res4 == 0) {
-						printf("Server -> Trigger level modifier %d\n", trigmod);
+						printf("Server -> Trigger level modifier %d\n", (int) trigmod);
 						if (trigmod < 4050) {
 							trigcomp = trigmod;
 						}
@@ -358,7 +355,7 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 
 					res4 = parsep2(&p2[1], "pt", 2, &pollmod);
 					if (res4 == 0) {
-						printf("Server -> Poll interval modifier %d\n", pollmod);
+						printf("Server -> Poll interval modifier %d\n", (int) pollmod);
 						if (!(pollmod < 1) || (pollmod > 900)) {
 							polltime = pollmod;
 						}
@@ -400,9 +397,9 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 						udpdestip = newip;
 					}
 				}
-				printf("Server -> Target UDP host: %s %d:%d:%d:%d\n", udp_target, udpdestip.addr & 0xFF,
-						(udpdestip.addr & 0xFF00) >> 8, (udpdestip.addr & 0xFF0000) >> 16,
-						(udpdestip.addr & 0xFF000000) >> 24);
+				printf("Server -> Target UDP host: %s %d:%d:%d:%d\n", udp_target, (int) (udpdestip.addr & 0xFF),
+						(int) ((udpdestip.addr & 0xFF00) >> 8), (int) ((udpdestip.addr & 0xFF0000) >> 16),
+						(int) ((udpdestip.addr & 0xFF000000) >> 24));
 
 				// falls through
 
@@ -445,10 +442,6 @@ void returnpage(volatile char *content, volatile u16_t charcount, int errorm) {
 // sends a URL request to a http server
 void getpage(char page[64]) {
 	volatile int result;
-	ip_addr_t ip;
-	int err = 0;
-
-	static char *postvars = NULL;
 
 //	printf("getpage: %s\n", page);
 
@@ -476,7 +469,7 @@ void initialapisn() {
 	j = 1;
 	sprintf(localip, "%u:%u:%u:%u", (uint) (myip & 0xFF), (uint) ((myip & 0xFF00) >> 8),
 			(uint) ((myip & 0xFF0000) >> 16), (uint) (myip & 0xFF000000) >> 24);
-	sprintf(params, "?bld=%d\&ip=%s\&nx=%s", BUILDNO, localip, nex_model);
+	sprintf(params, "?bld=%d&ip=%s&nx=%s", BUILDNO, localip, nex_model);
 	sprintf(stmuid, "/api/Device/%lx%lx%lx", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 
 	strcat(stmuid, params);

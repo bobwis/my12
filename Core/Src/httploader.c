@@ -59,14 +59,14 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 	writelcdcmd("xstr 5,88,470,48,2,BLACK,RED,0,1,1,\"DOWNLOADING NEW F/W\"");
 	writelcdcmd("xstr 5,136,470,48,2,BLACK,RED,0,1,1,\"DON'T SWITCH OFF...\"");
 
-	printf("httploader: fliename=%s, host=%s, crc1=%u, crc2=%u\n", filename, host, crc1, crc2);
+	printf("httploader: fliename=%s, host=%s, crc1=%u, crc2=%u\n", filename, host, (unsigned int) crc1, (unsigned int) crc2);
 
 	flash_memptr = (void*) flash_load_address;
 	flash_filelength = 0;
 
 	sprintf(newfilename, "/firmware/%s-%c%02u-%04u.bin", filename, segment, circuitboardpcb, newbuild);
 	printf("Attempting to download new firmware %s to 0x%08x from %s, ******* DO NOT SWITCH OFF ******\n", newfilename,
-			flash_memptr, host);
+			(unsigned int) (uintptr_t) flash_memptr, host);
 	writelcdcmd("\\r\\rDownloading new STM firmware....");
 
 	http_dlclient(newfilename, host, flash_memptr);
@@ -77,9 +77,8 @@ void httploader(char filename[], char host[], uint32_t crc1, uint32_t crc2) {
 // this gets called for each downloaded chunk received
 //
 int stm_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err) {
-	char *buf;
 	struct pbuf *q;
-	int count = 0, tlen = 0, len = 0;
+	int count = 0, len = 0;
 
 //	printf("stm_rx_callback:\n");
 
@@ -92,7 +91,6 @@ int stm_rx_callback(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 
 	for (q = p; q != NULL; q = q->next) {
 		count += q->len;
-		tlen = q->tot_len;
 		len = q->len;
 
 		if ((flash_abort == 0) && (flash_memptr != 0)) { // we need to write this data to flash
