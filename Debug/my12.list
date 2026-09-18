@@ -6226,9 +6226,9 @@ void lcd_showvars(void) {
  8002acc:	9204      	str	r2, [sp, #16]
  8002ace:	f8d3 2424 	ldr.w	r2, [r3, #1060]	@ 0x424
  8002ad2:	9203      	str	r2, [sp, #12]
- 8002ad4:	f242 723e 	movw	r2, #10046	@ 0x273e
+ 8002ad4:	f242 723f 	movw	r2, #10047	@ 0x273f
  8002ad8:	f8d3 1420 	ldr.w	r1, [r3, #1056]	@ 0x420
- 8002adc:	231c      	movs	r3, #28
+ 8002adc:	231e      	movs	r3, #30
  8002ade:	e9cd 2000 	strd	r2, r0, [sp]
  8002ae2:	9102      	str	r1, [sp, #8]
  8002ae4:	2200      	movs	r2, #0
@@ -8742,12 +8742,12 @@ void init_nextion() {
  8003c14:	f44f 7096 	mov.w	r0, #300	@ 0x12c
  8003c18:	f012 ff4c 	bl	8016ab4 <osDelay>
 	sprintf(str, "xstr 5,10,470,32,3,BLACK,WHITE,0,1,1,\"Ver %d.%d Build:%d\"", MAJORVERSION, MINORVERSION,
- 8003c1c:	f242 733e 	movw	r3, #10046	@ 0x273e
+ 8003c1c:	f242 733f 	movw	r3, #10047	@ 0x273f
  8003c20:	4622      	mov	r2, r4
  8003c22:	4927      	ldr	r1, [pc, #156]	@ (8003cc0 <init_nextion+0xe8>)
  8003c24:	9300      	str	r3, [sp, #0]
  8003c26:	a803      	add	r0, sp, #12
- 8003c28:	231c      	movs	r3, #28
+ 8003c28:	231e      	movs	r3, #30
  8003c2a:	f022 fbb5 	bl	8026398 <siprintf>
 	BUILD);
 	lcduart_error = HAL_UART_ERROR_NONE;
@@ -9377,7 +9377,7 @@ void pps_stopped() {
 0800403c <printstatus>:
 	printf("ID:%lu/(%d) %d:%d:%d:%d ", (unsigned long) statuspkt.uid, BUILDNO, (int) (myip & 0xFF), (int) ((myip & 0xFF00) >> 8),
  800403c:	4b36      	ldr	r3, [pc, #216]	@ (8004118 <printstatus+0xdc>)
- 800403e:	f242 723e 	movw	r2, #10046	@ 0x273e
+ 800403e:	f242 723f 	movw	r2, #10047	@ 0x273f
  8004042:	4936      	ldr	r1, [pc, #216]	@ (800411c <printstatus+0xe0>)
  8004044:	681b      	ldr	r3, [r3, #0]
  8004046:	f8b1 105c 	ldrh.w	r1, [r1, #92]	@ 0x5c
@@ -9470,7 +9470,7 @@ void printstatus(int verb) {
  80040f0:	d1eb      	bne.n	80040ca <printstatus+0x8e>
 		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
  80040f2:	4919      	ldr	r1, [pc, #100]	@ (8004158 <printstatus+0x11c>)
- 80040f4:	f242 753e 	movw	r5, #10046	@ 0x273e
+ 80040f4:	f242 753f 	movw	r5, #10047	@ 0x273f
  80040f8:	4818      	ldr	r0, [pc, #96]	@ (800415c <printstatus+0x120>)
  80040fa:	f501 6184 	add.w	r1, r1, #1056	@ 0x420
  80040fe:	c90e      	ldmia	r1, {r1, r2, r3}
@@ -9478,7 +9478,7 @@ void printstatus(int verb) {
  8004102:	4c17      	ldr	r4, [pc, #92]	@ (8004160 <printstatus+0x124>)
  8004104:	6824      	ldr	r4, [r4, #0]
  8004106:	9403      	str	r4, [sp, #12]
- 8004108:	241c      	movs	r4, #28
+ 8004108:	241e      	movs	r4, #30
  800410a:	e9cd 4501 	strd	r4, r5, [sp, #4]
  800410e:	f022 f895 	bl	802623c <iprintf>
 }
@@ -12691,7 +12691,7 @@ __STATIC_INLINE void SCB_EnableICache (void)
  80058c4:	f7fe fb72 	bl	8003fac <getboardpcb>
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
  80058c8:	f8df a3a0 	ldr.w	sl, [pc, #928]	@ 8005c6c <StartDefaultTask+0x3cc>
- 80058cc:	f242 773e 	movw	r7, #10046	@ 0x273e
+ 80058cc:	f242 773f 	movw	r7, #10047	@ 0x273f
 	printf("%s----------------------------------------------------------------------------\n", str);
  80058d0:	49b8      	ldr	r1, [pc, #736]	@ (8005bb4 <StartDefaultTask+0x314>)
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
@@ -12699,7 +12699,7 @@ __STATIC_INLINE void SCB_EnableICache (void)
 	printf("%s----------------------------------------------------------------------------\n", str);
  80058d4:	48b8      	ldr	r0, [pc, #736]	@ (8005bb8 <StartDefaultTask+0x318>)
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
- 80058d6:	f04f 081c 	mov.w	r8, #28
+ 80058d6:	f04f 081e 	mov.w	r8, #30
 	printf("%s----------------------------------------------------------------------------\n", str);
  80058da:	f020 fcaf 	bl	802623c <iprintf>
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
@@ -22409,7 +22409,7 @@ void returnpage(char *content, u16_t charcount, int errorm) {
  80095cc:	b134      	cbz	r4, 80095dc <returnpage+0x1b8>
 				printf("Firmware: this build is %d, the server build is %d\n", BUILDNO, newbuild);
  80095ce:	4b46      	ldr	r3, [pc, #280]	@ (80096e8 <returnpage+0x2c4>)
- 80095d0:	f242 713e 	movw	r1, #10046	@ 0x273e
+ 80095d0:	f242 713f 	movw	r1, #10047	@ 0x273f
  80095d4:	485c      	ldr	r0, [pc, #368]	@ (8009748 <returnpage+0x324>)
  80095d6:	681a      	ldr	r2, [r3, #0]
  80095d8:	f01c fe30 	bl	802623c <iprintf>
@@ -22420,7 +22420,7 @@ void returnpage(char *content, u16_t charcount, int errorm) {
  80095e6:	4293      	cmp	r3, r2
  80095e8:	f43f af25 	beq.w	8009436 <returnpage+0x12>
  80095ec:	4a3e      	ldr	r2, [pc, #248]	@ (80096e8 <returnpage+0x2c4>)
- 80095ee:	f242 733e 	movw	r3, #10046	@ 0x273e
+ 80095ee:	f242 733f 	movw	r3, #10047	@ 0x273f
  80095f2:	6812      	ldr	r2, [r2, #0]
  80095f4:	429a      	cmp	r2, r3
  80095f6:	f43f af1e 	beq.w	8009436 <returnpage+0x12>
@@ -22670,7 +22670,7 @@ void initialapisn() {
 	sprintf(params, "?bld=%d&ip=%s&nx=%s", BUILDNO, localip, nex_model);
  80097e2:	4830      	ldr	r0, [pc, #192]	@ (80098a4 <initialapisn+0xe4>)
  80097e4:	ab02      	add	r3, sp, #8
- 80097e6:	f242 723e 	movw	r2, #10046	@ 0x273e
+ 80097e6:	f242 723f 	movw	r2, #10047	@ 0x273f
  80097ea:	492f      	ldr	r1, [pc, #188]	@ (80098a8 <initialapisn+0xe8>)
  80097ec:	9000      	str	r0, [sp, #0]
  80097ee:	a80a      	add	r0, sp, #40	@ 0x28
