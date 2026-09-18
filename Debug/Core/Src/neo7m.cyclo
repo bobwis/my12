@@ -14,5 +14,5 @@
 ../Core/Src/neo7m.c:470:5:IsPacketReady	10
 ../Core/Src/neo7m.c:545:19:setupneo	6
 ../Core/Src/neo7m.c:657:6:HAL_UART_RxCpltCallback	12
-../Core/Src/neo7m.c:728:6:HAL_UART_ErrorCallback	9
-../Core/Src/neo7m.c:789:6:neotime	2
+../Core/Src/neo7m.c:727:6:HAL_UART_ErrorCallback	9
+../Core/Src/neo7m.c:786:6:neotime	2
