@@ -196,9 +196,12 @@
 /* MEMP_NUM_PBUF sizes the pool backing PBUF_REF/PBUF_ROM header-only pbuf
  * structs (pbuf_alloc's PBUF_RAM/PBUF_POOL types use separate pools/heap and
  * don't count against this). Permanently-held REF/ROM pbufs in this project:
- * p1, p2, ps (udpstream.c, 3) plus the SEND_QUEUE_DEPTH dedicated pbufs added
- * for the sample send queue (udpstream.c, 64) = 67; sized to 96 for margin. */
-#define MEMP_NUM_PBUF 96
+ * p1, p2 (udpstream.c, 2 - ps was retired when status packets moved onto the
+ * shared send queue) plus one dedicated pbuf per SEND_QUEUE_DEPTH send queue
+ * slot (udpstream.c, 96) = 98; sized to 128 for margin - this pool is shared
+ * with lwIP's own internal pbuf use (RX, ARP, DNS, DHCP, httpd), which gets
+ * none of that margin if this is sized right at the udpstream.c minimum. */
+#define MEMP_NUM_PBUF 128
 #define LWIP_TCPIP_TIMEOUT 100
 #define LWIP_SO_RCVTIMEO 100
 #define ETH_RX_BUFFER_SIZE 1536
