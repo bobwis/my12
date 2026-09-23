@@ -60,12 +60,12 @@ merely on dequeue (the more obvious approach) would have widened the
 window where the producer could overwrite a slot lwIP/hardware might still
 be reading out of.
 
-**Timed status logic is unchanged on purpose.** It's still only evaluated
-from the notify-timeout branch (i.e. only once the ADC side has been idle).
-This was checked with the user and confirmed as intentional, not a bug:
-during a trigger burst the end-of-sequence status packet already carries
-the same fields, so a timed status mid-burst would be a redundant
-duplicate.
+**Timed status is still only ever evaluated while the ADC side is idle** -
+never mid-burst, since the end-of-sequence status packet already carries
+the same fields then and a timed status too would be a redundant
+duplicate. *Where* that idle-time check lives, and exactly what "idle
+enough" means, changed in a follow-up - see "Timed status trigger
+relocation" below.
 
 ## RAM budget
 
@@ -92,6 +92,63 @@ show stale values if the project is ever reopened there. The new
 `netsendtask()` thread and `configUSE_COUNTING_SEMAPHORES`
 (`FreeRTOSConfig.h`) were deliberately *not* added to the `.ioc` - see the
 commit message for "Sync .ioc LwIP parameters..." for why.
+
+## Timed status trigger relocation (follow-up)
+
+Branch: `feature/timed-status-in-sender`, on top of the above.
+
+The original timed-status check fired on a fixed `t1sec % STAT_TIME`
+grid, evaluated only from `startudp()`'s notify-timeout branch. That left
+a real, if low-probability (~1-in-120 per burst end, at production's
+`STAT_TIME`=120s), gap: if a burst happened to end just before a grid
+boundary, the first idle check afterward could land almost exactly on
+that boundary, firing a timed status only ~1 second after the
+end-of-sequence status that had just closed the same burst - two status
+packets carrying near-identical fields, back to back.
+
+Fixed by changing what "due" means, and where it's decided:
+
+- **What**: instead of an absolute `t1sec % STAT_TIME` grid, the trigger
+  is now "has `STAT_TIME` seconds passed since the last status packet of
+  *any* kind (end-of-sequence or timed)". `netsendtask()` tracks
+  `laststatussecond`, updated right after it dispatches any status-type
+  packet - not just timed ones. This makes the near-simultaneous-pair
+  scenario structurally impossible: a timed status can no longer follow
+  an end-of-sequence one by less than a full `STAT_TIME`. Deliberately
+  gives up landing on clean `STAT_TIME` multiples to get this - confirmed
+  with the user that alignment to a clean grid was never actually needed.
+- **Where**: the whole check moved off the ADC-facing producer and into
+  `netsendtask()` itself. Unlike end-of-sequence status - which stays
+  exactly where it was, fired synchronously off the real ADC batch-end
+  notification, since moving it would add latency for no CPU benefit -
+  timed status was never tied to any ADC event, only to elapsed time, so
+  there was nothing to lose by relocating it off the ADC-critical task.
+  `netsendtask()`'s queue wait changed from `portMAX_DELAY` to a 1-second
+  bound so it can notice a due timed status with zero ADC activity -
+  still effectively idle (zero CPU) the rest of the time it's waiting.
+
+**This gave `enqueue_status()` a second caller** (`netsendtask()` itself,
+for timed status, alongside `startudp()`'s existing end-of-sequence call),
+meaning `sq_head` and `statuspkt.udppknum` - previously updated by exactly
+one task by construction - now have two possible writers. Fixed with
+`reserve_queue_slot()`: grabs a slot index and a packet sequence number
+together under one `taskENTER_CRITICAL()`/`taskEXIT_CRITICAL()` section,
+deliberately scoped to just those two integer read-modify-writes and
+*not* the payload memcpy that follows using the reserved values - once a
+slot is reserved, no other caller can pick it again until its descriptor
+is sent and `freeslots` is given back, so the memcpy needs no protection
+of its own. The critical section's cost is fixed (a handful of
+instructions), never proportional to packet size, regardless of whether
+a sample or a status packet triggered it - the whole point being to never
+put a payload-sized interrupts-disabled window in front of the ADC ISR,
+the same concern that shaped the rest of this design.
+
+`startudp()`'s notify-timeout branch is now empty (timed status no longer
+lives there, and nothing else ever did). Left as a 1000ms bounded wait
+rather than switched to `portMAX_DELAY`, since making the producer purely
+event-driven is a separate decision that hasn't been made.
+
+Verified on real hardware: confirmed working.
 
 ## Deferred, not forgotten
 
