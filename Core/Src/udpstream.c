@@ -109,23 +109,41 @@ void myreboot(char *msg) {
 #define SEND_QUEUE_DEPTH 96
 static uint8_t sendqueuebuf[SEND_QUEUE_DEPTH][UDPBUFSIZE];
 static struct pbuf *sendqueuepbuf[SEND_QUEUE_DEPTH];
-static uint8_t sq_head = 0;	// next slot the producer will fill; producer-owned only, never touched by netsendtask()
+static uint8_t sq_head = 0;	// next slot to fill; see reserve_queue_slot() for why this now needs protecting
 
 typedef struct {
 	uint8_t slot;	// which sendqueuebuf/sendqueuepbuf slot this item lives in
 	uint16_t len;	// actual payload length for this item (sample: UDPBUFSIZE, status: sizeof(statuspkt))
 } senditem_t;
 
-static QueueHandle_t sendqueueq;	// producer -> sender transport; also the sender's blocking wake signal
-static SemaphoreHandle_t freeslots;	// counts physical slots currently safe for the producer to write into
+static QueueHandle_t sendqueueq;	// producer/sender -> sender transport; also the sender's blocking wake signal
+static SemaphoreHandle_t freeslots;	// counts physical slots currently safe to write into
 
-// Push an item (already copied into sendqueuebuf[sq_head] by the caller) onto
-// the queue for netsendtask() to send, and advance sq_head. Never blocks: the
-// caller must already hold a free slot (see enqueue_sample()/enqueue_status()).
-static void submit_queued_item(uint16_t len) {
-	senditem_t item = { .slot = sq_head, .len = len };
-	xQueueSend(sendqueueq, &item, 0);
+// Reserve the next ring slot and packet sequence number together, atomically.
+// Now needed on both sides: the ADC-facing producer enqueues samples and
+// end-of-sequence status, but netsendtask() enqueues timed status itself
+// (see below) - so sq_head and statuspkt.udppknum each have two possible
+// writers and need a consistent, race-free view across both.
+//
+// Deliberately protects ONLY these two small integer read-modify-writes, not
+// the (much larger, payload-sized) memcpy that follows using the reserved
+// values - once a slot index is reserved here, no other caller will pick the
+// same one again until this item's descriptor is sent and freeslots is given
+// back, so the memcpy itself needs no further protection. Keeping the
+// critical section this small means it never holds interrupts disabled for
+// more than a few instructions, regardless of packet size - protecting the
+// whole enqueue instead would put a payload-sized interrupts-disabled window
+// directly in front of the ADC ISR, which is exactly what this queue exists
+// to avoid.
+static uint8_t reserve_queue_slot(uint32_t *pknum) {
+	uint8_t slot;
+	taskENTER_CRITICAL();
+	slot = sq_head;
 	sq_head = (sq_head + 1) % SEND_QUEUE_DEPTH;
+	*pknum = statuspkt.udppknum;
+	statuspkt.udppknum++;
+	taskEXIT_CRITICAL();
+	return slot;
 }
 
 // Copy a completed trigger sample into the send queue. Fast and bounded -
@@ -135,17 +153,24 @@ static void submit_queued_item(uint16_t len) {
 // overrun idiom in adcstream.c for the same "producer outpaced consumer"
 // situation.
 static void enqueue_sample(void *payload) {
+	uint8_t slot;
+	uint32_t pknum;
+	senditem_t item;
+
 	if (xSemaphoreTake(freeslots, 0) != pdTRUE) {
 		statuspkt.adcudpover++;	// queue full, drop this sample
 		return;
 	}
-	memcpy(sendqueuebuf[sq_head], payload, UDPBUFSIZE);
-	((uint8_t*) sendqueuebuf[sq_head])[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
-	((uint8_t*) sendqueuebuf[sq_head])[0] = statuspkt.udppknum & 0xff;
-	((uint8_t*) sendqueuebuf[sq_head])[1] = (statuspkt.udppknum & 0xff00) >> 8;
-	((uint8_t*) sendqueuebuf[sq_head])[2] = (statuspkt.udppknum & 0xff0000) >> 16;
-	statuspkt.udppknum++;		// UDP packet number - assigned in production order
-	submit_queued_item(UDPBUFSIZE);
+	slot = reserve_queue_slot(&pknum);
+	memcpy(sendqueuebuf[slot], payload, UDPBUFSIZE);
+	((uint8_t*) sendqueuebuf[slot])[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
+	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
+	((uint8_t*) sendqueuebuf[slot])[1] = (pknum & 0xff00) >> 8;
+	((uint8_t*) sendqueuebuf[slot])[2] = (pknum & 0xff0000) >> 16;
+
+	item.slot = slot;
+	item.len = UDPBUFSIZE;
+	xQueueSend(sendqueueq, &item, 0);
 }
 
 // Snapshot the current status packet fields into the send queue as an
@@ -154,8 +179,14 @@ static void enqueue_sample(void *payload) {
 // lwIP call. Taking a snapshot here (rather than the old zero-copy pointer
 // straight at the live statuspkt struct) also closes a latent race: the live
 // struct can keep being mutated by other tasks (AGC etc.) for as long as it
-// takes netsendtask() to actually get around to sending it.
+// takes netsendtask() to actually get around to sending it. Called from both
+// startudp() (ENDSEQ, event-driven off the actual ADC batch-end) and
+// netsendtask() (TIMED, time-driven - see there for why it lives there now).
 static void enqueue_status(int stype) {
+	uint8_t slot;
+	uint32_t pknum;
+	senditem_t item;
+
 	if (xSemaphoreTake(freeslots, 0) != pdTRUE) {
 		statuspkt.adcudpover++;	// queue full, drop this status packet
 		return;
@@ -165,27 +196,48 @@ static void enqueue_status(int stype) {
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 	statuspkt.adctrigoff = ((trigthresh + trigcomp) & 0xFFF) | ((pgagain & 0xF) << 12);
 
-	memcpy(sendqueuebuf[sq_head], (const void*) &statuspkt, sizeof(statuspkt));
-	((uint8_t*) sendqueuebuf[sq_head])[3] = stype;	// status pkt type (ENDSEQ or TIMED)
-	((uint8_t*) sendqueuebuf[sq_head])[0] = statuspkt.udppknum & 0xff;
-	((uint8_t*) sendqueuebuf[sq_head])[1] = (statuspkt.udppknum & 0xff00) >> 8;
-	((uint8_t*) sendqueuebuf[sq_head])[2] = (statuspkt.udppknum & 0xff0000) >> 16;
-	statuspkt.udppknum++;
-	submit_queued_item(sizeof(statuspkt));
+	slot = reserve_queue_slot(&pknum);
+	memcpy(sendqueuebuf[slot], (const void*) &statuspkt, sizeof(statuspkt));
+	((uint8_t*) sendqueuebuf[slot])[3] = stype;	// status pkt type (ENDSEQ or TIMED)
+	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
+	((uint8_t*) sendqueuebuf[slot])[1] = (pknum & 0xff00) >> 8;
+	((uint8_t*) sendqueuebuf[slot])[2] = (pknum & 0xff0000) >> 16;
+
+	item.slot = slot;
+	item.len = sizeof(statuspkt);
+	xQueueSend(sendqueueq, &item, 0);
 }
 
-// Lower-priority sender task: owns every sendudp() call in the firmware.
-// Blocks (zero CPU) until the producer has something queued, then drains as
-// fast as the network stack/hardware allow. Being strictly lower priority
-// than the producer (see startudp()) is what guarantees it can never delay
-// the ADC-facing path - the scheduler preempts it unconditionally the moment
-// a new ADC notification needs servicing, even mid-send-prep.
+// Lower-priority sender task: owns every sendudp() call in the firmware, and
+// also now owns the decision to send a timed status packet (see below).
+// Blocks up to 1 second at a time - long enough to stay effectively idle
+// (zero CPU) whenever there's nothing to do, short enough to notice a due
+// timed status without depending on ADC activity - then drains as fast as
+// the network stack/hardware allow. Being strictly lower priority than the
+// producer (see startudp()) is what guarantees it can never delay the
+// ADC-facing path - the scheduler preempts it unconditionally the moment a
+// new ADC notification needs servicing, even mid-send-prep.
 static void netsendtask(void const *argument) {
 	struct udp_pcb *pcb = (struct udp_pcb*) argument;
 	senditem_t item;
+	uint32_t laststatussecond = t1sec;	// don't fire a timed status right at boot
 
 	for (;;) {
-		xQueueReceive(sendqueueq, &item, portMAX_DELAY);
+		if (xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000)) != pdTRUE) {
+			// Nothing queued within 1 second - check whether a timed status
+			// is due. Moved here (off the ADC-facing producer) because it
+			// isn't tied to any ADC event, only to elapsed time; tracking
+			// "seconds since the last status packet of any type" (rather
+			// than the previous fixed t1sec % STAT_TIME grid) means a timed
+			// status can no longer land almost back-to-back with an
+			// end-of-sequence one - see UDP_SEND_QUEUE.md. laststatussecond
+			// only needs updating here, in the one task that dispatches
+			// every packet - no cross-task protection needed for it.
+			if ((t1sec - laststatussecond) >= STAT_TIME) {
+				enqueue_status(TIMED);
+			}
+			continue;
+		}
 
 		// Wait for hardware to fully release this slot's pbuf from whatever
 		// it last sent from it. Bounded, short retry rather than a tight
@@ -203,9 +255,11 @@ static void netsendtask(void const *argument) {
 		sendudp(pcb, sendqueuepbuf[item.slot], &udpdestip, UDP_PORT_NO);
 		xSemaphoreGive(freeslots);	// data handed to lwIP; producer may reuse this slot now
 
-		if (((uint8_t*) sendqueuebuf[item.slot])[3] == 4) {	// sample packets only, matches old drain_sendqueue's scope
+		if (((uint8_t*) sendqueuebuf[item.slot])[3] == 4) {	// sample packet
 			statuspkt.udpsent++;		// debug use adc udp sample packet sent count
 			statuspkt.adcpktssent++;	// UDP sample packet counter
+		} else {						// status packet (ENDSEQ or TIMED)
+			laststatussecond = t1sec;
 		}
 	}
 }
@@ -221,22 +275,6 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t 
 			printf("myudp_recv: err %i\n", err);
 		}
 		//		pbuf_free_callback(p);
-	}
-}
-
-//
-// queue a timed status packet if is time. Deliberately only ever checked
-// from startudp()'s notify-timeout branch, i.e. only once the ADC side has
-// been idle for a while - not a bug: during a trigger burst the
-// end-of-sequence status packet already carries the same fields, so a timed
-// status mid-burst would just be a redundant duplicate.
-//
-void sendtimedstatus(void) {
-	static uint32_t talive = 0;
-
-	if ((t1sec != talive) && (t1sec % STAT_TIME == 0)) { // this is a temporary mech to send timed status pkts...
-		talive = t1sec;
-		enqueue_status(TIMED);
 	}
 }
 
@@ -450,10 +488,13 @@ void startudp() {		// destination UDP target IP address
 		/* The transmission ended as expected. */
 		else {
 			/* The call to ulTaskNotifyTake() timed out - ADC side has been
-			 * idle. netsendtask() drains the queue independently now, so
-			 * there's nothing to do here except check for a due timed
-			 * status packet. */
-			sendtimedstatus();
+			 * idle. netsendtask() drains the queue and checks for a due
+			 * timed status packet independently now (see there), so there
+			 * is genuinely nothing left to do here - this branch is kept,
+			 * rather than switching to a portMAX_DELAY wait, only because
+			 * that's a separate decision (whether this task should ever
+			 * wake without a real ADC notification for some other future
+			 * reason) that hasn't been made yet. */
 //			printf("ulNotificationValue = %d\n",ulNotificationValue );
 		}
 
