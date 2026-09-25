@@ -176,6 +176,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f7xx_hal.h"
+#include "netfix.h"		/* my12: NETFIX_HAL_ETH_TX_ORDER switch, see below and Core/Inc/netfix.h */
 
 /** @addtogroup STM32F7xx_HAL_Driver
   * @{
@@ -183,6 +184,19 @@
 #ifdef HAL_ETH_MODULE_ENABLED
 
 #if defined(ETH)
+
+/* my12 PATCH MARKER. This file is a locally patched copy of Cube FW F7 V1.17.1's driver:
+ * ETH_Prepare_Tx_Descriptors() carries the fixes that ST made in later packages (V1.17.4):
+ *   - OWN of the FIRST descriptor is set last, after the whole chain is built (the stock
+ *     code hands it to the DMA first, so a DMA that is still busy with the previous frame
+ *     can fetch a half-built frame - garbage/header-only frames, lost fragments);
+ *   - FS of the next descriptor is cleared only AFTER the busy check (stock code clears it
+ *     first, on a descriptor that may still belong to an earlier frame);
+ *   - PRIMASK is saved/restored instead of __disable_irq()/__enable_irq().
+ * netfix_banner() (ethernetif.c) references this symbol, so if CubeMX regenerates Drivers/
+ * and restores the stock file, the LINK FAILS instead of the fix silently disappearing.
+ * Set NETFIX_HAL_ETH_TX_ORDER to 0 in Core/Inc/netfix.h to get the stock behaviour back. */
+const uint32_t netfix_hal_eth_patch = NETFIX_HAL_ETH_TX_ORDER;
 
 /** @defgroup ETH ETH
   * @brief ETH HAL module driver
@@ -3082,10 +3096,14 @@ static uint32_t ETH_Prepare_Tx_Descriptors(ETH_HandleTypeDef *heth, ETH_TxPacket
   /* Mark it as First Descriptor */
   SET_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_FS);
 
+#if !NETFIX_HAL_ETH_TX_ORDER
+  /* Stock ST code: hands the first descriptor to the DMA NOW, before the rest of the
+   * frame's descriptors exist (and with LS possibly still set from its previous use). */
   /* Ensure rest of descriptor is written to RAM before the OWN bit */
   __DMB();
   /* set OWN bit of FIRST descriptor */
   SET_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_OWN);
+#endif /* !NETFIX_HAL_ETH_TX_ORDER */
 
   /* only if the packet is split into more than one descriptors > 1 */
   while (txbuffer->next != NULL)
@@ -3107,8 +3125,12 @@ static uint32_t ETH_Prepare_Tx_Descriptors(ETH_HandleTypeDef *heth, ETH_TxPacket
     /* Get current descriptor address */
     dmatxdesc = (ETH_DMADescTypeDef *)dmatxdesclist->TxDesc[descidx];
 
+#if !NETFIX_HAL_ETH_TX_ORDER
+    /* Stock ST code: clears FS BEFORE checking that this descriptor is free - i.e. it may
+     * modify a descriptor that still belongs to an earlier, unsent frame. */
     /* Clear the FD bit of new Descriptor */
     CLEAR_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_FS);
+#endif /* !NETFIX_HAL_ETH_TX_ORDER */
 
     /* Current Tx Descriptor Owned by DMA: cannot be used by the application  */
     if ((READ_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_OWN) == ETH_DMATXDESC_OWN)
@@ -3133,6 +3155,11 @@ static uint32_t ETH_Prepare_Tx_Descriptors(ETH_HandleTypeDef *heth, ETH_TxPacket
 
       return HAL_ETH_ERROR_BUSY;
     }
+
+#if NETFIX_HAL_ETH_TX_ORDER
+    /* Clear the FD bit of new Descriptor (only now that we know it is ours) */
+    CLEAR_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_FS);
+#endif /* NETFIX_HAL_ETH_TX_ORDER */
 
     descnbr += 1U;
 
@@ -3166,11 +3193,35 @@ static uint32_t ETH_Prepare_Tx_Descriptors(ETH_HandleTypeDef *heth, ETH_TxPacket
 
   /* Mark it as LAST descriptor */
   SET_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_LS);
+
+#if NETFIX_HAL_ETH_TX_ORDER
+  /* Only now, with every descriptor of the frame complete, give the FIRST descriptor to
+   * the DMA. (ST V1.17.4 order; the DMA never sees a half-built frame.) */
+  dmatxdesc = (ETH_DMADescTypeDef *)dmatxdesclist->TxDesc[firstdescidx];
+  /* Ensure rest of descriptor is written to RAM before the OWN bit */
+  __DMB();
+  /* set OWN bit of FIRST descriptor */
+  SET_BIT(dmatxdesc->DESC0, ETH_DMATXDESC_OWN);
+#endif /* NETFIX_HAL_ETH_TX_ORDER */
+
   /* Save the current packet address to expose it to the application */
   dmatxdesclist->PacketAddress[descidx] = dmatxdesclist->CurrentPacketAddress;
 
   dmatxdesclist->CurTxDesc = descidx;
 
+#if NETFIX_HAL_ETH_TX_ORDER
+  {
+    /* Enter critical section, remembering the previous mask so we never enable interrupts
+     * that the caller had disabled (stock code used __disable_irq()/__enable_irq()). */
+    uint32_t primask_bit = __get_PRIMASK();
+    __set_PRIMASK(1);
+
+    dmatxdesclist->BuffersInUse += bd_count + 1U;
+
+    /* Exit critical section: restore previous priority mask */
+    __set_PRIMASK(primask_bit);
+  }
+#else
   /* disable the interrupt */
   __disable_irq();
 
@@ -3178,6 +3229,7 @@ static uint32_t ETH_Prepare_Tx_Descriptors(ETH_HandleTypeDef *heth, ETH_TxPacket
 
   /* Enable interrupts back */
   __enable_irq();
+#endif /* NETFIX_HAL_ETH_TX_ORDER */
 
 
   /* Return function status */

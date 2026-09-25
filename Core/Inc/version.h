@@ -29,7 +29,7 @@
 #endif
 
 // 21 May 2023 - updated IDE
-#define BUILD 10048	// 10048: UDP send-path stall guard (udpstream.c); 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release
+#define BUILD 10049	// 10049: Ethernet/lwIP thread-safety fixes (netfix.h: HAL TX descriptor order, lwIP protection, TX mutex, diagnostics); 10048: UDP send-path stall guard; 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else

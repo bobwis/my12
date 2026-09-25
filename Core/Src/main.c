@@ -42,6 +42,7 @@
 
 #include "udpstream.h"
 #include "version.h"
+#include "netfix.h"
 #include "www.h"
 #include "dhcp.h"
 #include "splat1.h"
@@ -2235,6 +2236,7 @@ void StartDefaultTask(void const * argument)
 				(csr & RCC_CSR_WWDGRSTF) ? "WWDG-WATCHDOG " : "", (csr & RCC_CSR_LPWRRSTF) ? "LOW-POWER " : "", (unsigned long) csr);
 		__HAL_RCC_CLEAR_RESET_FLAGS();
 	}
+	netfix_banner();	// which of the Ethernet/lwIP thread-safety fixes (netfix.h) this build has
 
 	crc_rom();
 	printaline("");

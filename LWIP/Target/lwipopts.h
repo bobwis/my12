@@ -58,7 +58,7 @@
 /*----- Default Value for LWIP_TCPIP_CORE_LOCKING: 0 ---*/
 #define LWIP_TCPIP_CORE_LOCKING 1
 /*----- Default Value for SYS_LIGHTWEIGHT_PROT: 1 ---*/
-#define SYS_LIGHTWEIGHT_PROT 0
+#define SYS_LIGHTWEIGHT_PROT 1
 /*----- Value in opt.h for MEM_ALIGNMENT: 1 -----*/
 #define MEM_ALIGNMENT 4
 /*----- Default Value for MEM_SIZE: 1600 ---*/
@@ -187,6 +187,40 @@
 #define LWIP_DBG_TYPES_ON LWIP_DBG_OFF
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
+#include "netfix.h"
+
+/* ---- lwIP inter-task protection (see Core/Inc/netfix.h, switch B) ------------------
+ * SYS_LIGHTWEIGHT_PROT was 0 from the initial commit (also in the .ioc). opt.h: "This is
+ * required when using lwIP from more than one context!" - pbuf_ref()/pbuf_free() reference
+ * counts, the memp pools and mem_free()/mem_malloc() (LWIP_ALLOW_MEM_FREE_FROM_OTHER_CONTEXT
+ * is 1, which makes mem_free() rely on this protection alone) were all unprotected while the
+ * sender, the tcpip thread, the low-priority task and the link thread all use them.
+ * We supply the three macros ourselves rather than use ST's sys_arch_protect(), which takes
+ * a (non-recursive) FreeRTOS mutex per call: a BASEPRI critical section costs a few cycles,
+ * nests by saving the previous mask, and only holds off interrupts at or below
+ * configMAX_SYSCALL_INTERRUPT_PRIORITY for the ~100 ns of a reference-count update. The
+ * regions lwIP protects are short and nothing calls these from an ISR that outranks the
+ * ceiling. Setting NETFIX_LWIP_PROTECT to 0 restores the old (unprotected) configuration. */
+#if NETFIX_LWIP_PROTECT
+#include "FreeRTOS.h"
+#include "task.h"
+#define SYS_ARCH_DECL_PROTECT(lev)	uint32_t lev
+#define SYS_ARCH_PROTECT(lev)		lev = (uint32_t) portSET_INTERRUPT_MASK_FROM_ISR()
+#define SYS_ARCH_UNPROTECT(lev)		portCLEAR_INTERRUPT_MASK_FROM_ISR(lev)
+#else
+#undef SYS_LIGHTWEIGHT_PROT
+#define SYS_LIGHTWEIGHT_PROT 0
+#endif
+
+#if NETFIX_DIAG
+/* Richer assertion handler (ethernetif.c): same first line as before, plus which task hit
+ * it and a dump of recent Ethernet TX/free events. arch/cc.h defines the stock printf
+ * version only if this is not defined. */
+void net_lwip_assert(const char *msg, int line, const char *file);
+#undef LWIP_PLATFORM_ASSERT			/* a few sources (sys_arch.c) pull in arch/cc.h before this file */
+#define LWIP_PLATFORM_ASSERT(x)		net_lwip_assert(x, __LINE__, __FILE__)
+#endif
+
 #define MEMP_NUM_SYS_TIMEOUT 	(LWIP_NUM_SYS_TIMEOUT_INTERNAL)+1
 #define MEMP_NUM_UDP_PCB        8
 #define IP_REASS_MAX_PBUFS     20

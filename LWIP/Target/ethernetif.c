@@ -33,7 +33,9 @@
 
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
-
+#include "netfix.h"		/* build 10049: TX serialisation + diagnostics, see Core/Inc/netfix.h */
+#include "semphr.h"
+#include <stdio.h>
 /* USER CODE END 0 */
 
 /* Private define ------------------------------------------------------------*/
@@ -54,7 +56,9 @@
 #define ETH_TX_BUFFER_MAX             ((ETH_TX_DESC_CNT) * 2U)
 
 /* USER CODE BEGIN 1 */
-
+/* low_level_output(): how long one wait for a TX-complete interrupt lasts when the DMA ring is
+ * genuinely full (the overall limit is ETHIF_TX_TIMEOUT, after which the frame is dropped). */
+#define ETHIF_TX_SLICE (10U)
 /* USER CODE END 1 */
 
 /* Private variables ---------------------------------------------------------*/
@@ -147,6 +151,171 @@ lan8742_IOCtx_t  LAN8742_IOCtx = {ETH_PHY_IO_Init,
                                   ETH_PHY_IO_GetTick};
 
 /* USER CODE BEGIN 3 */
+
+/* ---- Ethernet TX-path serialisation and diagnostics (build 10049, see Core/Inc/netfix.h) ----
+ * Several tasks end up in low_level_output(): the sender (netsendtask, udp_sendto), the tcpip
+ * thread (ARP, TCP, DHCP, DNS...), the low-priority task (HTTP polls via raw API calls) and,
+ * via netif_set_up/link_up, the link thread. ST's driver assumes only one at a time: it used one
+ * global ETH_TxPacketConfig and unprotected HAL ring state, and blocked in its busy-retry with
+ * that global live, so another task's frame could overwrite it (own frame lost + own pbuf
+ * reference never freed, the other frame sent and freed twice - matching the lost packet, the
+ * leaked reference and the "pbuf_free: p->ref > 0" assertion seen on detector 15).
+ * TxMutex is a FreeRTOS mutex (priority inheritance). It is deliberately NOT lwIP's core lock:
+ * low_level_output() is called with that lock already held by the tcpip thread. */
+#if NETFIX_TX_MUTEX
+static SemaphoreHandle_t TxMutex = NULL;
+#endif
+
+static volatile uint32_t nettx_contended;		/* TX-path entries that had to wait for another task */
+static volatile uint32_t nettx_dropped;			/* frames dropped after ETHIF_TX_TIMEOUT with the ring still full */
+static volatile uint32_t nettx_refused;			/* frames refused for another reason (link down, ...) */
+static volatile uint32_t nettx_asserts;			/* lwIP assertions seen */
+static const char *volatile nettx_last_holder;	/* last contention: task that held the mutex ... */
+static const char *volatile nettx_last_waiter;	/* ... and task that had to wait for it */
+
+#if NETFIX_DIAG
+/* Flight recorder of the last NETTX_TRACE_N transmit / free events (newest overwrites oldest).
+ * Recorded under TxMutex, ~30 cycles per event, dumped on a lwIP assertion and in UDPSTALL. */
+typedef struct {
+	uint32_t tick;			/* xTaskGetTickCount() */
+	const char *task;		/* pcTaskGetName() of the task that did it */
+	uint32_t ptr;			/* the pbuf handed to / freed by the driver */
+	uint16_t len;			/* its tot_len */
+	uint8_t ev;				/* 'T' handed to the DMA, 'F' freed by the release loop, 'D' dropped, 'E' refused */
+	uint8_t desc;			/* TxDescList.CurTxDesc when recorded */
+} nettx_ev_t;
+#define NETTX_TRACE_N 32
+static nettx_ev_t nettx_trace[NETTX_TRACE_N];
+static volatile uint32_t nettx_trace_cnt;
+
+static void nettx_rec(uint8_t ev, const void *p, uint16_t len)
+{
+	nettx_ev_t *e = &nettx_trace[(nettx_trace_cnt++) % NETTX_TRACE_N];
+
+	e->tick = xTaskGetTickCount();
+	e->task = pcTaskGetName(NULL);
+	e->ptr = (uint32_t) (uintptr_t) p;
+	e->len = len;
+	e->ev = ev;
+	e->desc = (uint8_t) heth.TxDescList.CurTxDesc;
+}
+#else
+#define nettx_rec(ev, p, len)	do { } while (0)
+#endif /* NETFIX_DIAG */
+
+#if NETFIX_TX_MUTEX
+static void tx_lock(void)
+{
+	if (TxMutex == NULL) {
+		return;
+	}
+	if (xSemaphoreTake(TxMutex, 0) != pdTRUE) {			/* another task is inside the TX path */
+		TaskHandle_t holder = xSemaphoreGetMutexHolder(TxMutex);
+
+		nettx_contended++;
+		nettx_last_holder = (holder != NULL) ? pcTaskGetName(holder) : "?";
+		nettx_last_waiter = pcTaskGetName(NULL);
+		xSemaphoreTake(TxMutex, portMAX_DELAY);
+	}
+}
+
+static void tx_unlock(void)
+{
+	if (TxMutex != NULL) {
+		xSemaphoreGive(TxMutex);
+	}
+}
+#define TX_LOCK()	tx_lock()
+#define TX_UNLOCK()	tx_unlock()
+#else
+#define TX_LOCK()	do { } while (0)
+#define TX_UNLOCK()	do { } while (0)
+#endif /* NETFIX_TX_MUTEX */
+
+/* Console report of the TX ring state, the counters above and (trace_lines > 0) the last few
+ * recorded events, oldest first. Reads without the mutex: it is called from assertion and
+ * stall handlers and must never block. */
+void nettx_diag_print(const char *tag, int trace_lines)
+{
+#if NETFIX_DIAG
+	int i, real = 0;
+	uint32_t cnt = nettx_trace_cnt;
+	uint32_t n = (cnt < NETTX_TRACE_N) ? cnt : NETTX_TRACE_N;
+	uint32_t first;
+
+	for (i = 0; i < ETH_TX_DESC_CNT; i++) {
+		if (heth.TxDescList.PacketAddress[i] != NULL) {
+			real++;
+		}
+	}
+	/* buffers_in_use is the HAL's own count of BUFFERS (not descriptors) and normally runs well
+	 * above the ring size: it only bounds the release loop and is not an error indicator. */
+	printf("NETDIAG[%s]: tx ring cur=%lu release_idx=%lu buffers_in_use=%lu frames_awaiting_release=%d heth_state=0x%02lx\n", tag,
+			(unsigned long) heth.TxDescList.CurTxDesc, (unsigned long) heth.TxDescList.releaseIndex,
+			(unsigned long) heth.TxDescList.BuffersInUse, real, (unsigned long) heth.gState);
+	printf("NETDIAG[%s]: tx mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n", tag,
+			(unsigned long) nettx_contended, nettx_last_waiter ? nettx_last_waiter : "-", nettx_last_holder ? nettx_last_holder : "-",
+			(unsigned long) nettx_dropped, (unsigned long) nettx_refused, (unsigned long) nettx_asserts);
+	if (trace_lines > 0 && n > 0) {
+		if (n > (uint32_t) trace_lines) {
+			n = (uint32_t) trace_lines;
+		}
+		first = cnt - n;
+		for (i = 0; i < (int) n; i++) {
+			const nettx_ev_t *e = &nettx_trace[(first + (uint32_t) i) % NETTX_TRACE_N];
+
+			printf("NETTX: t=%lu %-10s %c p=0x%08lx len=%u cur=%u\n", (unsigned long) e->tick, e->task ? e->task : "?", e->ev,
+					(unsigned long) e->ptr, (unsigned) e->len, (unsigned) e->desc);
+		}
+	}
+#endif
+}
+
+/* From the sender task once per timed status: one line, and only when a counter has moved. */
+void nettx_diag_periodic(void)
+{
+#if NETFIX_DIAG
+	static uint32_t last_c, last_d, last_r, last_a;
+
+	if (nettx_contended != last_c || nettx_dropped != last_d || nettx_refused != last_r || nettx_asserts != last_a) {
+		last_c = nettx_contended;
+		last_d = nettx_dropped;
+		last_r = nettx_refused;
+		last_a = nettx_asserts;
+		printf("NETDIAG: tx mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n",
+				(unsigned long) last_c, nettx_last_waiter ? nettx_last_waiter : "-", nettx_last_holder ? nettx_last_holder : "-",
+				(unsigned long) last_d, (unsigned long) last_r, (unsigned long) last_a);
+	}
+#endif
+}
+
+#if NETFIX_DIAG
+/* LWIP_PLATFORM_ASSERT (lwipopts.h). Same first line as the stock handler, then which task hit
+ * it and - for the first few - the TX ring state and the recent TX/free events, so a double free
+ * can be matched to the frames and tasks involved. Non-fatal, like the stock handler. */
+void net_lwip_assert(const char *msg, int line, const char *file)
+{
+	uint32_t n = ++nettx_asserts;
+
+	printf("Assertion \"%s\" failed at line %d in %s\n", msg, line, file);
+	if (n <= 3) {
+		printf("NETDIAG: lwIP assertion #%lu hit by task %s at tick %lu\n", (unsigned long) n, pcTaskGetName(NULL),
+				(unsigned long) xTaskGetTickCount());
+		nettx_diag_print("assert", 24);
+	}
+}
+#endif /* NETFIX_DIAG */
+
+/* One line at boot saying which of the netfix.h parts are built in. The two markers are only
+ * defined by the patched HAL driver and by the patched low_level_output() below: if CubeMX
+ * regenerates those files the link fails here instead of the fixes silently disappearing. */
+extern const uint32_t netfix_ethernetif_patch;
+void netfix_banner(void)
+{
+	printf("Net fixes: hal-tx-order=%lu tx-mutex=%lu lwip-protect=%d diag=%d (SYS_LIGHTWEIGHT_PROT=%d)\n",
+			(unsigned long) netfix_hal_eth_patch, (unsigned long) netfix_ethernetif_patch, NETFIX_LWIP_PROTECT, NETFIX_DIAG,
+			SYS_LIGHTWEIGHT_PROT);
+}
 
 /* USER CODE END 3 */
 
@@ -284,6 +453,14 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
 
   /* create the task that handles the ETH_MAC */
 /* USER CODE BEGIN OS_THREAD_DEF_CREATE_CMSIS_RTOS_V1 */
+#if NETFIX_TX_MUTEX
+  /* the TX serialisation mutex must exist before anything can transmit (see USER CODE 3) */
+  TxMutex = xSemaphoreCreateMutex();
+  if (TxMutex == NULL)
+  {
+    printf("ethernetif: TX mutex create failed - transmit path is NOT serialised\n");
+  }
+#endif
   osThreadDef(EthIf, ethernetif_input, osPriorityRealtime, 0, INTERFACE_THREAD_STACK_SIZE);
 // osThreadDef(EthIf, ethernetif_input, osPriorityNormal, 0, INTERFACE_THREAD_STACK_SIZE);
   osThreadCreate (osThread(EthIf), netif);
@@ -391,6 +568,10 @@ heth.Init.MACAddr[4] = (STM32_UUID[0] ^ STM32_UUID[1] ^ STM32_UUID[2]) & 0xFF00 
  *       dropped because of memory failure (except for the TCP timers).
  */
 
+/* Marker for netfix_banner(): defined only by this patched low_level_output(); a CubeMX
+ * regeneration that restores the stock function removes it and the link fails (see netfix.h). */
+const uint32_t netfix_ethernetif_patch = NETFIX_TX_MUTEX;
+
 static err_t low_level_output(struct netif *netif, struct pbuf *p)
 {
   uint32_t i = 0U;
@@ -421,6 +602,75 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
     i++;
   }
 
+#if NETFIX_TX_MUTEX
+  {
+    /* build 10049 (see Core/Inc/netfix.h, switch C). Everything from here on is serialised by
+     * TxMutex, the ETH_TxPacketConfig is this call's own copy of the template that
+     * low_level_init() set up (the old code wrote one global and could block with it live),
+     * the wait for a full ring no longer holds the mutex and is bounded, and the HAL's sticky
+     * BUSY error bit is cleared each attempt so it cannot turn a different failure (link down)
+     * into an endless retry. */
+    ETH_TxPacketConfig txcfg = TxConfig;
+    const uint16_t plen = (uint16_t) p->tot_len;
+    const TickType_t t0 = xTaskGetTickCount();
+
+    txcfg.Length = p->tot_len;
+    txcfg.TxBuffer = Txbuffer;
+    txcfg.pData = p;
+    (void) plen;		/* only used by the NETFIX_DIAG flight recorder */
+
+    pbuf_ref(p);
+
+    TX_LOCK();
+    for (;;)
+    {
+      heth.ErrorCode &= ~HAL_ETH_ERROR_BUSY;
+      if (HAL_ETH_Transmit_IT(&heth, &txcfg) == HAL_OK)
+      {
+        nettx_rec('T', p, plen);
+        errval = ERR_OK;
+        break;
+      }
+
+      if (HAL_ETH_GetError(&heth) & HAL_ETH_ERROR_BUSY)
+      {
+        /* The ring is full of frames the driver has not yet reclaimed (it only reclaims here, lazily).
+         * Reclaim the ones the DMA has finished and try again straight away. */
+        HAL_ETH_ReleaseTxPacket(&heth);
+        heth.ErrorCode &= ~HAL_ETH_ERROR_BUSY;
+        if (HAL_ETH_Transmit_IT(&heth, &txcfg) == HAL_OK)
+        {
+          nettx_rec('T', p, plen);
+          errval = ERR_OK;
+          break;
+        }
+
+        /* Still full: the DMA really has them in flight. Wait for a TX-complete interrupt - without
+         * holding TxMutex - then look again. Give up (drop this frame) after ETHIF_TX_TIMEOUT. */
+        TX_UNLOCK();
+        osSemaphoreWait(TxPktSemaphore, ETHIF_TX_SLICE);
+        TX_LOCK();
+        if ((xTaskGetTickCount() - t0) >= pdMS_TO_TICKS(ETHIF_TX_TIMEOUT))
+        {
+          nettx_dropped++;
+          nettx_rec('D', p, plen);
+          pbuf_free(p);
+          errval = ERR_IF;
+          break;
+        }
+        continue;
+      }
+
+      /* Other error (e.g. the link is down and the HAL is stopped): not retryable here */
+      nettx_refused++;
+      nettx_rec('E', p, plen);
+      pbuf_free(p);
+      errval = ERR_IF;
+      break;
+    }
+    TX_UNLOCK();
+  }
+#else
   TxConfig.Length = p->tot_len;
   TxConfig.TxBuffer = Txbuffer;
   TxConfig.pData = p;
@@ -451,6 +701,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
       }
     }
   }while(errval == ERR_BUF);
+#endif /* NETFIX_TX_MUTEX */
 
   return errval;
 }
@@ -835,7 +1086,9 @@ void ethernet_link_thread(void const * argument)
 
   if(netif_is_link_up(netif) && (PHYLinkState <= LAN8742_STATUS_LINK_DOWN))
   {
+    TX_LOCK();		/* build 10049: don't stop the MAC/DMA under a transmit in progress */
     HAL_ETH_Stop_IT(&heth);
+    TX_UNLOCK();
     netif_set_down(netif);
     netif_set_link_down(netif);
   }
@@ -870,11 +1123,13 @@ void ethernet_link_thread(void const * argument)
     if(linkchanged)
     {
       /* Get MAC Config MAC */
+      TX_LOCK();	/* build 10049: don't restart the MAC/DMA under a transmit in progress */
       HAL_ETH_GetMACConfig(&heth, &MACConf);
       MACConf.DuplexMode = duplex;
       MACConf.Speed = speed;
       HAL_ETH_SetMACConfig(&heth, &MACConf);
       HAL_ETH_Start_IT(&heth);
+      TX_UNLOCK();
       netif_set_up(netif);
       netif_set_link_up(netif);
     }
@@ -953,6 +1208,7 @@ void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t 
 void HAL_ETH_TxFreeCallback(uint32_t * buff)
 {
 /* USER CODE BEGIN HAL ETH TxFreeCallback */
+  nettx_rec('F', buff, ((struct pbuf *)buff)->tot_len);	/* flight recorder (NETFIX_DIAG), before the free */
 
   pbuf_free((struct pbuf *)buff);
 

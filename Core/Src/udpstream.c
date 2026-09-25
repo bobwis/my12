@@ -6,6 +6,7 @@
  */
 #include "lwip.h"
 #include "udpstream.h"
+#include "netfix.h"
 #include "adcstream.h"
 #include "mydebug.h"
 #include "FreeRTOS.h"
@@ -189,6 +190,7 @@ static void udp_stall_snapshot(const char *where, uint32_t waited_ms) {
 		}
 	}
 	printf(" (%d of %d)\n", bad, SEND_QUEUE_DEPTH);
+	nettx_diag_print("udpstall", 16);	// Ethernet TX ring / mutex counters / last TX and free events (netfix.h)
 }
 
 // Runs from the ADC-facing producer, at most once a second. See the block comment above.
@@ -343,6 +345,7 @@ static void netsendtask(void const *argument) {
 
 	for (;;) {
 		if (xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000)) != pdTRUE) {
+			nettx_diag_periodic();	// one NETDIAG: line if a TX-path counter moved (netfix.h); a compare otherwise
 			// Nothing queued within 1 second - check whether a timed status
 			// is due. Moved here (off the ADC-facing producer) because it
 			// isn't tied to any ADC event, only to elapsed time; tracking
