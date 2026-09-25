@@ -22,6 +22,8 @@
 #define pbuf_free pbuf_free_callback
 
 extern uint32_t t1sec;
+extern void rebootme(int why);
+extern struct netif gnetif;
 uint8_t gpslocked = 0;
 uint8_t epochvalid = 0;
 unsigned int globalfreeze;		// freeze udp streaming
@@ -118,6 +120,121 @@ typedef struct {
 
 static QueueHandle_t sendqueueq;	// producer/sender -> sender transport; also the sender's blocking wake signal
 static SemaphoreHandle_t freeslots;	// counts physical slots currently safe to write into
+
+/* ---- UDP send-path stall guard --------------------------------------------
+ * Field detectors on build 10047 (this send-queue code) were observed to stop
+ * sending ALL UDP - heartbeats included - while HTTP/TCP kept working and the
+ * console stayed silent; only a reboot cured it. The sender used to wait for a
+ * slot's pbuf with an unbounded, silent loop, which is exactly that failure if
+ * a pbuf reference is ever never released. Two layers now:
+ *
+ *  1. netsendtask()'s wait for a slot's pbuf is bounded. It reports once after
+ *     STALL_SNAPSHOT_MS, again every STALL_REPORT_EVERY_MS, and after
+ *     STALL_REBOOT_MS gives up and reboots.
+ *  2. udp_stall_watchdog(), run from the ADC-facing producer task (a different
+ *     task, so it still works if the sender is stuck ANYWHERE - the pbuf wait,
+ *     sendudp(), or the Ethernet output path), reboots if the sender has been
+ *     inside one item for STALL_SENDER_BUSY_SECS, if the queue holds items but
+ *     nothing has been sent for that long, or if the link is up but no packet of
+ *     any kind has been sent for STALL_NO_SEND_SECS (a heartbeat is due every
+ *     STAT_TIME). Only armed after STALL_ARM_UPTIME_SECS so a fault can never
+ *     cause a rapid reboot loop.
+ *
+ * Every report goes to the console only (the status/sample packet formats are
+ * fixed and shared with downstream software), prefixed UDPSTALL: so it is easy
+ * to find in a serial capture. rebootme() is the project's standard reboot.
+ */
+#define STALL_SNAPSHOT_MS		250		// sender's wait for a slot's pbuf before the first report
+#define STALL_REPORT_EVERY_MS	1000	// repeat interval for further short reports
+#define STALL_REBOOT_MS			5000	// sender gives up waiting for the pbuf and reboots
+#define STALL_SENDER_BUSY_SECS	30		// watchdog: sender inside one item / queue not draining
+#define STALL_NO_SEND_SECS		(5 * STAT_TIME)	// watchdog: link up but nothing sent at all
+#define STALL_ARM_UPTIME_SECS	600		// watchdog: don't act during the first 10 minutes
+#define STALL_REBOOT_WHY		9		// err_leds()/rebootme() code: UDP send path stalled
+
+static volatile uint32_t sq_busy_since;		// t1sec when the sender took its current item; 0 = idle
+static volatile uint32_t sq_last_send_sec;	// t1sec of the last completed sendudp()
+static volatile uint32_t sq_sent_total;		// completed sendudp() calls since boot (samples + status)
+static volatile uint8_t sq_cur_slot;		// the item the sender is/was working on
+static volatile uint8_t sq_cur_type;		//   (packet type byte: 4 = sample, ENDSEQ/TIMED = status)
+static volatile uint16_t sq_cur_len;
+static volatile uint32_t sq_cur_pknum;
+
+// One-shot dump of everything that could show why the send path stopped.
+static void udp_stall_snapshot(const char *where, uint32_t waited_ms) {
+	int i, bad = 0;
+	struct pbuf *pb = sendqueuepbuf[sq_cur_slot];
+
+	printf("UDPSTALL: ==== %s ====\n", where);
+	printf("UDPSTALL: uptime=%lus sender_busy_for=%lus last_send_ago=%lus waited=%lums sent_total=%lu\n", (unsigned long) t1sec,
+			(unsigned long) (sq_busy_since ? (t1sec - sq_busy_since) : 0), (unsigned long) (t1sec - sq_last_send_sec),
+			(unsigned long) waited_ms, (unsigned long) sq_sent_total);
+	printf("UDPSTALL: item slot=%u type=%u len=%u pknum=%lu\n", sq_cur_slot, sq_cur_type, sq_cur_len, (unsigned long) sq_cur_pknum);
+	if (pb != NULL) {
+		printf("UDPSTALL: item pbuf ref=%u len=%u tot_len=%u flags=0x%02x type=0x%02x next=0x%08lx payload=0x%08lx\n", (unsigned) pb->ref,
+				(unsigned) pb->len, (unsigned) pb->tot_len, (unsigned) pb->flags, (unsigned) pb->type_internal,
+				(unsigned long) (uintptr_t) pb->next, (unsigned long) (uintptr_t) pb->payload);
+	}
+	printf("UDPSTALL: freeslots=%u/%d queued=%u udpsent=%lu overruns=%lu heap_free=%lu\n", (unsigned) uxSemaphoreGetCount(freeslots),
+			SEND_QUEUE_DEPTH, (unsigned) uxQueueMessagesWaiting(sendqueueq), (unsigned long) statuspkt.udpsent,
+			(unsigned long) statuspkt.adcudpover, (unsigned long) xPortGetFreeHeapSize());
+	printf("UDPSTALL: netif_up=%d link_up=%d eth_dmasr=0x%08lx tx_cur_desc=%lu tx_buffers_in_use=%lu\n", (int) netif_is_up(&gnetif),
+			(int) netif_is_link_up(&gnetif), (unsigned long) ETH->DMASR, (unsigned long) heth.TxDescList.CurTxDesc,
+			(unsigned long) heth.TxDescList.BuffersInUse);
+	printf("UDPSTALL: ring slots with pbuf ref != 1 (slot:ref):");
+	for (i = 0; i < SEND_QUEUE_DEPTH; i++) {
+		if (sendqueuepbuf[i] != NULL && sendqueuepbuf[i]->ref != 1) {
+			printf(" %d:%u", i, (unsigned) sendqueuepbuf[i]->ref);
+			bad++;
+		}
+	}
+	printf(" (%d of %d)\n", bad, SEND_QUEUE_DEPTH);
+}
+
+// Runs from the ADC-facing producer, at most once a second. See the block comment above.
+static void udp_stall_watchdog(void) {
+	static uint32_t lastcheck = 0;
+	static uint32_t link_up_since = 0;	// t1sec when the link last came up; 0 = down/unknown
+	uint32_t now = t1sec;
+	uint32_t busy, linkup_for;
+	const char *why = NULL;
+
+	if (now == lastcheck || now < STALL_ARM_UPTIME_SECS) {
+		return;
+	}
+	lastcheck = now;
+
+	// Only judge the send path while the Ethernet link has been up: with the
+	// cable unplugged a stuck or silent sender is expected, and rebooting then
+	// would only throw away GPS lock for nothing. The failure this guards
+	// against happened with the link (and TCP) fully up.
+	if (!netif_is_link_up(&gnetif)) {
+		link_up_since = 0;
+		return;
+	}
+	if (link_up_since == 0) {
+		link_up_since = now;
+		return;
+	}
+	linkup_for = now - link_up_since;
+
+	busy = sq_busy_since;
+	if (busy != 0 && (now - busy) > STALL_SENDER_BUSY_SECS && linkup_for > STALL_SENDER_BUSY_SECS) {
+		why = "watchdog: sender stuck inside one item";
+	} else if ((now - sq_last_send_sec) > STALL_SENDER_BUSY_SECS && linkup_for > STALL_SENDER_BUSY_SECS
+			&& uxQueueMessagesWaiting(sendqueueq) > 0) {
+		why = "watchdog: queue not draining";
+	} else if ((now - sq_last_send_sec) > STALL_NO_SEND_SECS && linkup_for > STALL_NO_SEND_SECS) {
+		why = "watchdog: link up but no UDP packet sent";
+	}
+
+	if (why != NULL) {
+		udp_stall_snapshot(why, 0);
+		printf("UDPSTALL: rebooting\n");
+		osDelay(50);	// let the UART drain
+		rebootme(STALL_REBOOT_WHY);
+	}
+}
 
 // Reserve the next ring slot and packet sequence number together, atomically.
 // Now needed on both sides: the ADC-facing producer enqueues samples and
@@ -222,6 +339,8 @@ static void netsendtask(void const *argument) {
 	senditem_t item;
 	uint32_t laststatussecond = t1sec;	// don't fire a timed status right at boot
 
+	sq_last_send_sec = t1sec;	// stall guard: measure "nothing sent" from the start of this task
+
 	for (;;) {
 		if (xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000)) != pdTRUE) {
 			// Nothing queued within 1 second - check whether a timed status
@@ -239,14 +358,52 @@ static void netsendtask(void const *argument) {
 			continue;
 		}
 
+		// Stall guard bookkeeping: what the sender is working on, and since when.
+		sq_cur_slot = item.slot;
+		sq_cur_len = item.len;
+		sq_cur_type = ((uint8_t*) sendqueuebuf[item.slot])[3];
+		sq_cur_pknum = ((uint32_t) ((uint8_t*) sendqueuebuf[item.slot])[0]) | ((uint32_t) ((uint8_t*) sendqueuebuf[item.slot])[1] << 8)
+				| ((uint32_t) ((uint8_t*) sendqueuebuf[item.slot])[2] << 16);
+		sq_busy_since = (t1sec != 0) ? t1sec : 1;	// 0 means idle
+
 		// Wait for hardware to fully release this slot's pbuf from whatever
-		// it last sent from it. Bounded, short retry rather than a tight
-		// spin - this task is never on the ADC's critical path, so a
-		// millisecond of slack here costs nothing there. (Could be replaced
-		// with something driven off HAL_ETH_TxFreeCallback later if this
-		// retry ever shows up as a real bottleneck; not needed yet.)
-		while (sendqueuepbuf[item.slot]->ref != 1) {
-			vTaskDelay(1);
+		// it last sent from it. Normally this is already true (the slot was
+		// last used a whole ring - SEND_QUEUE_DEPTH sends - ago). Bounded:
+		// this used to be an endless silent loop, which is what a leaked pbuf
+		// reference turned into - all UDP stopped with nothing on the console.
+		// Now it reports after STALL_SNAPSHOT_MS, keeps reporting, and gives
+		// up and reboots after STALL_REBOOT_MS (see the stall guard block).
+		// Still a short 1 ms retry, not a tight spin - this task is never on
+		// the ADC's critical path.
+		if (sendqueuepbuf[item.slot]->ref != 1) {
+			const TickType_t waitstart = xTaskGetTickCount();
+			uint32_t next_report = STALL_SNAPSHOT_MS;
+			uint32_t waited = 0;
+			int reported = 0;
+
+			while (sendqueuepbuf[item.slot]->ref != 1) {
+				waited = (uint32_t) (xTaskGetTickCount() - waitstart) * portTICK_PERIOD_MS;
+				if (waited >= STALL_REBOOT_MS) {
+					udp_stall_snapshot("sender: pbuf never released - giving up", waited);
+					printf("UDPSTALL: rebooting\n");
+					osDelay(50);	// let the UART drain
+					rebootme(STALL_REBOOT_WHY);
+				}
+				if (waited >= next_report) {
+					if (!reported) {
+						udp_stall_snapshot("sender: slow pbuf release", waited);
+						reported = 1;
+					} else {
+						printf("UDPSTALL: still waiting slot=%u ref=%u waited=%lums\n", item.slot, (unsigned) sendqueuepbuf[item.slot]->ref,
+								(unsigned long) waited);
+					}
+					next_report += STALL_REPORT_EVERY_MS;
+				}
+				vTaskDelay(1);
+			}
+			if (reported) {
+				printf("UDPSTALL: slot %u released after %lums (it was a slow release, not a leak)\n", item.slot, (unsigned long) waited);
+			}
 		}
 		sendqueuepbuf[item.slot]->payload = sendqueuebuf[item.slot];
 		sendqueuepbuf[item.slot]->len = item.len;
@@ -254,6 +411,10 @@ static void netsendtask(void const *argument) {
 
 		sendudp(pcb, sendqueuepbuf[item.slot], &udpdestip, UDP_PORT_NO);
 		xSemaphoreGive(freeslots);	// data handed to lwIP; producer may reuse this slot now
+
+		sq_sent_total++;
+		sq_last_send_sec = t1sec;
+		sq_busy_since = 0;	// idle again
 
 		if (((uint8_t*) sendqueuebuf[item.slot])[3] == 4) {	// sample packet
 			statuspkt.udpsent++;		// debug use adc udp sample packet sent count
@@ -464,6 +625,8 @@ void startudp() {		// destination UDP target IP address
 #ifdef TESTING
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
 #endif
+
+		udp_stall_watchdog();	// cheap: acts at most once a second; reboots only if the sender is stuck (see stall guard)
 
 		if (ulNotificationValue > 0) {		// we were notified
 			sigsend = 0;

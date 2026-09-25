@@ -2021,6 +2021,10 @@ void err_leds(int why) {
 			HAL_GPIO_TogglePin(GPIOD, LED_D5_Pin);
 			HAL_GPIO_TogglePin(GPIOD, LED_D1_Pin);
 			break;
+		case 9:			// UDP send path stalled (stall guard in udpstream.c)
+			HAL_GPIO_TogglePin(GPIOD, LED_D2_Pin);
+			HAL_GPIO_TogglePin(GPIOD, LED_D5_Pin);
+			break;
 		}
 		for (i = 0; i < 3500000; i++)
 			;
@@ -2220,6 +2224,18 @@ void StartDefaultTask(void const * argument)
 	printaline("\n");
 	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
 	STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+
+	{	// why did we just (re)start? The RCC reset flags stay set until cleared, so this tells a
+		// software reset (rebootme()/NVIC, incl. the UDP stall guard) apart from an IWDG/WWDG
+		// watchdog reset or a power/pin reset. Console only.
+		uint32_t csr = RCC->CSR;
+		printf("Reset cause: %s%s%s%s%s%s%s(RCC_CSR=0x%08lx)\n", (csr & RCC_CSR_PORRSTF) ? "POWER-ON " : "",
+				(csr & RCC_CSR_BORRSTF) ? "BROWN-OUT " : "", (csr & RCC_CSR_PINRSTF) ? "PIN " : "",
+				(csr & RCC_CSR_SFTRSTF) ? "SOFTWARE " : "", (csr & RCC_CSR_IWDGRSTF) ? "IWDG-WATCHDOG " : "",
+				(csr & RCC_CSR_WWDGRSTF) ? "WWDG-WATCHDOG " : "", (csr & RCC_CSR_LPWRRSTF) ? "LOW-POWER " : "", (unsigned long) csr);
+		__HAL_RCC_CLEAR_RESET_FLAGS();
+	}
+
 	crc_rom();
 	printaline("");
 //	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1],	STM32_UUID[2]);
