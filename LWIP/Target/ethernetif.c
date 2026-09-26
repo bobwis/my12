@@ -175,7 +175,7 @@ static const char *volatile nettx_last_waiter;	/* ... and task that had to wait 
 
 #if NETFIX_DIAG
 /* Flight recorder of the last NETTX_TRACE_N transmit / free events (newest overwrites oldest).
- * Recorded under TxMutex, ~30 cycles per event, dumped on a lwIP assertion and in UDPSTALL. */
+ * Recorded under TxMutex, ~30 cycles per event, dumped on a lwIP assertion and in the udpstall dump. */
 typedef struct {
 	uint32_t tick;			/* xTaskGetTickCount() */
 	const char *task;		/* pcTaskGetName() of the task that did it */
@@ -250,10 +250,10 @@ void nettx_diag_print(const char *tag, int trace_lines)
 	}
 	/* buffers_in_use is the HAL's own count of BUFFERS (not descriptors) and normally runs well
 	 * above the ring size: it only bounds the release loop and is not an error indicator. */
-	printf("NETDIAG[%s]: tx ring cur=%lu release_idx=%lu buffers_in_use=%lu frames_awaiting_release=%d heth_state=0x%02lx\n", tag,
+	printf("nettx: [%s] ring cur=%lu release_idx=%lu buffers_in_use=%lu frames_awaiting_release=%d heth_state=0x%02lx\n", tag,
 			(unsigned long) heth.TxDescList.CurTxDesc, (unsigned long) heth.TxDescList.releaseIndex,
 			(unsigned long) heth.TxDescList.BuffersInUse, real, (unsigned long) heth.gState);
-	printf("NETDIAG[%s]: tx mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n", tag,
+	printf("nettx: [%s] mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n", tag,
 			(unsigned long) nettx_contended, nettx_last_waiter ? nettx_last_waiter : "-", nettx_last_holder ? nettx_last_holder : "-",
 			(unsigned long) nettx_dropped, (unsigned long) nettx_refused, (unsigned long) nettx_asserts);
 	if (trace_lines > 0 && n > 0) {
@@ -264,17 +264,19 @@ void nettx_diag_print(const char *tag, int trace_lines)
 		for (i = 0; i < (int) n; i++) {
 			const nettx_ev_t *e = &nettx_trace[(first + (uint32_t) i) % NETTX_TRACE_N];
 
-			printf("NETTX: t=%lu %-10s %c p=0x%08lx len=%u cur=%u\n", (unsigned long) e->tick, e->task ? e->task : "?", e->ev,
+			printf("nettx: t=%lu %-10s %c p=0x%08lx len=%u cur=%u\n", (unsigned long) e->tick, e->task ? e->task : "?", e->ev,
 					(unsigned long) e->ptr, (unsigned) e->len, (unsigned) e->desc);
 		}
 	}
 #endif
 }
 
-/* From the sender task once per timed status: one line, and only when a counter has moved. */
+/* DISABLED. Was: from the sender task once per timed status, one line when the TX mutex had been contended or
+ * anything was dropped/refused. Contention only shows the mutex doing its job, so it is no longer printed
+ * (the counters are still kept and appear in the udpstall / assertion dumps). The call in udpstream.c is commented out. */
 void nettx_diag_periodic(void)
 {
-#if NETFIX_DIAG
+#if 0
 	static uint32_t last_c, last_d, last_r, last_a;
 
 	if (nettx_contended != last_c || nettx_dropped != last_d || nettx_refused != last_r || nettx_asserts != last_a) {
@@ -282,7 +284,7 @@ void nettx_diag_periodic(void)
 		last_d = nettx_dropped;
 		last_r = nettx_refused;
 		last_a = nettx_asserts;
-		printf("NETDIAG: tx mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n",
+		printf("nettx: mutex contended=%lu (last: %s waited for %s) dropped=%lu refused=%lu lwip_asserts=%lu\n",
 				(unsigned long) last_c, nettx_last_waiter ? nettx_last_waiter : "-", nettx_last_holder ? nettx_last_holder : "-",
 				(unsigned long) last_d, (unsigned long) last_r, (unsigned long) last_a);
 	}
@@ -299,22 +301,24 @@ void net_lwip_assert(const char *msg, int line, const char *file)
 
 	printf("Assertion \"%s\" failed at line %d in %s\n", msg, line, file);
 	if (n <= 3) {
-		printf("NETDIAG: lwIP assertion #%lu hit by task %s at tick %lu\n", (unsigned long) n, pcTaskGetName(NULL),
+		printf("nettx: lwip assertion #%lu in task %s at tick %lu\n", (unsigned long) n, pcTaskGetName(NULL),
 				(unsigned long) xTaskGetTickCount());
 		nettx_diag_print("assert", 24);
 	}
 }
 #endif /* NETFIX_DIAG */
 
-/* One line at boot saying which of the netfix.h parts are built in. The two markers are only
- * defined by the patched HAL driver and by the patched low_level_output() below: if CubeMX
- * regenerates those files the link fails here instead of the fixes silently disappearing. */
+/* Boot check of the netfix.h parts. Silent when everything is built in; prints one netfix: line only if a fix has
+ * been switched off. The two markers are only defined by the patched HAL driver and by the patched
+ * low_level_output() below: if CubeMX regenerates those files the link fails here instead of the fixes silently
+ * disappearing. */
 extern const uint32_t netfix_ethernetif_patch;
 void netfix_banner(void)
 {
-	printf("Net fixes: hal-tx-order=%lu tx-mutex=%lu lwip-protect=%d diag=%d (SYS_LIGHTWEIGHT_PROT=%d)\n",
-			(unsigned long) netfix_hal_eth_patch, (unsigned long) netfix_ethernetif_patch, NETFIX_LWIP_PROTECT, NETFIX_DIAG,
-			SYS_LIGHTWEIGHT_PROT);
+	if (!netfix_hal_eth_patch || !netfix_ethernetif_patch || !NETFIX_LWIP_PROTECT || !SYS_LIGHTWEIGHT_PROT) {
+		printf("netfix: WARNING a network fix is switched off: hal-tx-order=%lu tx-mutex=%lu lwip-protect=%d (SYS_LIGHTWEIGHT_PROT=%d)\n",
+				(unsigned long) netfix_hal_eth_patch, (unsigned long) netfix_ethernetif_patch, NETFIX_LWIP_PROTECT, SYS_LIGHTWEIGHT_PROT);
+	}
 }
 
 /* USER CODE END 3 */

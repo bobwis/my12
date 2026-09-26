@@ -142,7 +142,7 @@ static SemaphoreHandle_t freeslots;	// counts physical slots currently safe to w
  *     cause a rapid reboot loop.
  *
  * Every report goes to the console only (the status/sample packet formats are
- * fixed and shared with downstream software), prefixed UDPSTALL: so it is easy
+ * fixed and shared with downstream software), prefixed udpstall: so it is easy
  * to find in a serial capture. rebootme() is the project's standard reboot.
  */
 #define STALL_SNAPSHOT_MS		250		// sender's wait for a slot's pbuf before the first report
@@ -166,23 +166,23 @@ static void udp_stall_snapshot(const char *where, uint32_t waited_ms) {
 	int i, bad = 0;
 	struct pbuf *pb = sendqueuepbuf[sq_cur_slot];
 
-	printf("UDPSTALL: ==== %s ====\n", where);
-	printf("UDPSTALL: uptime=%lus sender_busy_for=%lus last_send_ago=%lus waited=%lums sent_total=%lu\n", (unsigned long) t1sec,
+	printf("udpstall: %s\n", where);
+	printf("udpstall: uptime=%lus sender_busy=%lus last_send_ago=%lus waited=%lums sent=%lu\n", (unsigned long) t1sec,
 			(unsigned long) (sq_busy_since ? (t1sec - sq_busy_since) : 0), (unsigned long) (t1sec - sq_last_send_sec),
 			(unsigned long) waited_ms, (unsigned long) sq_sent_total);
-	printf("UDPSTALL: item slot=%u type=%u len=%u pknum=%lu\n", sq_cur_slot, sq_cur_type, sq_cur_len, (unsigned long) sq_cur_pknum);
+	printf("udpstall: item slot=%u type=%u len=%u pknum=%lu\n", sq_cur_slot, sq_cur_type, sq_cur_len, (unsigned long) sq_cur_pknum);
 	if (pb != NULL) {
-		printf("UDPSTALL: item pbuf ref=%u len=%u tot_len=%u flags=0x%02x type=0x%02x next=0x%08lx payload=0x%08lx\n", (unsigned) pb->ref,
+		printf("udpstall: pbuf ref=%u len=%u tot_len=%u flags=0x%02x type=0x%02x next=0x%08lx payload=0x%08lx\n", (unsigned) pb->ref,
 				(unsigned) pb->len, (unsigned) pb->tot_len, (unsigned) pb->flags, (unsigned) pb->type_internal,
 				(unsigned long) (uintptr_t) pb->next, (unsigned long) (uintptr_t) pb->payload);
 	}
-	printf("UDPSTALL: freeslots=%u/%d queued=%u udpsent=%lu overruns=%lu heap_free=%lu\n", (unsigned) uxSemaphoreGetCount(freeslots),
+	printf("udpstall: freeslots=%u/%d queued=%u udpsent=%lu overruns=%lu heap_free=%lu\n", (unsigned) uxSemaphoreGetCount(freeslots),
 			SEND_QUEUE_DEPTH, (unsigned) uxQueueMessagesWaiting(sendqueueq), (unsigned long) statuspkt.udpsent,
 			(unsigned long) statuspkt.adcudpover, (unsigned long) xPortGetFreeHeapSize());
-	printf("UDPSTALL: netif_up=%d link_up=%d eth_dmasr=0x%08lx tx_cur_desc=%lu tx_buffers_in_use=%lu\n", (int) netif_is_up(&gnetif),
+	printf("udpstall: netif_up=%d link_up=%d eth_dmasr=0x%08lx tx_cur_desc=%lu tx_buffers_in_use=%lu\n", (int) netif_is_up(&gnetif),
 			(int) netif_is_link_up(&gnetif), (unsigned long) ETH->DMASR, (unsigned long) heth.TxDescList.CurTxDesc,
 			(unsigned long) heth.TxDescList.BuffersInUse);
-	printf("UDPSTALL: ring slots with pbuf ref != 1 (slot:ref):");
+	printf("udpstall: ring ref!=1 (slot:ref):");
 	for (i = 0; i < SEND_QUEUE_DEPTH; i++) {
 		if (sendqueuepbuf[i] != NULL && sendqueuepbuf[i]->ref != 1) {
 			printf(" %d:%u", i, (unsigned) sendqueuepbuf[i]->ref);
@@ -232,7 +232,7 @@ static void udp_stall_watchdog(void) {
 
 	if (why != NULL) {
 		udp_stall_snapshot(why, 0);
-		printf("UDPSTALL: rebooting\n");
+		printf("udpstall: rebooting\n");
 		osDelay(50);	// let the UART drain
 		rebootme(STALL_REBOOT_WHY);
 	}
@@ -345,7 +345,7 @@ static void netsendtask(void const *argument) {
 
 	for (;;) {
 		if (xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000)) != pdTRUE) {
-			nettx_diag_periodic();	// one NETDIAG: line if a TX-path counter moved (netfix.h); a compare otherwise
+//			nettx_diag_periodic();	// (disabled) one line when the TX mutex was contended - only showed the mutex working (netfix.h)
 			// Nothing queued within 1 second - check whether a timed status
 			// is due. Moved here (off the ADC-facing producer) because it
 			// isn't tied to any ADC event, only to elapsed time; tracking
@@ -388,7 +388,7 @@ static void netsendtask(void const *argument) {
 				waited = (uint32_t) (xTaskGetTickCount() - waitstart) * portTICK_PERIOD_MS;
 				if (waited >= STALL_REBOOT_MS) {
 					udp_stall_snapshot("sender: pbuf never released - giving up", waited);
-					printf("UDPSTALL: rebooting\n");
+					printf("udpstall: rebooting\n");
 					osDelay(50);	// let the UART drain
 					rebootme(STALL_REBOOT_WHY);
 				}
@@ -397,7 +397,7 @@ static void netsendtask(void const *argument) {
 						udp_stall_snapshot("sender: slow pbuf release", waited);
 						reported = 1;
 					} else {
-						printf("UDPSTALL: still waiting slot=%u ref=%u waited=%lums\n", item.slot, (unsigned) sendqueuepbuf[item.slot]->ref,
+						printf("udpstall: still waiting slot=%u ref=%u waited=%lums\n", item.slot, (unsigned) sendqueuepbuf[item.slot]->ref,
 								(unsigned long) waited);
 					}
 					next_report += STALL_REPORT_EVERY_MS;
@@ -405,7 +405,7 @@ static void netsendtask(void const *argument) {
 				vTaskDelay(1);
 			}
 			if (reported) {
-				printf("UDPSTALL: slot %u released after %lums (it was a slow release, not a leak)\n", item.slot, (unsigned long) waited);
+				printf("udpstall: slot %u released after %lums (slow release, not a leak)\n", item.slot, (unsigned long) waited);
 			}
 		}
 		sendqueuepbuf[item.slot]->payload = sendqueuebuf[item.slot];

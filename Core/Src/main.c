@@ -2223,8 +2223,8 @@ void StartDefaultTask(void const * argument)
 
 	getboardpcb();		// find our daughterboard
 	printaline("\n");
-	printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
-	STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	printf("Lightning detector firmware %d.%d build %d  PCB=%d\n", MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 
 	{	// why did we just (re)start? The RCC reset flags stay set until cleared, so this tells a
 		// software reset (rebootme()/NVIC, incl. the UDP stall guard) apart from an IWDG/WWDG
@@ -2236,7 +2236,7 @@ void StartDefaultTask(void const * argument)
 				(csr & RCC_CSR_WWDGRSTF) ? "WWDG-WATCHDOG " : "", (csr & RCC_CSR_LPWRRSTF) ? "LOW-POWER " : "", (unsigned long) csr);
 		__HAL_RCC_CLEAR_RESET_FLAGS();
 	}
-	netfix_banner();	// which of the Ethernet/lwIP thread-safety fixes (netfix.h) this build has
+	netfix_banner();	// silent unless one of the Ethernet/lwIP thread-safety fixes (netfix.h) is switched off
 
 	crc_rom();
 	printaline("");
@@ -2475,8 +2475,8 @@ void printstatus(int verb) {
 			printf("meanwindiff:%d winmean:%d globaladcnoise:%d pretrigthresh:%d, triggthresh:%d, tcomp:%02d\n", meanwindiff,
 					winmean, (unsigned int) globaladcnoise, pretrigthresh, trigthresh, (unsigned int) trigcomp);
 		}
-		printf("Detector STM_UUID=%lx %lx %lx, SW Ver=%d.%d, Build=%d, PCB=%d\n", STM32_UUID[0], STM32_UUID[1],
-		STM32_UUID[2], MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+		printf("Lightning detector firmware %d.%d build %d  PCB=%d  STM_UUID=%lx %lx %lx\n", MAJORVERSION, MINORVERSION, BUILDNO,
+				circuitboardpcb, STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 	}
 
   /* USER CODE END 5 */

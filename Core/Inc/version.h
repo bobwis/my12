@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 30
+#define MINORVERSION 31
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -29,7 +29,7 @@
 #endif
 
 // 21 May 2023 - updated IDE
-#define BUILD 10048	// 10048: UDP send-path stall guard, plus (Sep 26) the Ethernet/lwIP thread-safety fixes in netfix.h while they are tested locally on detector 15 - the server advertises 10048 to it and the detector self-updates whenever the advertised number differs from this one, so do NOT change it for local test flashes. Bump to 10049 when these fixes are published to the fleet. 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release
+#define BUILD 10049	// 10049 (fw 0.31, Sep 27): UDP send-path stall guard (10048) plus the Ethernet/lwIP thread-safety fixes in netfix.h. 10048 = stall guard only. 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release. The detector self-updates whenever the server advertises a different build, so only change this when publishing.
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else

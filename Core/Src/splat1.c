@@ -150,7 +150,7 @@ void setpgagain(int gain) {		// this takes gain 0..9
 		pgacmd[0] = 0x4100;		// write to channel reg select ch0
 	}
 //	printf("setpgagain: channel pgacmd[0]=0x%0x\n",pgacmd[0]);
-	printf("setpgagain: channel pgacmd[0]=0x%04x\n", (unsigned int)pgacmd[0]);
+//	printf("setpgagain: channel pgacmd[0]=0x%04x\n", (unsigned int)pgacmd[0]);
 
 	if ((stat = HAL_SPI_Transmit(&hspi2, (uint8_t*) &pgacmd[0], 1, 1000)) != HAL_OK) {	// write it out
 		printf("setpgagain: SPI Error2: %d\n", stat);

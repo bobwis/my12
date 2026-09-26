@@ -1,7 +1,7 @@
 /*
  * netfix.h - switches for the Ethernet / lwIP thread-safety fixes (build 10049)
  *
- * Background: detectors stopped sending UDP ("UDPSTALL"). In every case b2's capture
+ * Background: detectors stopped sending UDP ("udpstall"). In every case b2's capture
  * showed one packet lost exactly one send-ring lap (96 sends) before the stall, and that
  * packet's pbuf reference never came back. Three causes were found in the network stack
  * as configured here (see UDP_SEND_QUEUE.md and the commit messages):
@@ -31,7 +31,7 @@
  *
  *  D  NETFIX_DIAG              Console-only diagnostics: a small flight recorder of TX
  *       calls/frees (task, pbuf, length), TX mutex contention counters, a richer lwIP
- *       assertion handler, a boot line, and a TXDIAG block added to the UDPSTALL report.
+ *       assertion handler, a boot check, and a nettx: block added to the udpstall: report.
  *
  * Set a switch to 0 to get the previous behaviour of that part (for bisecting).
  * Nothing here touches the ADC ISR or the ADC/producer task.
@@ -57,9 +57,9 @@ extern const uint32_t netfix_hal_eth_patch;
 extern const uint32_t netfix_ethernetif_patch;
 
 /* ethernetif.c */
-void netfix_banner(void);							/* boot line: which fixes are built in */
+void netfix_banner(void);							/* boot check: prints a netfix: line only if a fix is switched off */
 void nettx_diag_print(const char *tag, int trace_lines);	/* TX-path state + last events, console only */
-void nettx_diag_periodic(void);						/* prints one NETDIAG: line only when a counter moved */
+void nettx_diag_periodic(void);						/* disabled: used to print a line when the TX mutex was contended */
 void net_lwip_assert(const char *msg, int line, const char *file);	/* LWIP_PLATFORM_ASSERT */
 
 #ifdef __cplusplus
