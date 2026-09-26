@@ -445,7 +445,7 @@ void myudp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t 
 // Delayed DNS lookup result callback
 
 void dnsfound(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
-	if (ipaddr->addr == NULL) {
+	if (ipaddr == NULL || ipaddr->addr == 0) {	// lwIP passes ipaddr == NULL itself when the lookup fails
 		ip_ready = -1;
 	} else
 		ip_ready = ipaddr->addr;
