@@ -478,7 +478,12 @@ int IsPacketReady(unsigned char c) {
 		if ((c == UBXGPS_HEADER[p]) || (c == UBXGPS_HEADER2[p])) {
 			PACKETstore[p++] = c;
 		} else {
-			p = 0;
+			if (c == UBXGPS_HEADER[0]) {	// this byte may itself start the next header - don't waste it
+				PACKETstore[0] = c;
+				p = 1;
+			} else {
+				p = 0;
+			}
 			len = 0;
 		}
 	} else  // found a packet header, start filling
@@ -493,8 +498,12 @@ int IsPacketReady(unsigned char c) {
 		if (p == 6) {
 //			printf("RR: len=%d\n",len);
 			len = PACKETstore[4] + (PACKETstore[5] * 256);
-			if (len >= sizeof(PACKETstore)) {	// oversize
-				p = 0;
+			if (len >= sizeof(PACKETstore)) {	// oversize: bad length field (e.g. after a lost byte)
+				// carriagePosition MUST be cleared here. It was left at 6 before, so every later byte took this same
+				// branch (the stale length bytes never change) and the GPS receiver stayed dead until the "GPS bad"
+				// reboot 5 minutes later - the "GPS serial comms problem?" freeze.
+				UbxGpsv.carriagePosition = 0;
+				len = 0;
 				return 0;
 			}
 		}
@@ -589,7 +598,7 @@ HAL_StatusTypeDef setupneo() {
 	 * @retval HAL status
 	 */
 
-	stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+	stat = HAL_UART_Receive_DMA((circuitboardpcb == LIGHTNINGBOARD2) ? &huart8 : &huart6, rxdatabuf, 1);	// the real handle, not the gpsuartrx copy
 
 	if (stat != HAL_OK) {
 		printf("Err HAL_UART_Receive_DMA1 %d usart6/8\n", stat);
@@ -617,6 +626,12 @@ HAL_StatusTypeDef setupneo() {
 
 	restoreDefaults();
 	osDelay(1500);
+
+	// restoreDefaults() (CFG-CFG) puts the module's default message set - the NMEA sentences - back, undoing the
+	// disableNmea() above, so switch NMEA off again now that the defaults have been loaded. (With NMEA left on the
+	// GPS line carried ~640 bytes/s instead of ~100, and the per-byte receive interrupt lost bytes far more often.)
+	disableNmea();
+	osDelay(500);
 
 	// 	Set reporting frequency to 1 Sec
 	printf("NEO: Changing receiving frequency to 1 Sec...\n\r");
@@ -738,7 +753,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 
 		printf("GPS UART_Err Callback %0lx, ", huart->ErrorCode);
 		// restart
-		stat = HAL_UART_Receive_DMA(&gpsuartrx, rxdatabuf, 1);
+		// restart on the REAL handle HAL just aborted (huart == &huart8 or &huart6). gpsuartrx is a struct COPY whose
+		// RxState stayed BUSY_RX, so restarting on it returned HAL_BUSY and never re-armed the receiver.
+		stat = HAL_UART_Receive_DMA(huart, rxdatabuf, 1);
 		if ((stat != HAL_OK) && (stat != HAL_BUSY)) {
 			printf("Err HAL_UART_Receive_DMA usart6/8 stat=%d\n", stat);
 		}
