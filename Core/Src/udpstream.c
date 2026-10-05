@@ -243,11 +243,11 @@ static void udp_stall_watchdog(void) {
 	}
 }
 
-// Reserve the next ring slot and packet sequence number, each atomically.
-// Needed on both sides: the ADC-facing producer enqueues samples and
-// end-of-sequence status, but netsendtask() enqueues timed status itself
-// (see below) - so sq_head and statuspkt.udppknum each have two possible
-// writers and need a consistent, race-free view across both.
+// Reserve the next ring slot atomically. sq_head has three writers: the ADC
+// ISR (samples, enqueue_sample_isr), startudp() (end-of-sequence status) and
+// netsendtask() (timed status). The packet number is taken later, together
+// with the queue send, in one critical section - see enqueue_status() - so
+// that wire order always matches packet-number order.
 //
 // Deliberately protects ONLY these small integer read-modify-writes, not
 // the (much larger, payload-sized) memcpy that follows using the reserved
@@ -260,10 +260,10 @@ static void udp_stall_watchdog(void) {
 // directly in front of the ADC ISR, which is exactly what this queue exists
 // to avoid.
 //
-// Slot index and packet number are reserved separately (two tiny critical
-// sections) so that a sample dropped after its copy - see enqueue_sample() -
-// gives back its slot without leaving a gap in the packet numbering. Skipping
-// a slot index is harmless: freeslots, not the index, bounds what is in flight.
+// The packet number is taken only once a packet is certain to be sent, so a
+// sample dropped after its copy (enqueue_sample_isr) gives back its slot
+// without leaving a gap in the packet numbering. Skipping a slot index is
+// harmless: freeslots, not the index, bounds what is in flight.
 static uint8_t reserve_queue_slot(void) {
 	uint8_t slot;
 	taskENTER_CRITICAL();
@@ -271,15 +271,6 @@ static uint8_t reserve_queue_slot(void) {
 	sq_head = (sq_head + 1) % SEND_QUEUE_DEPTH;
 	taskEXIT_CRITICAL();
 	return slot;
-}
-
-static uint32_t take_packet_number(void) {
-	uint32_t pknum;
-	taskENTER_CRITICAL();
-	pknum = statuspkt.udppknum;
-	statuspkt.udppknum++;
-	taskEXIT_CRITICAL();
-	return pknum;
 }
 
 uint32_t trigbuflate = 0;	// triggered buffers dropped because DMA had moved on before they were copied
@@ -350,16 +341,23 @@ static void enqueue_status(int stype) {
 	statuspkt.adctrigoff = ((trigthresh + trigcomp) & 0xFFF) | ((pgagain & 0xF) << 12);
 
 	slot = reserve_queue_slot();
-	pknum = take_packet_number();
 	memcpy(sendqueuebuf[slot], (const void*) &statuspkt, sizeof(statuspkt));
 	((uint8_t*) sendqueuebuf[slot])[3] = stype;	// status pkt type (ENDSEQ or TIMED)
+	item.slot = slot;
+	item.len = sizeof(statuspkt);
+
+	// Packet number and queue position must be taken together: the ADC ISR queues samples itself, and
+	// between taking the number and xQueueSend() it could slip in a sample with a later number ahead of
+	// this status packet. Masks the ADC ISR for a few instructions only; the send never blocks (0 ticks,
+	// a free slot is already held). (Out-of-order arrival seen on the bench PC is something else: samples
+	// are IP-fragmented, status packets aren't, and the receiver can deliver back-to-back ones swapped.)
+	taskENTER_CRITICAL();
+	pknum = statuspkt.udppknum++;
 	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
 	((uint8_t*) sendqueuebuf[slot])[1] = (pknum & 0xff00) >> 8;
 	((uint8_t*) sendqueuebuf[slot])[2] = (pknum & 0xff0000) >> 16;
-
-	item.slot = slot;
-	item.len = sizeof(statuspkt);
 	xQueueSend(sendqueueq, &item, 0);
+	taskEXIT_CRITICAL();
 }
 
 // Lower-priority sender task: owns every sendudp() call in the firmware, and
