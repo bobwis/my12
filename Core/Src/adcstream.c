@@ -374,7 +374,11 @@ void ADC_Conv_complete(void) {
 				sigsend = 1; // the real trigger
 
 			} else {
-				if (((abs(meanwindiff) + pretrigthresh) + trigcomp) > lastthresh) {
+				// near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task)
+				// but not the trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a
+				// fixed "rise > 2" independent of trigthresh, so raising the threshold could never reduce
+				// the near-miss count and the AGC pinned trigthresh at its clamp.
+				if (abs(meanwindiff) > (lastmeanwindiff + pretrigthresh + trigcomp)) {
 					pretrigcnt++;
 				}
 			}
