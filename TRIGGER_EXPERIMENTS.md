@@ -49,3 +49,27 @@ Build number deliberately unchanged (10049) for local development.
 - Then: ENDSEQ prompt delivery (finding 4); generator re-config for noise; rate-based AGC; STA/LTA
   detector; peak selection of the best buffer per event in netsendtask().
 - Bob's original `#if 0` adcstream.c experiment is in `git stash` (stash@{0}).
+
+## Phase 5 (STA/LTA detector) - status when paused (2026-10-05 evening)
+- Commits: `cab4c44` STA/LTA detector (console Ctrl-T toggles; status line d= detector, r= peak STA/LTA*16;
+  tuning globals stalta_ratio_q4 / stalta_ks / stalta_kl writable over SWD), `fdafba2` prompt ENDSEQ,
+  `cd0b90e` LTA always learns (4x slower on triggered buffers) - fixes a runaway where the LTA froze after a
+  noise step and every buffer triggered (sweep saw 27-46 noise triggers/s, more at a HIGHER ratio).
+- **cd0b90e is built but NOT flashed.** Detector 15 runs `fdafba2` (STA/LTA without the LTA fix), left with
+  AGC on, edge detector selected.
+- STA/LTA ISR load: **13% avg / 14% peak** (edge detector 38% / 46%).
+- Sweep results so far are INVALID: the generator wiring/bridge became unreliable. With CH2 at 0 mV the
+  detector still saw a strong 20.15 kHz periodic signal (autocorrelation r=0.8 at 49.6 us) and noise ~1430
+  at gain 8, and the 1 s stroke was not visible (Bob's scope agreed). Bob is repairing the cabling.
+- Detector 15 rebooted once unexplained during the runaway STA/LTA sweep (uptime reset to 12 s) - possibly
+  the UDP stall guard under ~46 triggers/s; keep a console log running in future sweeps to catch the cause.
+- Gotcha: sample packets are only sent once GPS is locked (~1-2 min after boot); after any reboot wait for
+  lock before scoring detection.
+- Generator: CH2 = Noise (code 14) 20 mV; CH1 burst setup as last fixed by Bob (r24 = 00,01,11,00), 5 kHz
+  playback, 100 mV; snapshot `tools/bench/psg_stim_noise.json`.
+- Next: once wiring is fixed - flash cd0b90e, confirm the 1 s stroke with CH2 off (`sweep.py` scoring),
+  calibrate STA/LTA ratio to match the edge detector's noise-trigger rate, then amplitude sweep both detectors.
+- Storm captures: `C:\projects\lightning\captures\<storm>\lightsrv*.cap` = raw detector UDP payloads
+  concatenated (parser `tools/bench/capfile.py`); README per storm. Some samples carry bit 12/13 flags (mask
+  0x0FFF; meaning to confirm with Bob). Plan: load real distant-stroke waveforms into spare generator
+  memories at real-time rate (~1.32 kHz for 2048 pts) and/or replay buffers offline through both detectors.
