@@ -45,6 +45,9 @@ void ADC_MultiModeDMAConvM1Cplt(DMA_HandleTypeDef *hdma);
 void startadc(void);
 
 extern unsigned int dmabufno;
+extern volatile uint32_t adcbufseq;
+extern volatile uint8_t trigbufno;
+extern volatile uint32_t trigbufseq;
 
 extern unsigned int sigprev;		// number of streams let after adc thresh exceeded
 volatile extern uint16_t  sigsend;	// flag to tell udp to send sample packet

@@ -29,6 +29,9 @@ adcbuffer *pktbuf;
 uint32_t t2cap[1];  // dma writes t2 capture value on 1pps edge
 
 unsigned int dmabufno = 0;	// the last filled buffer 0 or 1
+volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is safe to read until N+1 completes)
+volatile uint8_t trigbufno = 0;		// which buffer (0/1) produced the current sigsend trigger
+volatile uint32_t trigbufseq = 0;	// adcbufseq of that buffer, so the sender can tell if DMA has since overwritten it
 
 unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
 volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
@@ -328,12 +331,14 @@ void ADC_Conv_complete(void) {
 	uint16_t thiswindiff;
 	uint16_t thissamp = 0;
 	uint16_t lastthresh;
+	const uint8_t bufno = dmabufno;		// the buffer this call scans (DMA callbacks may advance dmabufno later)
+	const uint32_t bufseq = adcbufseq;
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
 //	gpioeset(GPIO_PIN_0);
 
-	if (dmabufno == 1) {		// second buffer is ready
+	if (bufno == 1) {		// second buffer is ready
 		buf = (adcbuffer*) &((*pktbuf)[(UDPBUFSIZE / 4)]);
 	} else {
 		buf = pktbuf;
@@ -403,6 +408,8 @@ void ADC_Conv_complete(void) {
 //			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt (redundant see 331)
 		}
 		sigprev = 1;	// remember this trigger for next packet
+		trigbufno = bufno;		// tell the sender exactly which buffer triggered (not whatever dmabufno is when it runs)
+		trigbufseq = bufseq;
 		ledhang = 15;		// 15 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
 
@@ -497,6 +504,7 @@ void ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)	// adc conversion done (DMA c
 void ADC_MultiModeDMAConvM0Cplt(DMA_HandleTypeDef *hdma) {
 	ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef*) hdma->Parent;
 	dmabufno = 0;
+	adcbufseq++;
 	ADC_ConvCpltCallback(hadc);
 }
 
@@ -504,6 +512,7 @@ void ADC_MultiModeDMAConvM1Cplt(DMA_HandleTypeDef *hdma) {
 	ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef*) hdma->Parent;
 
 	dmabufno = 1;
+	adcbufseq++;
 	ADC_ConvCpltCallback(hadc);
 }
 
