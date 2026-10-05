@@ -46,6 +46,11 @@ void startadc(void);
 
 extern unsigned int dmabufno;
 extern volatile uint32_t adcbufseq;
+#define DETECTOR_EDGE 0		// original 32-sample-window edge detector
+#define DETECTOR_STALTA 1	// STA/LTA energy detector (experiment)
+extern volatile uint8_t detector;
+extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
+
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR
 extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles
 

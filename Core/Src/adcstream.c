@@ -35,6 +35,17 @@ volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is
 // Budget per buffer is ADCBUF_CYCLES (adcstream.h). The early-return overrun path is not counted.
 volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 
+// Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
+// changed live over SWD during bench sweeps.
+volatile uint8_t detector = DETECTOR_EDGE;
+volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64 = 4.0x)
+volatile uint32_t stalta_ks = 6;		// STA time constant 2^ks samples (6 = 64 samples = 24 us at 2.7 MSps)
+volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
+volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
+static int32_t sl_dc_q8 = 2048 << 8;	// baseline, Q8
+static uint32_t sl_sta_acc = 0;		// STA accumulator (= STA << ks)
+static uint32_t sl_lta_q8 = 0;		// noise floor: mean |x - dc| per sample, Q8 (0 = not yet seeded)
+
 unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
 volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
 uint32_t globaladcavg = 0;		// adc average over milli-secs
@@ -360,7 +371,51 @@ void ADC_Conv_complete(void) {
 			statuspkt.adcudpover++;		// debug adc overruning the udp railgun
 			return;						// skip detecting another trigger
 		}
-		{
+		if (detector == DETECTOR_STALTA) {
+			// STA/LTA energy detector (experiment). dc = slow baseline (EMA of buffer means), e = |x - dc|,
+			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl quiet buffers of the
+			// buffer-mean of e. Trigger when STA > LTA * stalta_ratio_q4 / 16. Unlike the edge detector (32-sample
+			// window high-pass) this responds to energy relative to the noise floor, not to edge sharpness, so
+			// smooth distant waveforms are not penalised. Threshold work is per buffer; per sample is ~15 ops.
+			const uint32_t ks = stalta_ks;
+			const int32_t dc = sl_dc_q8 >> 8;
+			const uint32_t lta_q8 = sl_lta_q8;
+			const uint32_t thr_acc = ((lta_q8 * stalta_ratio_q4) >> 12) << ks;	// compare against STA accumulator
+			uint32_t sta = sl_sta_acc, peak = 0, esum = 0;
+			uint32_t bgacc = adcbgbaseacc;
+			const uint32_t bg0 = bgacc;
+			uint16_t trig = 0;
+
+			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+				const int32_t x = (*adcbuf16)[i];
+				const uint32_t e = (uint32_t) abs(x - dc);
+				bgacc += x;
+				esum += e;
+				sta += e - (sta >> ks);
+				if (sta > peak)
+					peak = sta;
+			}
+			if ((lta_q8 != 0) && (peak > thr_acc))	// no triggering until the LTA has been seeded
+				trig = 1;
+
+			{
+				const uint32_t n = ADCBUFSIZE >> 1;
+				const int32_t bufmean_q8 = (int32_t) (((bgacc - bg0) << 8) / n);
+				const uint32_t emean_q8 = (esum << 8) / n;
+				sl_dc_q8 += (bufmean_q8 - sl_dc_q8) >> 3;	// baseline follows over ~8 buffers (~2 ms)
+				if (lta_q8 == 0)
+					sl_lta_q8 = emean_q8;
+				else if (!trig)	// learn the noise floor from quiet buffers only
+					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> stalta_kl;
+				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
+			}
+			sl_sta_acc = sta;
+			adcbgbaseacc = bgacc;
+			meanwindiff = lastmeanwindiff = sl_lta_q8 >> 8;	// noise floor for globaladcnoise / gain AGC / status
+			if (trig)
+				sigsend = 1;
+		} else {
+			// Original edge detector.
 			// Hot-loop state in locals so it stays in registers; the globals are read once and written back
 			// once per buffer. Same arithmetic and integer types as before. trigcomp is volatile (set by the
 			// server) and in SRAM1, and was being re-read twice per sample.
@@ -412,10 +467,10 @@ void ADC_Conv_complete(void) {
 			pretrigcnt += nearmiss;
 			if (trig)
 				sigsend = 1;
-		}
-		if (sigsend) {
-			trigthresh += 2;
-			pretrigcnt += 201;
+			if (sigsend) {
+				trigthresh += 2;
+				pretrigcnt += 201;
+			}
 		}
 	}
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers
