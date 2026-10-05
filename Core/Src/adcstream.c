@@ -336,6 +336,7 @@ void ADC_Conv_complete(void) {
 	const uint8_t bufno = dmabufno;		// the buffer this call scans (DMA callbacks may advance dmabufno later)
 	const uint32_t bufseq = adcbufseq;
 	const uint32_t cyc0 = DWT->CYCCNT;	// ISR cost measurement, see isrcyc_*
+	uint8_t endnow = 0;					// a batch ended in this buffer: wake the sender for ENDSEQ
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
@@ -435,6 +436,8 @@ void ADC_Conv_complete(void) {
 	} else {			// no trigger
 		if (sigprev) {		// but there was a trigger the last packet
 			sendendstatus = 1;		// so tell udpstream to send the end of sequence status packet
+			endnow = 1;				// and wake it now: it used to wait for the NEXT batch's first trigger,
+									// so ENDSEQ arrived late and carried the next batch's id
 		}
 		sigprev = 0;
 
@@ -451,7 +454,7 @@ void ADC_Conv_complete(void) {
 
 	if (xTaskToNotify == NULL) {
 		printf("Notify task null\n");
-	} else if (sigsend) {
+	} else if (sigsend || endnow) {
 		vTaskNotifyGiveFromISR(xTaskToNotify, &xHigherPriorityTaskWoken);
 		// signal the detection processing of this packet to the back-end
 		/* If xHigherPriorityTaskWoken is now set to pdTRUE then a context switch
