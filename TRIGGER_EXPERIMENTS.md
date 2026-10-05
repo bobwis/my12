@@ -39,7 +39,10 @@ Build number deliberately unchanged (10049) for local development.
    (AGC toggle), digits (gain, AGC off) work again.
 
 ## Where we stopped
-- Phase 4 step (c) `7721270` (copy triggered buffer inside the ISR): partly validated - ISR load median
+- Phase 4 step (c) `7721270` VALIDATED (fixed gain 8, AGC off): ISR 38% avg / 47% peak, late 2 and
+  overrun 1 in 90 s. Baseline for detector comparison with CH1 100 mV + CH2 noise 20 mV: 73% of
+  stimuli detected (66/91, +-10 ms of the generator's 1.000142 s period), ~1.1 noise-only buffers/s,
+  stimulus peaks median 521 vs noise 373 counts. Earlier partial note: - ISR load median
   38% / peak 47%, late (lt) +0 over 120 s. Still to check: sent packets contain the stimulus waveform
   (`analyze_stim.py` on a fresh `udpcap.py` capture). Detector 15 is flashed with this build.
   Note lt (late/torn ISR copies) reached 9 after ~290 s - investigate.
