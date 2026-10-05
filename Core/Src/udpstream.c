@@ -238,13 +238,13 @@ static void udp_stall_watchdog(void) {
 	}
 }
 
-// Reserve the next ring slot and packet sequence number together, atomically.
-// Now needed on both sides: the ADC-facing producer enqueues samples and
+// Reserve the next ring slot and packet sequence number, each atomically.
+// Needed on both sides: the ADC-facing producer enqueues samples and
 // end-of-sequence status, but netsendtask() enqueues timed status itself
 // (see below) - so sq_head and statuspkt.udppknum each have two possible
 // writers and need a consistent, race-free view across both.
 //
-// Deliberately protects ONLY these two small integer read-modify-writes, not
+// Deliberately protects ONLY these small integer read-modify-writes, not
 // the (much larger, payload-sized) memcpy that follows using the reserved
 // values - once a slot index is reserved here, no other caller will pick the
 // same one again until this item's descriptor is sent and freeslots is given
@@ -254,16 +254,30 @@ static void udp_stall_watchdog(void) {
 // whole enqueue instead would put a payload-sized interrupts-disabled window
 // directly in front of the ADC ISR, which is exactly what this queue exists
 // to avoid.
-static uint8_t reserve_queue_slot(uint32_t *pknum) {
+//
+// Slot index and packet number are reserved separately (two tiny critical
+// sections) so that a sample dropped after its copy - see enqueue_sample() -
+// gives back its slot without leaving a gap in the packet numbering. Skipping
+// a slot index is harmless: freeslots, not the index, bounds what is in flight.
+static uint8_t reserve_queue_slot(void) {
 	uint8_t slot;
 	taskENTER_CRITICAL();
 	slot = sq_head;
 	sq_head = (sq_head + 1) % SEND_QUEUE_DEPTH;
-	*pknum = statuspkt.udppknum;
-	statuspkt.udppknum++;
 	taskEXIT_CRITICAL();
 	return slot;
 }
+
+static uint32_t take_packet_number(void) {
+	uint32_t pknum;
+	taskENTER_CRITICAL();
+	pknum = statuspkt.udppknum;
+	statuspkt.udppknum++;
+	taskEXIT_CRITICAL();
+	return pknum;
+}
+
+uint32_t trigbuflate = 0;	// triggered buffers dropped because DMA had moved on before they were copied
 
 // Copy a completed trigger sample into the send queue. Fast and bounded -
 // never waits on anything, never touches lwIP. If the queue is already full
@@ -271,17 +285,34 @@ static uint8_t reserve_queue_slot(uint32_t *pknum) {
 // drops the sample and counts it, matching the existing sigsend/adcudpover
 // overrun idiom in adcstream.c for the same "producer outpaced consumer"
 // situation.
-static void enqueue_sample(void *payload) {
+//
+// bufseq is the adcbufseq of the buffer that triggered. The DMA double buffer
+// starts refilling that buffer as soon as the next one completes, so the copy
+// is only valid if no further completion happened before or during it. A late
+// copy used to send the *next* buffer under this trigger's name (bench test:
+// ~40% of sent events lacked the stimulus waveform); now it is dropped and
+// counted in trigbuflate instead.
+static void enqueue_sample(void *payload, uint32_t bufseq) {
 	uint8_t slot;
 	uint32_t pknum;
 	senditem_t item;
 
+	if (adcbufseq != bufseq) {
+		trigbuflate++;		// already being overwritten
+		return;
+	}
 	if (xSemaphoreTake(freeslots, 0) != pdTRUE) {
 		statuspkt.adcudpover++;	// queue full, drop this sample
 		return;
 	}
-	slot = reserve_queue_slot(&pknum);
+	slot = reserve_queue_slot();
 	memcpy(sendqueuebuf[slot], payload, UDPBUFSIZE);
+	if (adcbufseq != bufseq) {	// DMA completed another buffer during the copy: may be torn
+		trigbuflate++;
+		xSemaphoreGive(freeslots);
+		return;
+	}
+	pknum = take_packet_number();
 	((uint8_t*) sendqueuebuf[slot])[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
 	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
 	((uint8_t*) sendqueuebuf[slot])[1] = (pknum & 0xff00) >> 8;
@@ -315,7 +346,8 @@ static void enqueue_status(int stype) {
 	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 	statuspkt.adctrigoff = ((trigthresh + trigcomp) & 0xFFF) | ((pgagain & 0xF) << 12);
 
-	slot = reserve_queue_slot(&pknum);
+	slot = reserve_queue_slot();
+	pknum = take_packet_number();
 	memcpy(sendqueuebuf[slot], (const void*) &statuspkt, sizeof(statuspkt));
 	((uint8_t*) sendqueuebuf[slot])[3] = stype;	// status pkt type (ENDSEQ or TIMED)
 	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
@@ -632,14 +664,17 @@ void startudp() {		// destination UDP target IP address
 		udp_stall_watchdog();	// cheap: acts at most once a second; reboots only if the sender is stuck (see stall guard)
 
 		if (ulNotificationValue > 0) {		// we were notified
+			// read which buffer triggered BEFORE clearing sigsend: once it is clear the ADC ISR may record the next trigger
+			const uint8_t tbufno = trigbufno;
+			const uint32_t tbufseq = trigbufseq;
 			sigsend = 0;
 			/* if we have a trigger, send a sample packet */
 			if ((gpslocked) && (jabbertimeout == 0) && (!(globalfreeze))) { // only send if adc threshold was exceeded and GPS is locked
 
 				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
-				pd = (dmabufno) ? p2 : p1; // which dma buffer to send, dmabuf is last filled buffer, 0 or 1
+				pd = (tbufno) ? p2 : p1; // the buffer that triggered (not the latest one, which may have moved on)
 
-				enqueue_sample(pd->payload);	// fast fixed-size copy; pd is free for the ADC again immediately
+				enqueue_sample(pd->payload, tbufseq);	// fast fixed-size copy, dropped if DMA has since overwritten it
 
 				/* queue end of sequence status packet if end of batch sequence */
 				if (sendendstatus > 0) {
