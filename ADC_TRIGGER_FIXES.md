@@ -80,6 +80,15 @@ packet headers still carry id - 1 (header written before `adcbatchid`
 increments - unchanged, pre-existing). lightsrv5 uses the ENDSEQ batch id only
 for the status JSON `batchid` field and logs, not for pairing with samples.
 
+Also from code review during the soak: with samples queued from the ISR, the
+ISR could queue a sample between `enqueue_status()` taking an ENDSEQ's packet
+number and queuing it, putting a later-numbered sample ahead of it.
+`enqueue_status()` now takes the number and queues the item in one short
+critical section. (The out-of-order arrivals actually seen on the bench PC,
+e.g. sample 1216 before ENDSEQ 1215, are receiver-side and continue with the
+fix: samples are IP-fragmented, status packets are not, and back-to-back ones
+can be delivered swapped. lightsrv5 doesn't depend on packet order.)
+
 ## 5. Console
 
 - USART2 receive is re-armed after UART errors (`HAL_UART_ErrorCallback`) and
@@ -109,3 +118,11 @@ task has finished booting.
 - With the lockout fixed the AGC equilibrates on near misses, not trigger
   rate, so a noisy site can see ~0.5 noise triggers/s. A rate-based AGC is a
   candidate for the experiment branch.
+- Batches are practically always one packet: each triggered buffer raises
+  `trigthresh` by 2 and adds 201 to the AGC count, and the buffer after a
+  trigger is skipped (`ov`) whenever `startudp()` - same priority as lwIP's
+  tcpip_thread - hasn't run within 270 us. A gentler first step (+1) was
+  tried in the soak (branch `experiment/backoff-tweak`): 2-3 packet batches
+  rose from 0.1% to 2%, but dropped batches went 1% -> 5%, ov/lt per trigger
+  roughly doubled and the AGC started stepping the gain 8<->9. Not shipped;
+  revisit with startudp() priority / the sigsend gate on the experiment branch.
