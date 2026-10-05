@@ -362,42 +362,59 @@ void ADC_Conv_complete(void) {
 			statuspkt.adcudpover++;		// debug adc overruning the udp railgun
 			return;						// skip detecting another trigger
 		}
-		for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
-			j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
-			thissamp = (*adcbuf16)[i];
+		{
+			// Hot-loop state in locals so it stays in registers; the globals are read once and written back
+			// once per buffer. Same arithmetic and integer types as before. trigcomp is volatile (set by the
+			// server) and in SRAM1, and was being re-read twice per sample.
+			const uint16_t thr = trigthresh + trigcomp;		// trigger: rise > trigthresh + trigcomp
+			const int32_t pthr = pretrigthresh + trigcomp;	// near miss: rise > pretrigthresh + trigcomp
+			int32_t wma = wmeanacc, wda = wdacc;
+			uint32_t bgacc = adcbgbaseacc;
+			uint16_t lastmwd = lastmeanwindiff;
+			int16_t wmean = winmean, mwd = meanwindiff;
+			uint32_t nearmiss = 0;
+			uint16_t trig = 0;
 
-			adcbgbaseacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
+			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
+				j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
+				thissamp = (*adcbuf16)[i];
 
-			wmeanacc = wmeanacc + thissamp - lastsamp[j];		// window mean acc
-			winmean = wmeanacc >> (WINSHIFT);		// divide to find the new window mean
-			lastsamp[j] = thissamp;			// save last samples
+				bgacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
 
-			thiswindiff = abs(thissamp - winmean);			// find difference from window mean
-			wdacc = wdacc - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
+				wma = wma + thissamp - lastsamp[j];		// window mean acc
+				wmean = wma >> (WINSHIFT);		// divide to find the new window mean
+				lastsamp[j] = thissamp;			// save last samples
 
-			meanwindiff = wdacc >> (WINSHIFT); // sliding mean of window differences (used for globalnoise)
-			windiff[j] = meanwindiff;	// store latest window mean of differences
+				thiswindiff = abs(thissamp - wmean);			// find difference from window mean
+				wda = wda - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
 
-			lastthresh = lastmeanwindiff + trigthresh + trigcomp;		// trigger threshold compensation provided by the server;
+				mwd = wda >> (WINSHIFT); // sliding mean of window differences (used for globalnoise)
+				windiff[j] = mwd;	// store latest window mean of differences
 
-			if (abs(meanwindiff) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
-				sigsend = 1; // the real trigger
+				lastthresh = lastmwd + thr;		// trigger threshold compensation provided by the server
 
-			} else {
-				// near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task)
-				// but not the trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a
-				// fixed "rise > 2" independent of trigthresh, so raising the threshold could never reduce
-				// the near-miss count and the AGC pinned trigthresh at its clamp.
-				if (abs(meanwindiff) > (lastmeanwindiff + pretrigthresh + trigcomp)) {
-					pretrigcnt++;
+				if (abs(mwd) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
+					trig = 1; // the real trigger
+				} else if (abs(mwd) > (lastmwd + pthr)) {
+					// near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task)
+					// but not the trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a
+					// fixed "rise > 2" independent of trigthresh, so raising the threshold could never reduce
+					// the near-miss count and the AGC pinned trigthresh at its clamp.
+					nearmiss++;
 				}
-			}
-			lastmeanwindiff = abs(meanwindiff);
+				lastmwd = abs(mwd);
+			} // end for i
 
-//			HAL_GPIO_WritePin(GPIOE, GPIO_PIN_12, GPIO_PIN_SET /*PE12*/); // debug pin
-//			gpioeset(GPIO_PIN_12);
-
-		} // end for i
+			wmeanacc = wma;
+			wdacc = wda;
+			adcbgbaseacc = bgacc;
+			lastmeanwindiff = lastmwd;
+			winmean = wmean;
+			meanwindiff = mwd;
+			pretrigcnt += nearmiss;
+			if (trig)
+				sigsend = 1;
+		}
 		if (sigsend) {
 			trigthresh += 2;
 			pretrigcnt += 201;
