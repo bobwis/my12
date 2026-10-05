@@ -12,9 +12,11 @@ Build number deliberately unchanged (10049) for local development.
   Snapshots: `psg_original_full.json` (as found: CH1 replaying CONTINUOUSLY at 20 kHz - not bursting),
   `psg_bob_burst_1hz.json` (Bob's 1 Hz burst, CH1 at 130 kHz = 7.7 us playback, 0.7 V).
   **Current generator state:** Bob's burst setup but CH1 playback 5 kHz (200 us, w13=5000000,0) and
-  amplitude 100 mV (w15=100). A resistor bridge now sums CH1+CH2 into the detector input, so CH2's
-  3.3 V trigger pulse is also injected - next: internal 1 s trigger + CH2 as noise (Bob to set on
-  the front panel, then diff registers to learn the trigger-source encoding).
+  amplitude 100 mV (w15=100). A resistor bridge sums CH1+CH2 into the detector input. CH1's burst is
+  self-triggered by the generator's internal 1 s period (r43=1000), not by CH2. **CH2 is now Noise
+  (w12=11) at 20 mV (w16=20)** - snapshot before that change: `psg_selftrigger_1hz.json`. With it the
+  detector sat at gain 2, noise reading 16-23, threshold 2, no noise triggers in a short look.
+  Waveform codes: 0 sine 1 square 2 pulse 3 triangle 11 noise 101 = arb memory 01.
 - Sample rate measured 2.70 MSps (two ways); 728 samples = 270 us/buffer = 58240 CPU cycles.
 
 ## Findings so far
@@ -39,6 +41,7 @@ Build number deliberately unchanged (10049) for local development.
 - Phase 4 step (c) `7721270` (copy triggered buffer inside the ISR): partly validated - ISR load median
   38% / peak 47%, late (lt) +0 over 120 s. Still to check: sent packets contain the stimulus waveform
   (`analyze_stim.py` on a fresh `udpcap.py` capture). Detector 15 is flashed with this build.
+  Note lt (late/torn ISR copies) reached 9 after ~290 s - investigate.
 - Then: ENDSEQ prompt delivery (finding 4); generator re-config for noise; rate-based AGC; STA/LTA
   detector; peak selection of the best buffer per event in netsendtask().
 - Bob's original `#if 0` adcstream.c experiment is in `git stash` (stash@{0}).
