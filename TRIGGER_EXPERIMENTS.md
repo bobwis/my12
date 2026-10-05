@@ -50,6 +50,35 @@ Build number deliberately unchanged (10049) for local development.
   detector; peak selection of the best buffer per event in netsendtask().
 - Bob's original `#if 0` adcstream.c experiment is in `git stash` (stash@{0}).
 
+## Release 0.32 / build 10050 (2026-10-06) and what its soak found
+Master 7eb6413 = the validated fixes from this branch (lockout, ISR copy, ISR load, prompt ENDSEQ,
+console) + fixes found in the soak, all merged back here (STA/LTA, Ctrl-T, d=/r= kept on top;
+CONSOLE_STATUS_SECS 1 here, 60 in the release). Details: ADC_TRIGGER_FIXES.md. Soak findings:
+- **Stall watchdog false positive** (fixed e89e2ab): samples are now queued by the ISR, which then wakes
+  startudp() whose watchdog saw a fresh item before NetSend ran; after >30 s of quiet the next trigger
+  rebooted the detector. Now judged on sender liveness (sq_alive_sec). Verified twice with 50 s generator
+  pauses (python psg.py: r10 "0,0" then restore).
+- Console ISR average wrapped at 60 s intervals (b871046, 16-cycle units).
+- LCD redraws page 0 after unplug/replug (014ec39; 0x88 ready or framing re-init -> lcd_repaint()).
+- Status packet number + queue send made atomic (7040da3). The out-of-order arrivals seen on the PC are
+  RECEIVER-side: samples are IP-fragmented (NETIF_MTU_OVERRIDE), status packets aren't.
+- **Gentler first back-off step** (+1 instead of +2) tried: branch `experiment/backoff-tweak`. 2-3 packet
+  batches 0.1% -> 2%, but dropped batches 1% -> 5%, ov/lt per trigger ~2x, AGC hunting gain 8<->9. Not
+  shipped. Batches stay one packet mainly because of ov: startudp() shares osPriorityNormal with
+  tcpip_thread, so the 270 us sigsend handshake is often missed and the next buffer isn't scanned.
+- **lwIP raw API called without the core lock** (pre-existing, also in 10049): sendudp() udp_sendto() from
+  NetSend, and www.c's client (LOCK_TCPIP_CORE commented out), race tcpip_thread (ARP queue, frag).
+  Seen once: mem.c sanity asserts "heap element link valid"/"unused?" (double free) at 09:01 on 7eb6413.
+  First item for 10051, with an overnight soak.
+- **lt (late ISR copies) tracks the SEND rate** (1/min at 2 batches/s -> ~47/min with 1000-10000 repeat
+  bursts) while ISR load stays ~37%. Hypothesis, unmeasured: MEM_SANITY_CHECK=1 / MEM_OVERFLOW_CHECK=2 walk
+  the whole lwIP heap on every malloc/free inside a BASEPRI critical section, masking the ADC IRQ (prio 5).
+- Generator worked all day today (1 Hz burst, 25 -> 50 -> 1000 -> 10000 repeats); each stroke gives ~2
+  one-packet batches 2-100 ms apart. Tools added: udplive.py (live per-interval rx counts, flushes),
+  batchstats.py (batch sizes / groups per window), endseq_check.py.
+- Next on this branch: core lock (10051), measure the heap-check latency, startudp() priority / drop the
+  sigsend gate, then revisit the back-off tweak and STA/LTA sweeps (cd0b90e LTA fix still unvalidated).
+
 ## Phase 5 (STA/LTA detector) - status when paused (2026-10-05 evening)
 - Commits: `cab4c44` STA/LTA detector (console Ctrl-T toggles; status line d= detector, r= peak STA/LTA*16;
   tuning globals stalta_ratio_q4 / stalta_ks / stalta_kl writable over SWD), `fdafba2` prompt ENDSEQ,

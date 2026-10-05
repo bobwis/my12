@@ -52,7 +52,7 @@ extern volatile uint8_t detector;
 extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
 
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR
-extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles
+extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles (sum in 16-cycle units)
 
 // CPU cycles available per ADC buffer: 216 MHz * 728 samples / 2.7 MSps (measured: 3708 buffers/s)
 #define ADCBUF_CYCLES 58240U
