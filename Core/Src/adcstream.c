@@ -32,6 +32,7 @@ unsigned int dmabufno = 0;	// the last filled buffer 0 or 1
 volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is safe to read until N+1 completes)
 // ADC_Conv_complete() cost in CPU cycles (DWT cycle counter), for the console status line:
 // isrcyc_sum/isrcyc_n give the average, isrcyc_max the peak since the status line last cleared it.
+// isrcyc_sum is in units of 16 cycles so a status interval of up to ~300 s can't wrap it even at 100% load.
 // Budget per buffer is ADCBUF_CYCLES (adcstream.h). The early-return overrun path is not counted.
 volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 
@@ -470,7 +471,7 @@ void ADC_Conv_complete(void) {
 		uint32_t c = DWT->CYCCNT - cyc0;
 		if (c > isrcyc_max)
 			isrcyc_max = c;
-		isrcyc_sum += c;
+		isrcyc_sum += (c + 8) >> 4;		// units of 16 cycles: whole cycles wrapped in ~50 s at 38% load
 		isrcyc_n++;
 	}
 }

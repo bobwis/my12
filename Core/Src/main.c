@@ -2594,7 +2594,7 @@ void StarLPTask(void const * argument)
 			if ((t1sec - laststatsec) >= CONSOLE_STATUS_SECS) {
 				uint32_t isrsum = isrcyc_sum, isrn = isrcyc_n, isrmax = isrcyc_max;
 				uint32_t dn = isrn - lastisrn;
-				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
+				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
 				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%%\n", (unsigned long) t1sec,
