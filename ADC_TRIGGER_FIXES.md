@@ -39,6 +39,15 @@ dropped sample leaves no gap in `udppknum`. Sample packets are only queued
 once the send path is armed (`samplesarmed`, set at "Arming") and under the
 same GPS-lock / jabber / freeze conditions as before.
 
+Knock-on fix found in the 10050 soak: the UDP stall watchdog runs in `startudp()`,
+which the ISR now wakes *after* queuing the sample, so the watchdog sees a
+just-queued item before the (lower priority) sender has run. Its "queue not
+draining" test used time since the last send, so the first trigger after
+30 s of quiet (once past the 600 s arming time) rebooted the detector -
+twice in the soak, at ~460 packets each time. The test now uses
+`sq_alive_sec`, refreshed every time the sender's queue wait returns
+(item or 1 s timeout), so it still catches a blocked or starved sender.
+
 FreeRTOS `FromISR` calls are legal here: the TIM5 proxy IRQ runs at priority 5,
 below `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` (3); the tasks touch
 `sq_head` / `udppknum` under `taskENTER_CRITICAL`, which masks it.

@@ -136,7 +136,11 @@ static SemaphoreHandle_t freeslots;	// counts physical slots currently safe to w
  *     task, so it still works if the sender is stuck ANYWHERE - the pbuf wait,
  *     sendudp(), or the Ethernet output path), reboots if the sender has been
  *     inside one item for STALL_SENDER_BUSY_SECS, if the queue holds items but
- *     nothing has been sent for that long, or if the link is up but no packet of
+ *     the sender's loop hasn't come round for that long (sq_alive_sec - NOT the
+ *     last send: since samples are queued by the ADC ISR, which then wakes this
+ *     higher-priority task, the watchdog routinely sees a just-queued sample
+ *     before the sender has run, and after 30 s of no triggers that read as a
+ *     stall and rebooted the detector), or if the link is up but no packet of
  *     any kind has been sent for STALL_NO_SEND_SECS (a heartbeat is due every
  *     STAT_TIME). Only armed after STALL_ARM_UPTIME_SECS so a fault can never
  *     cause a rapid reboot loop.
@@ -155,6 +159,7 @@ static SemaphoreHandle_t freeslots;	// counts physical slots currently safe to w
 
 static volatile uint32_t sq_busy_since;		// t1sec when the sender took its current item; 0 = idle
 static volatile uint32_t sq_last_send_sec;	// t1sec of the last completed sendudp()
+static volatile uint32_t sq_alive_sec;		// t1sec the sender last came back from its queue wait (item or 1 s timeout)
 static volatile uint32_t sq_sent_total;		// completed sendudp() calls since boot (samples + status)
 static volatile uint8_t sq_cur_slot;		// the item the sender is/was working on
 static volatile uint8_t sq_cur_type;		//   (packet type byte: 4 = sample, ENDSEQ/TIMED = status)
@@ -167,9 +172,9 @@ static void udp_stall_snapshot(const char *where, uint32_t waited_ms) {
 	struct pbuf *pb = sendqueuepbuf[sq_cur_slot];
 
 	printf("udpstall: %s\n", where);
-	printf("udpstall: uptime=%lus sender_busy=%lus last_send_ago=%lus waited=%lums sent=%lu\n", (unsigned long) t1sec,
+	printf("udpstall: uptime=%lus sender_busy=%lus last_send_ago=%lus alive_ago=%lus waited=%lums sent=%lu\n", (unsigned long) t1sec,
 			(unsigned long) (sq_busy_since ? (t1sec - sq_busy_since) : 0), (unsigned long) (t1sec - sq_last_send_sec),
-			(unsigned long) waited_ms, (unsigned long) sq_sent_total);
+			(unsigned long) (t1sec - sq_alive_sec), (unsigned long) waited_ms, (unsigned long) sq_sent_total);
 	printf("udpstall: item slot=%u type=%u len=%u pknum=%lu\n", sq_cur_slot, sq_cur_type, sq_cur_len, (unsigned long) sq_cur_pknum);
 	if (pb != NULL) {
 		printf("udpstall: pbuf ref=%u len=%u tot_len=%u flags=0x%02x type=0x%02x next=0x%08lx payload=0x%08lx\n", (unsigned) pb->ref,
@@ -223,7 +228,7 @@ static void udp_stall_watchdog(void) {
 	busy = sq_busy_since;
 	if (busy != 0 && (now - busy) > STALL_SENDER_BUSY_SECS && linkup_for > STALL_SENDER_BUSY_SECS) {
 		why = "watchdog: sender stuck inside one item";
-	} else if ((now - sq_last_send_sec) > STALL_SENDER_BUSY_SECS && linkup_for > STALL_SENDER_BUSY_SECS
+	} else if ((now - sq_alive_sec) > STALL_SENDER_BUSY_SECS && linkup_for > STALL_SENDER_BUSY_SECS
 			&& uxQueueMessagesWaiting(sendqueueq) > 0) {
 		why = "watchdog: queue not draining";
 	} else if ((now - sq_last_send_sec) > STALL_NO_SEND_SECS && linkup_for > STALL_NO_SEND_SECS) {
@@ -372,9 +377,12 @@ static void netsendtask(void const *argument) {
 	uint32_t laststatussecond = t1sec;	// don't fire a timed status right at boot
 
 	sq_last_send_sec = t1sec;	// stall guard: measure "nothing sent" from the start of this task
+	sq_alive_sec = t1sec;
 
 	for (;;) {
-		if (xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000)) != pdTRUE) {
+		BaseType_t got = xQueueReceive(sendqueueq, &item, pdMS_TO_TICKS(1000));
+		sq_alive_sec = t1sec;	// stall guard: this loop is still turning
+		if (got != pdTRUE) {
 //			nettx_diag_periodic();	// (disabled) one line when the TX mutex was contended - only showed the mutex working (netfix.h)
 			// Nothing queued within 1 second - check whether a timed status
 			// is due. Moved here (off the ADC-facing producer) because it
