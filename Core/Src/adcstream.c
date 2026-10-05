@@ -32,6 +32,10 @@ unsigned int dmabufno = 0;	// the last filled buffer 0 or 1
 volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is safe to read until N+1 completes)
 volatile uint8_t trigbufno = 0;		// which buffer (0/1) produced the current sigsend trigger
 volatile uint32_t trigbufseq = 0;	// adcbufseq of that buffer, so the sender can tell if DMA has since overwritten it
+// ADC_Conv_complete() cost in CPU cycles (DWT cycle counter), for the console status line:
+// isrcyc_sum/isrcyc_n give the average, isrcyc_max the peak since the status line last cleared it.
+// Budget per buffer is ADCBUF_CYCLES (adcstream.h). The early-return overrun path is not counted.
+volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 
 unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
 volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
@@ -333,6 +337,7 @@ void ADC_Conv_complete(void) {
 	uint16_t lastthresh;
 	const uint8_t bufno = dmabufno;		// the buffer this call scans (DMA callbacks may advance dmabufno later)
 	const uint32_t bufseq = adcbufseq;
+	const uint32_t cyc0 = DWT->CYCCNT;	// ISR cost measurement, see isrcyc_*
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
@@ -444,6 +449,13 @@ void ADC_Conv_complete(void) {
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_RESET /*PE0*/);	// debug pin
 //	gpioeclr(GPIO_PIN_0 | GPIO_PIN_12);
 
+	{	// ISR cost (full-scan path only)
+		uint32_t c = DWT->CYCCNT - cyc0;
+		if (c > isrcyc_max)
+			isrcyc_max = c;
+		isrcyc_sum += c;
+		isrcyc_n++;
+	}
 }
 
 // handle the highest priority interrupt to capture the true DMA conversion complete time (below RTOSOS level)
@@ -526,6 +538,12 @@ void startadc() {
 	statuspkt.adcpktssent = 0;
 
 	printf("Starting ADC DMA\n");
+	// enable the DWT cycle counter for ISR cost measurement (isrcyc_*). The Cortex-M7 DWT has a software
+	// lock: without the LAR unlock the CTRL write is silently ignored (seen on the bench: CYCCNT stuck at 0).
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+	DWT->LAR = 0xC5ACCE55;
+	DWT->CYCCNT = 0;
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 	osDelay(100);
 // get some heap for the ADC stream DMA buffer 1
 	pktbuf = pvPortMalloc(UDPBUFSIZE * 2);	// two buffers concatenated
