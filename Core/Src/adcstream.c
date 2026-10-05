@@ -545,15 +545,14 @@ void startadc() {
 	DWT->CYCCNT = 0;
 	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 	osDelay(100);
-// get some heap for the ADC stream DMA buffer 1
-	pktbuf = pvPortMalloc(UDPBUFSIZE * 2);	// two buffers concatenated
-	if (pktbuf == NULL) {
-		printf("pvPortMalloc returned nil for pktbuf\n");
-		for (;;)
-			;
-	}
-	if (((uint32_t) pktbuf & 3) > 0) {
-		printf("******** pvPortMalloc not on word boundary *********\n");
+// ADC stream DMA double buffer (two buffers concatenated). Static rather than pvPortMalloc so it
+// lands in zero-wait DTCM (start of .bss) instead of the FreeRTOS heap, which now sits in SRAM1:
+// with the D-cache off every one of the 728 sample loads per buffer in ADC_Conv_complete() was an
+// uncached SRAM1 access. DMA2 can write DTCM on the F7.
+	static uint32_t adcdmabuf[(UDPBUFSIZE * 2) / 4] __attribute__((aligned(32)));
+	pktbuf = (adcbuffer*) adcdmabuf;
+	if (((uint32_t) pktbuf) >= 0x20020000U) {
+		printf("******** ADC DMA buffer not in DTCM (0x%08lx) *********\n", (unsigned long) pktbuf);
 	}
 
 //	printf("(&(*pktbuf)[0])=0x%x ", &((*pktbuf)[0]));
