@@ -278,41 +278,39 @@ static uint32_t take_packet_number(void) {
 }
 
 uint32_t trigbuflate = 0;	// triggered buffers dropped because DMA had moved on before they were copied
+static volatile uint8_t samplesarmed = 0;	// set by startudp() once the queue exists and sending is armed
 
-// Copy a completed trigger sample into the send queue. Fast and bounded -
-// never waits on anything, never touches lwIP. If the queue is already full
-// (network can't keep up even with SEND_QUEUE_DEPTH slots of buffering),
-// drops the sample and counts it, matching the existing sigsend/adcudpover
-// overrun idiom in adcstream.c for the same "producer outpaced consumer"
-// situation.
+// Copy the ADC buffer that just triggered into the send queue. Called from ADC_Conv_complete()
+// (TIM5 IRQ, priority 5, FreeRTOS-safe) straight after that buffer was scanned, while the DMA is
+// filling the *other* half of the double buffer - so the copy cannot race the DMA. When this copy
+// was done later by the startudp() task, the ADC ISR load (83% on the bench) meant the task was
+// routinely preempted mid-copy while the DMA refilled the buffer: torn or wrong buffers were sent.
 //
-// bufseq is the adcbufseq of the buffer that triggered. The DMA double buffer
-// starts refilling that buffer as soon as the next one completes, so the copy
-// is only valid if no further completion happened before or during it. A late
-// copy used to send the *next* buffer under this trigger's name (bench test:
-// ~40% of sent events lacked the stimulus waveform); now it is dropped and
-// counted in trigbuflate instead.
-static void enqueue_sample(void *payload, uint32_t bufseq) {
+// Tasks update sq_head and statuspkt.udppknum under taskENTER_CRITICAL(), which masks this IRQ,
+// so plain access is safe here. Never blocks; drops and counts if the queue is full (adcudpover),
+// not yet created, or if this ISR itself overran into the next buffer (trigbuflate).
+void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken) {
 	uint8_t slot;
 	uint32_t pknum;
 	senditem_t item;
 
-	if (adcbufseq != bufseq) {
-		trigbuflate++;		// already being overwritten
+	if (!samplesarmed)		// ADC starts before startudp() has created the queue and armed
 		return;
-	}
-	if (xSemaphoreTake(freeslots, 0) != pdTRUE) {
+	if ((!gpslocked) || (jabbertimeout != 0) || (globalfreeze))	// same send conditions the task used
+		return;
+	if (xSemaphoreTakeFromISR(freeslots, woken) != pdTRUE) {
 		statuspkt.adcudpover++;	// queue full, drop this sample
 		return;
 	}
-	slot = reserve_queue_slot();
+	slot = sq_head;
+	sq_head = (sq_head + 1) % SEND_QUEUE_DEPTH;
 	memcpy(sendqueuebuf[slot], payload, UDPBUFSIZE);
-	if (adcbufseq != bufseq) {	// DMA completed another buffer during the copy: may be torn
+	if (adcbufseq != bufseq) {	// this ISR ran past the next DMA completion: the copy may be torn
 		trigbuflate++;
-		xSemaphoreGive(freeslots);
+		xSemaphoreGiveFromISR(freeslots, woken);
 		return;
 	}
-	pknum = take_packet_number();
+	pknum = statuspkt.udppknum++;
 	((uint8_t*) sendqueuebuf[slot])[3] = 4;	// pkt type (was 0, changed to 4 29-oct-22)
 	((uint8_t*) sendqueuebuf[slot])[0] = pknum & 0xff;
 	((uint8_t*) sendqueuebuf[slot])[1] = (pknum & 0xff00) >> 8;
@@ -320,7 +318,7 @@ static void enqueue_sample(void *payload, uint32_t bufseq) {
 
 	item.slot = slot;
 	item.len = UDPBUFSIZE;
-	xQueueSend(sendqueueq, &item, 0);
+	xQueueSendFromISR(sendqueueq, &item, woken);
 }
 
 // Snapshot the current status packet fields into the send queue as an
@@ -556,7 +554,7 @@ extern struct ip4_addr locateip(char *targetname) {
 
 void startudp() {		// destination UDP target IP address
 	struct udp_pcb *pcb;
-	struct pbuf *pd, *p1, *p2;
+	struct pbuf *p1, *p2;
 	uint32_t ulNotificationValue = 0;
 	const TickType_t xMaxBlockTime = pdMS_TO_TICKS(1000);
 	int i;
@@ -641,6 +639,7 @@ void startudp() {		// destination UDP target IP address
 	statuspkt.telltale1 = 0xDEC0EDFE; //  0xFEEDC0DE marker at the end of each status packet
 
 	netup = 1; // this is incomplete - it should be set by the phys layer also
+	samplesarmed = 1;	// from here the ADC ISR may queue triggered samples (as the old task-side copy did)
 	printf("Arming UDP Railgun\nSystem ready and operating....\n");
 
 	while (1) {
@@ -664,18 +663,9 @@ void startudp() {		// destination UDP target IP address
 		udp_stall_watchdog();	// cheap: acts at most once a second; reboots only if the sender is stuck (see stall guard)
 
 		if (ulNotificationValue > 0) {		// we were notified
-			// read which buffer triggered BEFORE clearing sigsend: once it is clear the ADC ISR may record the next trigger
-			const uint8_t tbufno = trigbufno;
-			const uint32_t tbufseq = trigbufseq;
 			sigsend = 0;
-			/* if we have a trigger, send a sample packet */
-			if ((gpslocked) && (jabbertimeout == 0) && (!(globalfreeze))) { // only send if adc threshold was exceeded and GPS is locked
-
-				//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET /*PB11*/);	// debug pin
-				pd = (tbufno) ? p2 : p1; // the buffer that triggered (not the latest one, which may have moved on)
-
-				enqueue_sample(pd->payload, tbufseq);	// fast fixed-size copy, dropped if DMA has since overwritten it
-
+			// the triggered sample itself was already queued by the ADC ISR (enqueue_sample_isr)
+			if ((gpslocked) && (jabbertimeout == 0) && (!(globalfreeze))) {
 				/* queue end of sequence status packet if end of batch sequence */
 				if (sendendstatus > 0) {
 //					if (jabbertimeout == 0)	// terminate curtailed sequence???
