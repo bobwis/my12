@@ -36,6 +36,12 @@ next free ring slot and pushes a small descriptor. No lwIP call, no
 network-timing dependency, ever. This is the only thing that runs on the
 ADC-critical path.
 
+> **Changed in 0.32 / 10050:** the sample copy now happens in the ADC ISR
+> itself (`enqueue_sample_isr()` from `ADC_Conv_complete()`), because the task
+> was often a buffer or more late and copied the wrong or a half-refilled
+> buffer. `startudp()` now only clears `sigsend` and queues end-of-sequence
+> status. See `ADC_TRIGGER_FIXES.md`.
+
 **Sender** (`netsendtask()`, new, `osPriorityBelowNormal` - one level below
 the producer): owns every `sendudp()` call in the firmware. Blocks on the
 descriptor queue (zero CPU while idle) and drains as fast as the network

@@ -9,7 +9,7 @@
 #define VERSION_H_
 
 #define MAJORVERSION 0
-#define MINORVERSION 31
+#define MINORVERSION 32
 
 // TESTING Speeds up the frequency of status packets
 // and uses different target IP addresses
@@ -29,7 +29,7 @@
 #endif
 
 // 21 May 2023 - updated IDE
-#define BUILD 10049	// 10049 (fw 0.31, Sep 27): UDP send-path stall guard (10048) plus the Ethernet/lwIP thread-safety fixes in netfix.h. 10048 = stall guard only. 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release. The detector self-updates whenever the server advertises a different build, so only change this when publishing.
+#define BUILD 10050	// 10050 (fw 0.32, Oct 6): AGC lockout fix (near-miss test tracks the threshold), triggering buffer copied in the ADC ISR (no wrong/torn buffers), ADC ISR load 83% -> ~40% (DMA buffer in DTCM, scan loop in registers), prompt ENDSEQ with the right batch id, console input re-arm, console status line (ISR load). 10049 (fw 0.31, Sep 27): UDP send-path stall guard (10048) plus the Ethernet/lwIP thread-safety fixes in netfix.h. 10048 = stall guard only. 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release. The detector self-updates whenever the server advertises a different build, so only change this when publishing.
 #ifndef TESTING
 #define BUILDNO BUILD	// 16 bits  "S/W build number" of the lightning detector
 #else
@@ -63,7 +63,7 @@
 // One-line console status every N seconds (0 = off). Independent of TESTING.
 // Each line is ~80 bytes of blocking UART output from the LP task (~7 ms),
 // which also runs the 10 ms / 100 ms AGC timing, so keep this >= 1.
-#define CONSOLE_STATUS_SECS 1
+#define CONSOLE_STATUS_SECS 60
 
 // CPU half clock speed
 #define  CCLK  108000000
