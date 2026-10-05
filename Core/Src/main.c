@@ -2578,6 +2578,22 @@ void StarLPTask(void const * argument)
 		else
 			pretrigthresh = 1;		// set the pretrigger level
 
+#if CONSOLE_STATUS_SECS > 0
+		{	// compact status line: t1sec, triggers, thresh, pretrig thresh, gain, noise, near-misses since last line,
+			// adc->udp overruns, late (overwritten) trigger buffers, jabber count, trigger suppression countdown
+			static uint32_t laststatsec = 0, lastnearmiss = 0;
+			if ((t1sec - laststatsec) >= CONSOLE_STATUS_SECS) {
+				laststatsec = t1sec;
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u\n", (unsigned long) t1sec,
+						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
+						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
+						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
+						(unsigned) sigsuppress);
+				lastnearmiss = pretrigcnt;
+			}
+		}
+#endif
+
 		while (xQueueReceive(consolerxq, &inch, 0)) {
 			if (inch == 0x07) {  // control G
 				gpsfake = (gpsfake) ? 0 : 1;
