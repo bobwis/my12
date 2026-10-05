@@ -6,7 +6,8 @@ higher than this unit's and must NOT be used. Writes return ':ok' even when a
 register ignores the value, so always confirm by reading back a changed value.
 Frequency registers are value,unit with value in mHz (r13=20000000,0 = 20 kHz).
 Known on this unit: 10 outputs, 11/12 wave (101 = arb memory 01), 13/14 freq,
-15/16 amp mV, 17/18 offset (1000 = 0 V). Burst/trigger setup lives somewhere in
+15/16 amp mV, 17/18 offset (1000 = 0 V).
+Waveform codes differ from the vendor app list: 14 = noise, 11 = negative ladder. Burst/trigger setup lives somewhere in
 r24, r26, r40, r41, r43, r60, r61 (see psg_bob_burst_1hz.json vs
 psg_original_full.json) - not individually decoded yet.
 """

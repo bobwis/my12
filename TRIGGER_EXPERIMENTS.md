@@ -14,9 +14,10 @@ Build number deliberately unchanged (10049) for local development.
   **Current generator state:** Bob's burst setup but CH1 playback 5 kHz (200 us, w13=5000000,0) and
   amplitude 100 mV (w15=100). A resistor bridge sums CH1+CH2 into the detector input. CH1's burst is
   self-triggered by the generator's internal 1 s period (r43=1000), not by CH2. **CH2 is now Noise
-  (w12=11) at 20 mV (w16=20)** - snapshot before that change: `psg_selftrigger_1hz.json`. With it the
+  (code 14, set by Bob on the panel) at 20 mV (w16=20)** - snapshot before that change: `psg_selftrigger_1hz.json`. With it the
   detector sat at gain 2, noise reading 16-23, threshold 2, no noise triggers in a short look.
-  Waveform codes: 0 sine 1 square 2 pulse 3 triangle 11 noise 101 = arb memory 01.
+  Waveform codes on THIS unit differ from the vendor app's list: 11 = negative ladder (my w12=11
+  mistake), 14 = noise, 101 = arb memory 01. Verify any other code on the panel before relying on it.
 - Sample rate measured 2.70 MSps (two ways); 728 samples = 270 us/buffer = 58240 CPU cycles.
 
 ## Findings so far
