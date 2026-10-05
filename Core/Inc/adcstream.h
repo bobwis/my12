@@ -48,6 +48,10 @@ extern unsigned int dmabufno;
 extern volatile uint32_t adcbufseq;
 extern volatile uint8_t trigbufno;
 extern volatile uint32_t trigbufseq;
+extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles
+
+// CPU cycles available per ADC buffer: 216 MHz * 728 samples / 2.7 MSps (measured: 3708 buffers/s)
+#define ADCBUF_CYCLES 58240U
 
 extern unsigned int sigprev;		// number of streams let after adc thresh exceeded
 volatile extern uint16_t  sigsend;	// flag to tell udp to send sample packet
