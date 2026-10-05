@@ -374,7 +374,7 @@ void ADC_Conv_complete(void) {
 		}
 		if (detector == DETECTOR_STALTA) {
 			// STA/LTA energy detector (experiment). dc = slow baseline (EMA of buffer means), e = |x - dc|,
-			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl quiet buffers of the
+			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl buffers of the
 			// buffer-mean of e. Trigger when STA > LTA * stalta_ratio_q4 / 16. Unlike the edge detector (32-sample
 			// window high-pass) this responds to energy relative to the noise floor, not to edge sharpness, so
 			// smooth distant waveforms are not penalised. Threshold work is per buffer; per sample is ~15 ops.
@@ -404,10 +404,13 @@ void ADC_Conv_complete(void) {
 				const int32_t bufmean_q8 = (int32_t) (((bgacc - bg0) << 8) / n);
 				const uint32_t emean_q8 = (esum << 8) / n;
 				sl_dc_q8 += (bufmean_q8 - sl_dc_q8) >> 3;	// baseline follows over ~8 buffers (~2 ms)
+				// Learn the noise floor from every buffer, 4x slower on triggered ones. (Learning only from quiet
+				// buffers froze the LTA when the noise stepped up - e.g. a gain change - so every buffer triggered
+				// and it never recovered: bench sweep went to ~46 triggers/s.)
 				if (lta_q8 == 0)
 					sl_lta_q8 = emean_q8;
-				else if (!trig)	// learn the noise floor from quiet buffers only
-					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> stalta_kl;
+				else
+					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (stalta_kl + 2) : stalta_kl);
 				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
 			}
 			sl_sta_acc = sta;
