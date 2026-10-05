@@ -2578,6 +2578,14 @@ void StarLPTask(void const * argument)
 		else
 			pretrigthresh = 1;		// set the pretrigger level
 
+		// Console receive self-heal: found disarmed on the bench (RxState READY, RXNEIE clear, no error code) while
+		// characters were arriving in RDR, so the interrupt-driven receive had been lost without an error callback.
+		// Re-arm whenever it is not active; any byte already waiting in RDR is taken as soon as RXNEIE is set.
+		if (huart2.RxState == HAL_UART_STATE_READY) {
+			__HAL_UART_CLEAR_OREFLAG(&huart2);
+			HAL_UART_Receive_IT(&huart2, &con_ch, 1);
+		}
+
 #if CONSOLE_STATUS_SECS > 0
 		{	// compact status line: t1sec, triggers, thresh, pretrig thresh, gain, noise, near-misses since last line,
 			// adc->udp overruns, late (overwritten) trigger buffers, jabber count, trigger suppression countdown
