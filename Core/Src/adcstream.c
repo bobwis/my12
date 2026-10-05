@@ -30,8 +30,6 @@ uint32_t t2cap[1];  // dma writes t2 capture value on 1pps edge
 
 unsigned int dmabufno = 0;	// the last filled buffer 0 or 1
 volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is safe to read until N+1 completes)
-volatile uint8_t trigbufno = 0;		// which buffer (0/1) produced the current sigsend trigger
-volatile uint32_t trigbufseq = 0;	// adcbufseq of that buffer, so the sender can tell if DMA has since overwritten it
 // ADC_Conv_complete() cost in CPU cycles (DWT cycle counter), for the console status line:
 // isrcyc_sum/isrcyc_n give the average, isrcyc_max the peak since the status line last cleared it.
 // Budget per buffer is ADCBUF_CYCLES (adcstream.h). The early-return overrun path is not counted.
@@ -430,8 +428,7 @@ void ADC_Conv_complete(void) {
 //			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt (redundant see 331)
 		}
 		sigprev = 1;	// remember this trigger for next packet
-		trigbufno = bufno;		// tell the sender exactly which buffer triggered (not whatever dmabufno is when it runs)
-		trigbufseq = bufseq;
+		enqueue_sample_isr(buf, bufseq, &xHigherPriorityTaskWoken);	// queue this buffer now, before the DMA can refill it
 		ledhang = 15;		// 15 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
 
