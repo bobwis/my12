@@ -415,9 +415,14 @@ void ADC_Conv_complete(void) {
 			if (trig)
 				sigsend = 1;
 		}
-		if (sigsend) {
-			trigthresh += 2;
-			pretrigcnt += 201;
+		if (sigsend) {	// back off after a trigger (sigprev: the previous buffer triggered too)
+			if (sigprev == 0) {		// first buffer of a batch: gentler step, so the next buffer can still
+				trigthresh += 1;	// continue the batch; the AGC sees the same count as before
+				pretrigcnt += 201;
+			} else {				// follow-on buffers: same threshold climb as before, but half the
+				trigthresh += 2;	// AGC count, so a 4-6 buffer batch raises the threshold rather than
+				pretrigcnt += 100;	// stepping the PGA gain down (768 in 100 ms does that)
+			}
 		}
 	}
 //sigsend = ((samplecnt & 0x1ff) == 0) ? 1 : 0;			// for testing create continual spaced triggers

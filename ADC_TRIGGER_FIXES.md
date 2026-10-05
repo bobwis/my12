@@ -80,6 +80,26 @@ packet headers still carry id - 1 (header written before `adcbatchid`
 increments - unchanged, pre-existing). lightsrv5 uses the ENDSEQ batch id only
 for the status JSON `batchid` field and logs, not for pairing with samples.
 
+Also from code review during the soak: with samples queued from the ISR, the
+ISR could queue a sample between `enqueue_status()` taking an ENDSEQ's packet
+number and queuing it, putting a later-numbered sample ahead of it.
+`enqueue_status()` now takes the number and queues the item in one short
+critical section. (The out-of-order arrivals actually seen on the bench PC,
+e.g. sample 1216 before ENDSEQ 1215, are receiver-side and continue with the
+fix: samples are IP-fragmented, status packets are not, and back-to-back ones
+can be delivered swapped. lightsrv5 doesn't depend on packet order.)
+
+## 4a. Gentler back-off on the first buffer of a batch
+
+Every triggered buffer raised `trigthresh` by 2 in the ISR and added 201 to
+the AGC's 100 ms count (>768 in 100 ms steps the PGA gain down). So the buffer
+after a trigger needed a 50% bigger rise at the usual threshold (6 vs 4,
+counting trigcomp 2), and in the soak practically every batch was one packet.
+Now the first buffer of a batch raises the threshold by 1 (AGC count still
+201, so isolated noise triggers drive the AGC as before); follow-on buffers
+raise it by 2 as before but add 100, so a 4-6 buffer batch raises the
+threshold instead of costing a gain step. The jabber guard is unchanged.
+
 ## 5. Console
 
 - USART2 receive is re-armed after UART errors (`HAL_UART_ErrorCallback`) and
