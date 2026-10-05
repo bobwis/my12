@@ -40,6 +40,7 @@ typedef uint8_t byte;
 
 extern UART_HandleTypeDef huart6, huart7, huart8, huart5;
 extern void uart5_rxdone();
+extern unsigned char con_ch;	// console uart input char (main.c)
 
 UART_HandleTypeDef gpsuarttx, gpsuartrx;
 USART_TypeDef *GPSUARTRX;
@@ -777,6 +778,13 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 			if (UART5->ISR & USART_ISR_FE) // Framing Error
 				UART5->ICR = USART_ICR_FECF;
 		}
+		return;
+	}
+
+	if (huart->Instance == USART2) {			// console UART
+		// HAL aborts interrupt-driven reception on any receive error; without re-arming here,
+		// console input stays dead until reboot after the first overrun/framing/noise error
+		HAL_UART_Receive_IT(huart, &con_ch, 1);
 		return;
 	}
 
