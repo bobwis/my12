@@ -36,9 +36,9 @@ Build number deliberately unchanged (10049) for local development.
    (AGC toggle), digits (gain, AGC off) work again.
 
 ## Where we stopped
-- Phase 4 step (c) `7721270` (copy triggered buffer inside the ISR) is built but NOT yet validated.
-  Validate: flash, run `flashmeasure.py` + `udpcap.py`, check samples are sent (lt ~0) and contain
-  the stimulus (`analyze_stim.py`), and ISR load stays ~40%.
+- Phase 4 step (c) `7721270` (copy triggered buffer inside the ISR): partly validated - ISR load median
+  38% / peak 47%, late (lt) +0 over 120 s. Still to check: sent packets contain the stimulus waveform
+  (`analyze_stim.py` on a fresh `udpcap.py` capture). Detector 15 is flashed with this build.
 - Then: ENDSEQ prompt delivery (finding 4); generator re-config for noise; rate-based AGC; STA/LTA
   detector; peak selection of the best buffer per event in netsendtask().
 - Bob's original `#if 0` adcstream.c experiment is in `git stash` (stash@{0}).
