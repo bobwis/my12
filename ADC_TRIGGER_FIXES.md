@@ -92,6 +92,16 @@ for the status JSON `batchid` field and logs, not for pairing with samples.
   the last line, adc->udp overruns, late/torn ISR copies, jabber count,
   suppression countdown, ADC ISR load since the last line.
 
+## 6. LCD redraws itself after a restart
+
+After the LCD was unplugged and replugged (or reset by the framing-error
+re-init in `processnex()`), it stayed on its power-up page until the detector
+rebooted: `lcd_time()` only sends the date/"UNLOCK GPS" visibility when GPS
+lock changes, the date is only sent when the day changes, and the LCD's 0x88
+"ready" message was only printed. Both events now request `lcd_repaint()`
+(page 0, time, date, GPS, visibility), acted on in `processnex()` once the LP
+task has finished booting.
+
 ## Known residuals
 
 - `lt` (late/torn copies dropped) still increments occasionally on the bench:

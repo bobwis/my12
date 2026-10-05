@@ -56,6 +56,8 @@ volatile int lcdbright = 100;		// lcd brightness
 volatile int lcd_txblocked = 0;		// flag to stop external callers writingto the LCD
 int lastday = 0;		// the last date shown on the LCD
 uint16_t lastsec = -1;	// the last second shown on the lcd
+static uint8_t lcd_oldlocked = 0xff;	// GPS lock state last shown by lcd_time() (0xff = resend)
+static volatile uint8_t lcd_repaintreq = 0;	// LCD restarted or was re-synced: redraw page 0 (see lcd_repaint)
 
 static int trigindex = 0; // index to next save data position for trigger charts
 static int pressindex = 0; // index to next save data position for pressure charts
@@ -72,6 +74,7 @@ uint32_t lcdlen;
 char lcd_err_msg[16] = { 0 };	// lcd error message or trigger message
 
 void lcd_gps(void);
+void lcd_repaint(void);
 void lcd_init(int);
 void lcd_presscharts(void);
 void lcd_showvars(void);
@@ -792,6 +795,7 @@ int lcd_event_process(void) {
 
 			case 0x88:	// Return data notification that LCD is ready
 				printf("Nextion returned 0x88 - Ready!\n");
+				lcd_repaintreq = 1;		// it has (re)started on its power-up page: redraw ours
 				break;
 
 			case NEX_ETOUCH:
@@ -896,8 +900,16 @@ void processnex() {		// process Nextion - called at regular intervals
 		lcd_uart_init(230400);
 		lcd_init(230400);		// try to reset LCD
 		lcd_initflag = 0;		// done
+		lcd_repaintreq = 1;		// the reset put it back on its power-up page
 		osDelay(100);
 		return;
+	}
+
+	// Redraw page 0 once the LCD has restarted (unplugged/replugged, or reset by the re-init above).
+	// Not during boot: the LP task draws the "Starting..." screen and selects page 0 itself.
+	if (lcd_repaintreq && lptask_init_done && !lcd_txblocked) {
+		lcd_repaintreq = 0;
+		lcd_repaint();
 	}
 
 	lcd_rxdma();		// get any new characters received
@@ -982,7 +994,6 @@ void lcd_gps(void) {
 // send the time to t0.txt
 void lcd_time() {
 	char str[16], errmsg[64];
-	static uint8_t oldlocked = 0xff;
 
 	if (lcd_err_msg[0] != '\0') {
 		setlcddim(99);
@@ -996,7 +1007,7 @@ void lcd_time() {
 		strftime(sbuffer, sizeof(sbuffer), "%H:%M:%S", &timeinfo);
 		setlcdtext("t0.txt", sbuffer);
 
-		if (gpslocked != oldlocked) {
+		if (gpslocked != lcd_oldlocked) {
 			if (gpslocked) {
 				writelcdcmd("vis t3,0");	// hide warning
 				writelcdcmd("vis t1,1");	// show date
@@ -1006,9 +1017,25 @@ void lcd_time() {
 				setlcdtext("t3.txt", str);
 				writelcdcmd("vis t3,1");	// show warning
 			}
-			oldlocked = gpslocked;
+			lcd_oldlocked = gpslocked;
 		}
 	}
+}
+
+// Redraw page 0 from scratch. After a restart the LCD shows its power-up page with default text, but
+// lcd_time() only sends the date/warning visibility when GPS lock changes and the LP loop only sends
+// the date when the day changes, so without this the display stayed on its defaults until a reboot.
+void lcd_repaint(void) {
+	printf("LCD: redrawing page 0\n");
+	writelcdcmd("page 0");
+	lcd_currentpage = 0;
+	our_currentpage = 0;
+	lcd_oldlocked = 0xff;	// resend the GPS-lock warning and date visibility
+	localepochtime = epochtime + (time_t) (10 * 60 * 60);	// as lcd_time(), so lcd_date() has today's date
+	timeinfo = *localtime(&localepochtime);
+	lcd_time();
+	lcd_date();
+	lcd_gps();
 }
 
 // send the date to t1.txt (assumes timeinfo is current)
