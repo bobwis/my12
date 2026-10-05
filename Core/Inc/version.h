@@ -60,6 +60,11 @@
 #define STAT_TIME 120
 #endif
 
+// One-line console status every N seconds (0 = off). Independent of TESTING.
+// Each line is ~80 bytes of blocking UART output from the LP task (~7 ms),
+// which also runs the 10 ms / 100 ms AGC timing, so keep this >= 1.
+#define CONSOLE_STATUS_SECS 1
+
 // CPU half clock speed
 #define  CCLK  108000000
 

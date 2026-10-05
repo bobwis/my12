@@ -18,6 +18,7 @@ extern int dnslookup(char *name, struct ip4_addr *ip);
 
 #define UDP_PORT_NO 5000
 extern TaskHandle_t xTaskToNotify;
+extern uint32_t trigbuflate;	// triggered ADC buffers dropped because DMA had overwritten them before they were copied
 
 // status packet types
 #define TIMED 2
