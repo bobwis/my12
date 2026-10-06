@@ -39,7 +39,7 @@ volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
 volatile uint8_t detector = DETECTOR_EDGE;
-volatile uint8_t despike = 0;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
+volatile uint8_t despike = 3;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
 volatile uint16_t despike_k = 60;			// mode 2: |raw - median| above this marks a spike (ADC counts)
 volatile uint8_t despike_n = 3;				// mode 2: samples held after a spike (covers its ringing)
 static uint16_t despike_hv = 2048;			// mode 2: last good output, held while blanking
