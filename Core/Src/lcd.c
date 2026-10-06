@@ -49,9 +49,11 @@ volatile uint8_t lcdtouched = 0;		// this gets set to 0xff when an autonomous ev
 volatile uint8_t lcdpevent = 0;		// lcd reported a page. set to 0xff for new report
 static uint32_t lcd_dim_due = 0;			// HAL tick at which the backlight drops to the dim level (lcd_wake)
 static uint8_t lcd_dimmed = 0;				// 1 = backlight is at the dim level
-#define LCDQ_SYS0 0
-#define LCDQ_DIMS 1
-static volatile uint8_t lcd_query = LCDQ_SYS0;	// which "get" the next numeric (0x71) reply answers
+#define LCDQ_NONE 0
+#define LCDQ_SYS0 1
+#define LCDQ_DIMS 2
+static volatile uint8_t lcd_query = LCDQ_NONE;	// which "get" the next numeric (0x71) reply answers
+static volatile uint8_t lcd_int_got;		// set when that reply has been decoded
 static volatile int lcd_dims_rx = -1;		// reply to "get dims"
 unsigned int rxtimeout = 0;			// receive timeout, reset in lcd_getch
 int txdmadone = 0;			// Tx DMA complete flag (1=done, 0=waiting for complete)
@@ -318,6 +320,20 @@ int lcd_puts(char *str) {
 	return (stat);
 }
 
+// wait up to ms for the numeric (0x71) reply to the pending get; 0 = got it, -1 = timeout
+int lcd_waitint(uint32_t ms) {
+	const uint32_t start = HAL_GetTick();
+
+	processnex();
+	while (!lcd_int_got) {
+		if ((HAL_GetTick() - start) > ms)
+			return (-1);
+		osDelay(1);
+		processnex();
+	}
+	return (0);
+}
+
 // read the response to a general command from the lcd (not one needing return values)
 // returns 0xff on timeout
 // assumes 	lcdstatus has been prearmed with 0xff prior to call
@@ -469,13 +485,14 @@ void lcd_wake(void) {
 // Read the idle level the LCD keeps across power cycles (dims). Over 90 (incl. the factory 100) counts as never set.
 void lcd_getdims(void) {
 	lcd_txblocked = 0;
-	lcd_clearrxbuf();
 	lcd_dims_rx = -1;
+	lcd_int_got = 0;
 	lcd_query = LCDQ_DIMS;
 	lcdstatus = 0xff;
 	writelcdcmd("get dims");
-	lcd_getlack();
-	lcd_query = LCDQ_SYS0;
+	lcd_waitint(LCD_GET_MS);
+	lcd_query = LCDQ_NONE;
+	lcd_txblocked = 0;
 	lcd_dimlevel = ((lcd_dims_rx >= LCD_DIM_MIN) && (lcd_dims_rx <= 90)) ? lcd_dims_rx : LCD_DIM_DEFAULT;
 	printf("LCD idle brightness %d, bright %d (stored %d)\n", lcd_dimlevel, lcd_brightlevel(), lcd_dims_rx);
 }
@@ -544,12 +561,18 @@ int lcd_getsys0(void) {
 //	printf("Getting SYS0\n");
 	lcd_txblocked = 0;
 	lcd_clearrxbuf();
+	lcd_int_got = 0;
+	lcd_query = LCDQ_SYS0;
 	lcdstatus = 0xff;
 	result = writelcdcmd("get sys0");
 	if (result == -1) {		// send err
 		printf("getsys0: Cmd failed\n\r");
 	}
-	result = lcd_getlack();		// wait for a response
+	result = lcd_waitint(LCD_GET_MS);	// wait for the sys0 reply itself, not just any packet
+	lcd_query = LCDQ_NONE;
+	if (result == -1) {
+		printf("getsys0: no reply\n");
+	}
 
 	lcd_txblocked = 0;		// allow others sending to the LCD
 //	printf("getsys0: returned 0x%u\n", lcd_sys0);
@@ -822,13 +845,17 @@ int lcd_event_process(void) {
 			case 0x71:	// This is an integer variable from a "Get" command
 				if (lcd_query == LCDQ_DIMS) {	// answer to lcd_getdims()
 					lcd_dims_rx = decode_int((char*) eventbuffer);
-					lcd_query = LCDQ_SYS0;
+				} else if (lcd_query == LCDQ_SYS0) {	// answer to lcd_getsys0()
+					lcd_sys0 = decode_int((char*) eventbuffer);
+					if (nex_model[0] != '\0') {
+						printf("Nextion LCD's Firmware build: %d\n", lcd_sys0);
+					}
+				} else {
+					printf("LCD: unexpected get reply ignored\n");
 					break;
 				}
-				lcd_sys0 = decode_int((char*) eventbuffer);
-				if (nex_model[0] != '\0') {
-					printf("Nextion LCD's Firmware build: %d\n", lcd_sys0);
-				}
+				lcd_query = LCDQ_NONE;
+				lcd_int_got = 1;
 				break;
 
 			case 0x88:	// Return data notification that LCD is ready

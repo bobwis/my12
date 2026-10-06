@@ -37,6 +37,15 @@ today's server (absent = firmware default):
   advertises 10051. Detector 15 updated over the air and boots 10051 from bank A.
 - Quick soak inconclusive: it ran straight after the OTA reboot, likely before GPS lock. Rerun before merging to master.
 
+## 10052 (same day): LCD reload loop fix
+10051 read the LCD's dims straight after its sys0 (LCD build) at boot. Both reads accepted any LCD packet as the
+answer, and the dims read cleared the receive buffer, so a slow LCD's sys0 reply was lost. lcd_sys0 then stayed
+-1, the unit reflashed the LCD and rebooted it again at every 15-minute poll (detector 18: "LCD server build
+10036, lcd has -1"). Now each get waits up to 500 ms for its own 0x71 reply, an unrequested reply is ignored,
+and lcdupneeded() asks for sys0 again (and skips the update) when it's still unknown.
+Images: A CRC 0xb0d7ebce, I CRC 0xd05dd52b (305056 bytes each).
+Stopgap on the server for units still on 10051: lbl:0 turns off the LCD build check.
+
 ## Known open items
 lwIP raw API calls without the core lock (`sendudp()`, `www.c` client) are still to be fixed, and so is the heap-check
 latency (see `TRIGGER_EXPERIMENTS.md`).

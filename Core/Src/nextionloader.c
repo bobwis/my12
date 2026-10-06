@@ -291,6 +291,12 @@ int nxt_check() {
 
 int lcdupneeded() {
 	if (srvlcdbld) {		// not 0 from the server
+		if (lcd_sys0 == -1)		// no reply to "get sys0" yet: ask again rather than reflash
+			lcd_getsys0();
+		if (lcd_sys0 == -1) {
+			printf("LCD build unknown (no reply), update skipped\n");
+			return (0);
+		}
 		if ((lcd_sys0 & 0xffff) != srvlcdbld) 	{ // this LCD doesent match the build presented by the server
 			printf("LCD server build %d, lcd has %d\n",srvlcdbld,lcd_sys0);
 			return (1);
