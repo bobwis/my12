@@ -2597,12 +2597,12 @@ void StarLPTask(void const * argument)
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
-				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu\n", (unsigned long) t1sec,
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu f=%u\n", (unsigned long) t1sec,
 						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
 						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
 						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
 						(unsigned) sigsuppress, (unsigned long) avgpct, (unsigned long) (isrmax * 100U / ADCBUF_CYCLES),
-						(unsigned) detector, (unsigned long) stalta_peak16);
+						(unsigned) detector, (unsigned long) stalta_peak16, (unsigned) despike);
 				lastnearmiss = pretrigcnt;
 				lastisrsum = isrsum;
 				lastisrn = isrn;
@@ -2635,6 +2635,11 @@ void StarLPTask(void const * argument)
 
 			if (inch == 0x04) {  // control D
 				printstatus(2);
+			}
+
+			if (inch == 0x06) {  // control F: toggle the 3-sample median impulse filter (experiment)
+				despike = !despike;
+				printf("Despike filter %s\n", despike ? "ON" : "OFF");
 			}
 
 			if (inch == 0x14) {  // control T: toggle trigger detector (experiment)

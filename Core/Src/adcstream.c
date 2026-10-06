@@ -39,6 +39,9 @@ volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
 volatile uint8_t detector = DETECTOR_EDGE;
+volatile uint8_t despike = 0;				// 1 = 3-sample median before the edge detector (console Ctrl-F)
+static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of the previous buffer
+static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
 volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64 = 4.0x)
 volatile uint32_t stalta_ks = 6;		// STA time constant 2^ks samples (6 = 64 samples = 24 us at 2.7 MSps)
 volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
@@ -433,9 +436,30 @@ void ADC_Conv_complete(void) {
 			uint32_t nearmiss = 0;
 			uint16_t trig = 0;
 
+			// Impulse filter (experiment): a separate pre-pass so the hot loop below keeps its register allocation.
+			// 3-sample median = each sample clamped between the previous two: removes single-sample spikes
+			// (switching-converter interference, detector 13) and barely changes a stroke, which rises over many samples.
+			const uint16_t *src = &(*adcbuf16)[0];
+			if (despike) {
+				uint16_t a = despike_a, b = despike_b;
+				for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+					const uint16_t r = src[i];
+					const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
+					despike_buf[i] = (r < lo) ? lo : ((r > hi) ? hi : r);
+					a = b;
+					b = r;
+				}
+				despike_a = a;
+				despike_b = b;
+				src = despike_buf;
+			} else {
+				despike_a = src[(ADCBUFSIZE >> 1) - 2];
+				despike_b = src[(ADCBUFSIZE >> 1) - 1];
+			}
+
 			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
 				j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
-				thissamp = (*adcbuf16)[i];
+				thissamp = src[i];
 
 				bgacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
 
