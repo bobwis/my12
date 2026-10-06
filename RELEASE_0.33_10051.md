@@ -32,6 +32,11 @@ today's server (absent = firmware default):
 - STA/LTA detector, off by default (console Ctrl-T; status `d=`, `r=`).
 - The console status line is every 60 s (`CONSOLE_STATUS_SECS`; 1 s on the bench).
 
+## Deployment status (2026-10-07)
+- Images A (CRC 0x0e4eebe1) and I (0x05fa46f2) published on b2 as my12-{A,I}{11,22}-10051.bin; detectorsrv9
+  advertises 10051. Detector 15 updated over the air and boots 10051 from bank A.
+- Quick soak inconclusive: it ran straight after the OTA reboot, likely before GPS lock. Rerun before merging to master.
+
 ## Known open items
 lwIP raw API calls without the core lock (`sendudp()`, `www.c` client) are still to be fixed, and so is the heap-check
 latency (see `TRIGGER_EXPERIMENTS.md`).
