@@ -39,7 +39,11 @@ volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
 volatile uint8_t detector = DETECTOR_EDGE;
-volatile uint8_t despike = 0;				// 1 = 3-sample median before the edge detector (console Ctrl-F)
+volatile uint8_t despike = 0;				// 0 off, 1 = 3-sample median, 2 = median + blanking (console Ctrl-F cycles)
+volatile uint16_t despike_k = 60;			// mode 2: |raw - median| above this marks a spike (ADC counts)
+volatile uint8_t despike_n = 3;				// mode 2: samples held after a spike (covers its ringing)
+static uint16_t despike_hv = 2048;			// mode 2: last good output, held while blanking
+static uint8_t despike_hold = 0;
 static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of the previous buffer
 static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
 volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64 = 4.0x)
@@ -442,12 +446,39 @@ void ADC_Conv_complete(void) {
 			const uint16_t *src = &(*adcbuf16)[0];
 			if (despike) {
 				uint16_t a = despike_a, b = despike_b;
-				for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-					const uint16_t r = src[i];
-					const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
-					despike_buf[i] = (r < lo) ? lo : ((r > hi) ? hi : r);
-					a = b;
-					b = r;
+				if (despike == 1) {
+					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+						const uint16_t r = src[i];
+						const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
+						despike_buf[i] = (r < lo) ? lo : ((r > hi) ? hi : r);
+						a = b;
+						b = r;
+					}
+				} else {
+					// Mode 2: as mode 1, and when a sample stands out from its median by more than despike_k, hold the
+					// last good value for despike_n more samples so the spike's ringing doesn't reach the edge detector.
+					const int32_t k = despike_k;
+					const uint8_t n = despike_n;
+					uint16_t hv = despike_hv;
+					uint8_t hold = despike_hold;
+					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+						const uint16_t r = src[i];
+						const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
+						const uint16_t m = (r < lo) ? lo : ((r > hi) ? hi : r);
+						if ((int32_t) r - m > k || (int32_t) m - r > k)
+							hold = n + 1;
+						if (hold) {
+							hold--;
+							despike_buf[i] = hv;
+						} else {
+							despike_buf[i] = m;
+							hv = m;
+						}
+						a = b;
+						b = r;
+					}
+					despike_hv = hv;
+					despike_hold = hold;
 				}
 				despike_a = a;
 				despike_b = b;
