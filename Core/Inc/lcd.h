@@ -10,7 +10,11 @@
 
 #define LCDRXBUFSIZE (1<<7)		// LCD serial Rx buffer (power of two)
 #define DMARXBUFSIZE (1<<7)		// DMA serial Rx buffer (power of two)
-#define DIMTIME 60000		// Dim the LCD after activity time
+#define LCD_DIM_DEFAULT 24		// idle backlight level when the LCD has none stored (dims)
+#define LCD_DIM_MIN 1			// lowest idle level the slider can set (never black)
+#define LCD_SLIDER_MIN 15		// the LCD design's slider bottoms out about here; firmware maps 15..100 -> idle 1..100
+#define LCD_BRIGHT_OFFSET 66	// bright level = idle + this, capped at 100 (idle 24 -> 90, idle 34 -> 100)
+#define LCD_BRIGHT_MS 10000		// stay bright this long after an alert / touch, then back to idle
 
 #define COMMAND_TIMEOUT_TICKS 20	//  general command timeout
 
@@ -69,6 +73,8 @@ void lcd_starting();
 int writelcdcmd(char *str);
 void lcd_showvars(void);
 void init_nextion();
+void lcd_wake(void);
+void lcd_getdims(void);
 void lcd_startdl(int filesize);
 int lcd_writeblock(uint8_t *buf, int len);
 

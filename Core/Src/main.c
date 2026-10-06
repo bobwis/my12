@@ -2685,16 +2685,20 @@ void StarLPTask(void const * argument)
 //		if (globaladcnoise == 0)
 //			globaladcnoise = statuspkt.adcbase;		// dont allow zero peaks
 
-		if (trigs != statuspkt.trigcount) {		// another tigger(s) has occured
-			trigs = statuspkt.trigcount;
+		if (alertreq) {		// a triggered buffer was big enough to be a local strike: overlay + tone
+			alertreq = 0;
 			strcpy(lcd_err_msg, "\"TRIGGER\"");
-
-//			HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// start audio buzz - broken on splat 1
-///			HAL_TIM_Base_Start(&htim7);	// audio synth sampling interval timer
 			if (soundenabled) {
 				HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t*) phaser_wav, sizeof(phaser_wav),
 				DAC_ALIGN_8B_R /*DAC_ALIGN_12B_R*/);		// start phaser noise
 			}
+		}
+
+		if (trigs != statuspkt.trigcount) {		// another tigger(s) has occured
+			trigs = statuspkt.trigcount;
+
+//			HAL_TIM_OC_Start (&htim4, TIM_CHANNEL_3);		// start audio buzz - broken on splat 1
+///			HAL_TIM_Base_Start(&htim7);	// audio synth sampling interval timer
 
 #if 1
 			while (!(xSemaphoreTake(ssicontentHandle, (TickType_t ) 1) == pdTRUE)) {// take the ssi generation semaphore (portMAX_DELAY == infinite)
@@ -2729,6 +2733,14 @@ void StarLPTask(void const * argument)
 		/**********************  Every 100mSec   *******************************/
 
 		if ((tenmstimer + 3) % 10 == 0) {
+			{	// alert level in ADC counts at the current PGA gain (gains x10: 1,2,4,5,8,10,16,32, then x3.16 boost)
+				static const uint16_t gain10[10] = { 10, 20, 40, 50, 80, 100, 160, 320, 506, 1012 };
+				const int g = (pgagain < 0) ? 0 : ((pgagain > 9) ? 9 : pgagain);
+				uint32_t c = (alert_mv * 4096UL * gain10[g]) / (3300UL * 10UL);
+				if (c > 1900)
+					c = 1900;	// just below clipping, so a saturated signal always alerts
+				alert_counts = (uint16_t) ((c < 1) ? 1 : c);
+			}
 
 #ifdef SPLAT1
 

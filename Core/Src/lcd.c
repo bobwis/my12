@@ -47,12 +47,17 @@ volatile uint8_t our_currentpage = 0;		// The current page number we think we ar
 volatile uint8_t lcdstatus = 0;		// response code, set to 0xff for not set
 volatile uint8_t lcdtouched = 0;		// this gets set to 0xff when an autonomous event or cmd reply happens
 volatile uint8_t lcdpevent = 0;		// lcd reported a page. set to 0xff for new report
-unsigned int dimtimer = DIMTIME;	// lcd dim imer
+static uint32_t lcd_dim_due = 0;			// HAL tick at which the backlight drops to the dim level (lcd_wake)
+static uint8_t lcd_dimmed = 0;				// 1 = backlight is at the dim level
+#define LCDQ_SYS0 0
+#define LCDQ_DIMS 1
+static volatile uint8_t lcd_query = LCDQ_SYS0;	// which "get" the next numeric (0x71) reply answers
+static volatile int lcd_dims_rx = -1;		// reply to "get dims"
 unsigned int rxtimeout = 0;			// receive timeout, reset in lcd_getch
 int txdmadone = 0;			// Tx DMA complete flag (1=done, 0=waiting for complete)
 volatile int lcd_initflag = 0;		// lcd and or UART needs re-initilising
 volatile int lcduart_error = 0;		// lcd uart last err
-volatile int lcdbright = 100;		// lcd brightness
+volatile int lcd_dimlevel = LCD_DIM_DEFAULT;	// idle backlight level: brightness slider, persisted in the LCD (dims)
 volatile int lcd_txblocked = 0;		// flag to stop external callers writingto the LCD
 int lastday = 0;		// the last date shown on the LCD
 uint16_t lastsec = -1;	// the last second shown on the lcd
@@ -75,6 +80,7 @@ char lcd_err_msg[16] = { 0 };	// lcd error message or trigger message
 
 void lcd_gps(void);
 void lcd_repaint(void);
+void lcd_clearrxbuf();
 void lcd_init(int);
 void lcd_presscharts(void);
 void lcd_showvars(void);
@@ -441,10 +447,37 @@ int setlcdbin(char *id, unsigned long value) {
 
 // set the LCD bracklight brightness
 void setlcddim(unsigned int level) {
-	dimtimer = DIMTIME;
-	if (level > 99)
-		level = 99;
+	if (level > 100)
+		level = 100;
 	setlcdbin("dim", level);
+}
+
+// Bright level: the idle (slider) level + LCD_BRIGHT_OFFSET, capped at 100 - the default idle 24 gives 90.
+static int lcd_brightlevel(void) {
+	const int b = lcd_dimlevel + LCD_BRIGHT_OFFSET;
+	return ((b > 100) ? 100 : b);
+}
+
+// Backlight to the bright level now; processnex() returns it to the idle level after LCD_BRIGHT_MS.
+// Called on a strike alert, any touch, a page change, LCD (re)start and boot.
+void lcd_wake(void) {
+	setlcddim(lcd_brightlevel());
+	lcd_dim_due = HAL_GetTick() + LCD_BRIGHT_MS;
+	lcd_dimmed = 0;
+}
+
+// Read the idle level the LCD keeps across power cycles (dims). Over 90 (incl. the factory 100) counts as never set.
+void lcd_getdims(void) {
+	lcd_txblocked = 0;
+	lcd_clearrxbuf();
+	lcd_dims_rx = -1;
+	lcd_query = LCDQ_DIMS;
+	lcdstatus = 0xff;
+	writelcdcmd("get dims");
+	lcd_getlack();
+	lcd_query = LCDQ_SYS0;
+	lcd_dimlevel = ((lcd_dims_rx >= LCD_DIM_MIN) && (lcd_dims_rx <= 90)) ? lcd_dims_rx : LCD_DIM_DEFAULT;
+	printf("LCD idle brightness %d, bright %d (stored %d)\n", lcd_dimlevel, lcd_brightlevel(), lcd_dims_rx);
 }
 
 // request the current lcd page
@@ -787,6 +820,11 @@ int lcd_event_process(void) {
 				break;
 
 			case 0x71:	// This is an integer variable from a "Get" command
+				if (lcd_query == LCDQ_DIMS) {	// answer to lcd_getdims()
+					lcd_dims_rx = decode_int((char*) eventbuffer);
+					lcd_query = LCDQ_SYS0;
+					break;
+				}
 				lcd_sys0 = decode_int((char*) eventbuffer);
 				if (nex_model[0] != '\0') {
 					printf("Nextion LCD's Firmware build: %d\n", lcd_sys0);
@@ -799,14 +837,19 @@ int lcd_event_process(void) {
 				break;
 
 			case NEX_ETOUCH:
+				lcd_wake();		// any touch brightens the display
 				printf("lcd_event_process: Got Touch event %02x %02x %02x\n", (unsigned int)eventbuffer[1], (unsigned int)eventbuffer[2],
 						(unsigned int)eventbuffer[3]);
 
-				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 6)) {		// p4 id 6 brightness slider
-					lcdbright = eventbuffer[3];
-					if (lcdbright < 14)
-						lcdbright = 14;		// prevent black
-					setlcddim(lcdbright);
+				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 6)) {		// p4 id 6 brightness slider = idle (dim) level
+					char cmd[16];
+					// the slider can't go below about LCD_SLIDER_MIN (set in the LCD design): stretch that range to 1..100
+					const int sv = eventbuffer[3];
+					lcd_dimlevel = (sv <= LCD_SLIDER_MIN) ? LCD_DIM_MIN : LCD_DIM_MIN + ((sv - LCD_SLIDER_MIN) * (100 - LCD_DIM_MIN)) / (100 - LCD_SLIDER_MIN);
+					sprintf(cmd, "dims=%d", lcd_dimlevel);	// persist in the LCD across power cycles
+					writelcdcmd(cmd);
+					setlcddim(lcd_dimlevel);	// show the level just set; the next alert or touch brightens again
+					lcd_dimmed = 1;
 				}
 
 				if ((eventbuffer[1] == 4) && (eventbuffer[2] == 7)) {		// p4 reset button
@@ -834,7 +877,7 @@ int lcd_event_process(void) {
 
 			case NEX_EPAGE:		// got page change event
 //				printf("lcd_event_process: Got Page event, OldPage=%d, NewPage=%d\n", lcd_currentpage, eventbuffer[1]);
-				setlcddim(lcdbright);
+				lcd_wake();
 				if (((lcd_pagechange(eventbuffer[1]) < 0) || (lcd_pagechange(eventbuffer[1]) > 5)))	// page number limits
 					printf("lcd_event_process: invalid page received %d\n", lcd_pagechange(eventbuffer[1]));
 				else
@@ -860,7 +903,6 @@ int lcd_event_process(void) {
 // processnex   process LCD errors and read from LCD
 void processnex() {		// process Nextion - called at regular intervals
 	volatile int result;
-	static int i;
 
 	switch (lcduart_error) {
 	case HAL_UART_ERROR_NONE:
@@ -922,15 +964,9 @@ void processnex() {		// process Nextion - called at regular intervals
 	(void) result;
 #endif
 
-	if (dimtimer > 50000) {
-		dimtimer--;
-	} else {
-		dimtimer = 60000;
-		i = lcdbright - (((lcdbright >> 1) + (lcdbright >> 4)));		// - 62.5% dim
-		if (i < 2)
-			i = 2;	// prevent black
-//		printf("Auto Dimming now %d to %d\n", lcdbright, i);
-		setlcddim(i);
+	if (!lcd_dimmed && ((int32_t) (HAL_GetTick() - lcd_dim_due) >= 0)) {	// bright period over: back to idle
+		setlcddim(lcd_dimlevel);
+		lcd_dimmed = 1;
 	}
 }
 
@@ -996,8 +1032,7 @@ void lcd_time() {
 	char str[16], errmsg[64];
 
 	if (lcd_err_msg[0] != '\0') {
-		setlcddim(99);
-		dimtimer = 60000;
+		lcd_wake();		// alert / error message: brighten, dim again later
 		sprintf(errmsg, "xstr 21,17,442,110,7,0,65504,1,1,1,%s", lcd_err_msg);
 		writelcdcmd(errmsg);
 		lcd_err_msg[0] = '\0';
@@ -1036,6 +1071,7 @@ void lcd_repaint(void) {
 	lcd_time();
 	lcd_date();
 	lcd_gps();
+	lcd_wake();
 }
 
 // send the date to t1.txt (assumes timeinfo is current)
@@ -1281,12 +1317,17 @@ void lcd_pressplot() {
 
 // refresh the entire control page on the lcd
 void lcd_controls(void) {
+	char sl[24];
+
+	// put the brightness slider (page 4, id 6) where the current idle level is (inverse of the event mapping)
+	sprintf(sl, "b[6].val=%d", LCD_SLIDER_MIN + ((lcd_dimlevel - LCD_DIM_MIN) * (100 - LCD_SLIDER_MIN)) / (100 - LCD_DIM_MIN));
 	char str[130];
 
 	osDelay(100);
 	if (our_currentpage == 4) {		// if currently displaying on LCD
 		setlcdtext("t0.txt", "Sound");
 		setlcdtext("t1.txt", "LEDS");
+		writelcdcmd(sl);		// slider position = current idle level
 //		setlcdtext("t2.txt", "LCD Brightness");
 //	sprintf(str,"%s Control Server IP: %lu.%lu.%lu.%lu",  HTTP_CONTROL_SERVER, ip & 0xff, (ip & 0xff00) >> 8,
 //			(ip & 0xff0000) >> 16, (ip & 0xff000000) >> 24);
@@ -1377,6 +1418,8 @@ void init_nextion() {
 	osDelay(100);
 	lcd_getsys0();
 	processnex();
-
+	
+	lcd_getdims();		// user brightness stored in the LCD
+	lcd_wake();
 }
 

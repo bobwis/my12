@@ -64,6 +64,11 @@ extern unsigned int sigprev;		// number of streams let after adc thresh exceeded
 volatile extern uint16_t  sigsend;	// flag to tell udp to send sample packet
 extern uint16_t trigthresh;	// dynamic trigger threshold
 
+#define ALERT_MV_DEFAULT 100		// local-strike alert level, mV at the PGA input (remote setting "al")
+extern volatile uint32_t alert_mv;
+extern volatile uint16_t alert_counts;
+extern volatile uint8_t alertreq;
+extern volatile uint16_t alertpeak;
 extern uint32_t globaladcavg;		// adc global average level over 100-200msec
 extern uint32_t t2avg;				// cpu clock trim variable
 

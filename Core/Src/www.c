@@ -243,44 +243,142 @@ void init_httpd_ssi() {
 	http_set_ssi_handler(tag_callback, tagname, 21);	// was 32
 }
 
-///////////////////////////////////////////////////////
-/// parse p2 params
-// return 0 for success
-//////////////////////////////////////////////////////
-int parsep2(char *buf, char *match, int type, void *value) {
-	int i, j;
-	char *pch;
-	uint32_t *val;
+/* ---------------------------------------------------------------------------------------------------------------------------- */
+// Remote settings from the control server
+/* ---------------------------------------------------------------------------------------------------------------------------- */
+// The server's reply is "<sn> <udp_target> <p1> {key:value,key:value,...}" (no spaces inside the braces).
+// Every key below is matched exactly; unknown keys are ignored and absent keys leave the variable unchanged, so new
+// firmware works with an older server and vice versa. To add a setting, add a row: key, type, variable, range.
+// Out-of-range values are rejected (and logged); rows with log=1 are printed only when the value changes.
 
-	i = 0;
-	j = 0;
-	val = value;
-	while ((buf[i]) && (buf[i] != '}')) {
-		if (buf[i++] == match[j]) {
-			j++;
-		} else {
-			j = 0;
-		}
-		if (j > 0) {		// started matching something
-			if (buf[i] == ':') {		// end of match
-				i++;
-				if (type == 1) {		// looking for a string
-					j = 0;
-					pch = value;
-					while ((buf[i]) && ((isalnum((unsigned char) buf[i])) || (buf[i] == '.') || (buf[i] == '_'))) {
-						pch[j++] = buf[i++];
-					}
-					pch[j] = 0;
-					return ((j > 0) ? 0 : -1);
-				} else if (type == 2) { // uint32_t base 10 string
-					return ((sscanf(&buf[i], "%lu", val) == 1) ? 0 : -1);
-				} else if (type == 3) { // uint32_t hex string
-					return ((sscanf(&buf[i], "%lx", val) == 1) ? 0 : -1);
-				}
-			}
-		}
+enum { RS_U8 = 1, RS_U16, RS_U32, RS_HEX32, RS_STR };
+
+typedef struct {
+	const char *key;		// key in the server's {key:value,...} list
+	uint8_t type;			// RS_U8/U16/U32 decimal, RS_HEX32 hex, RS_STR [A-Za-z0-9._]
+	void *var;				// destination variable
+	uint32_t min, max;		// numeric: accepted range; RS_STR: max = buffer size
+	uint8_t log;			// print when the value changes
+	const char *name;		// console label
+} remote_setting_t;
+
+static uint32_t rs_crc1, rs_crc2, rs_n2;	// firmware image checksums etc. from the last reply
+static char rs_s1[16];
+
+static const remote_setting_t remote_settings[] = {
+	// firmware and LCD updates (the server advertises a build)
+	{ "fw",   RS_STR,   fwfilename,          0, sizeof(fwfilename), 0, "Firmware file" },
+	{ "bld",  RS_U32,   &newbuild,           0, 0xffff,     0, "Firmware build" },
+	{ "crc1", RS_HEX32, &rs_crc1,            0, 0xffffffff, 0, "crc1" },
+	{ "crc2", RS_HEX32, &rs_crc2,            0, 0xffffffff, 0, "crc2" },
+	{ "srv",  RS_STR,   loaderhost,          0, sizeof(loaderhost), 1, "Loader host" },
+	{ "n2",   RS_HEX32, &rs_n2,              0, 0xffffffff, 0, "n2" },
+	{ "s1",   RS_STR,   rs_s1,               0, sizeof(rs_s1), 0, "s1" },
+	{ "lcd",  RS_STR,   lcdfile,             0, sizeof(lcdfile), 0, "LCD file" },
+	{ "lbl",  RS_U32,   &srvlcdbld,          0, 0xffff,     0, "LCD build" },
+	{ "siz",  RS_U32,   &lcdlen,             0, 0x1000000,  0, "LCD file size" },
+	// detection and display
+	{ "tt",   RS_U32,   (void*) &trigcomp,   0, 4049,       1, "Trigger level modifier" },
+	{ "pt",   RS_U32,   &polltime,           1, 900,        1, "Poll interval modifier" },
+	{ "al",   RS_U32,   (void*) &alert_mv,   1, 10000,      1, "Alert level mV" },
+	{ "dsp",  RS_U8,    (void*) &despike,    0, 3,          1, "Impulse filter mode" },
+	{ "dsk",  RS_U16,   (void*) &despike_k,  1, 4095,       1, "Impulse filter threshold" },
+	{ "dsn",  RS_U8,    (void*) &despike_n,  0, 20,         1, "Impulse filter hold" },
+};
+#define RS_COUNT (sizeof(remote_settings) / sizeof(remote_settings[0]))
+
+// Value of "key:" in the list as a whole key (not part of a longer key), or NULL.
+static const char* rs_find(const char *list, const char *key) {
+	const size_t n = strlen(key);
+	const char *p;
+
+	for (p = list; *p && (*p != '}'); p++) {
+		if (((p == list) || !(isalnum((unsigned char) p[-1]) || (p[-1] == '_'))) && (strncmp(p, key, n) == 0) && (p[n] == ':'))
+			return (p + n + 1);
 	}
-	return (-1);
+	return (NULL);
+}
+
+static uint32_t rs_read(const remote_setting_t *s) {
+	switch (s->type) {
+	case RS_U8:
+		return (*(volatile uint8_t*) s->var);
+	case RS_U16:
+		return (*(volatile uint16_t*) s->var);
+	default:
+		return (*(volatile uint32_t*) s->var);
+	}
+}
+
+static void rs_write(const remote_setting_t *s, uint32_t v) {
+	switch (s->type) {
+	case RS_U8:
+		*(volatile uint8_t*) s->var = (uint8_t) v;
+		break;
+	case RS_U16:
+		*(volatile uint16_t*) s->var = (uint16_t) v;
+		break;
+	default:
+		*(volatile uint32_t*) s->var = v;
+		break;
+	}
+}
+
+// Apply every key present in list ("key:value,..." up to '}'). Returns a bitmask of the rows found and valid.
+static uint32_t remote_settings_apply(const char *list) {
+	uint32_t found = 0;
+	unsigned int i;
+
+	for (i = 0; i < RS_COUNT; i++) {
+		const remote_setting_t *s = &remote_settings[i];
+		const char *v = rs_find(list, s->key);
+		if (v == NULL)
+			continue;
+		if (s->type == RS_STR) {
+			char tmp[64];
+			size_t j = 0;
+			while ((j + 1 < s->max) && (j + 1 < sizeof(tmp)) && (isalnum((unsigned char) v[j]) || (v[j] == '.') || (v[j] == '_'))) {
+				tmp[j] = v[j];
+				j++;
+			}
+			tmp[j] = '\0';
+			if (j == 0)
+				continue;
+			if (s->log && strcmp(tmp, (char*) s->var))
+				printf("Server -> %s: %s\n", s->name, tmp);
+			strcpy((char*) s->var, tmp);
+		} else {
+			char *end;
+			const uint32_t val = strtoul(v, &end, (s->type == RS_HEX32) ? 16 : 10);
+			if (end == v)
+				continue;
+			if ((val < s->min) || (val > s->max)) {
+				printf("Server -> %s %lu out of range %lu..%lu, ignored\n", s->name, (unsigned long) val, (unsigned long) s->min,
+						(unsigned long) s->max);
+				continue;
+			}
+			if (s->log && (rs_read(s) != val))
+				printf("Server -> %s %lu\n", s->name, (unsigned long) val);
+			rs_write(s, val);
+		}
+		found |= (1UL << i);
+	}
+	return (found);
+}
+
+// 1 if every key in keys[] (NULL terminated) was found by the last remote_settings_apply()
+static int rs_all_found(uint32_t found, const char *const keys[]) {
+	unsigned int i;
+	int k;
+
+	for (k = 0; keys[k]; k++) {
+		for (i = 0; i < RS_COUNT; i++)
+			if (strcmp(remote_settings[i].key, keys[k]) == 0)
+				break;
+		if ((i == RS_COUNT) || !(found & (1UL << i)))
+			return (0);
+	}
+	return (1);
 }
 
 /* ---------------------------------------------------------------------------------------------------------------------------- */
@@ -300,12 +398,11 @@ int parsep2(char *buf, char *match, int type, void *value) {
 
 // callback with the page
 void returnpage(char *content, u16_t charcount, int errorm) {
-	uint32_t sn, trigmod, pollmod;
-	int nconv, res, res2, res3, res4;
+	uint32_t sn;
+	int nconv, res;
 	int p1;
 	char p2[256];
-	char s1[16];
-	uint32_t crc1, crc2, n2 = 0;
+	uint32_t crc1 = rs_crc1, crc2 = rs_crc2;	// last values the server sent
 	struct ip4_addr newip;
 	err_t err;
 
@@ -317,7 +414,6 @@ void returnpage(char *content, u16_t charcount, int errorm) {
 
 //			printf("returnpage: =%d, charcount=%d, content=%.*s\n", errorm, charcount, charcount, content);
 //			printf("Server replied: \"%.*s\"\n", charcount, content);
-			s1[0] = '\0';
 			nconv = sscanf(content, "%5lu%48s%u%255s", &sn, udp_target, &p1, p2);
 
 			switch (nconv) {
@@ -329,40 +425,11 @@ void returnpage(char *content, u16_t charcount, int errorm) {
 			case 4: 							// converted  4 fields
 				// this param is for a variable number of string tokens
 				if (p2[0] == '{') {		// its the start of enclosed params
-					res = 0;
-					res2 = 0;
-					res3 = 0;
-					res |= parsep2(&p2[1], "fw", 1, fwfilename);
-					res |= parsep2(&p2[1], "bld", 2, &newbuild);
-					res |= parsep2(&p2[1], "crc1", 3, &crc1);		// low addr
-					res |= parsep2(&p2[1], "crc2", 3, &crc2);
-
-					res2 |= parsep2(&p2[1], "srv", 1, &loaderhost);
-					res2 |= parsep2(&p2[1], "n2", 3, &n2);
-					res2 |= parsep2(&p2[1], "s1", 1, s1);
-
-					res3 |= parsep2(&p2[1], "lcd", 1, lcdfile);
-					res3 |= parsep2(&p2[1], "lbl", 2, &srvlcdbld);
-					res3 |= parsep2(&p2[1], "siz", 2, &lcdlen);
-
-					res4 = parsep2(&p2[1], "tt", 2, &trigmod);
-					if (res4 == 0) {
-						printf("Server -> Trigger level modifier %d\n", (int) trigmod);
-						if (trigmod < 4050) {
-							trigcomp = trigmod;
-						}
-					}
-
-					res4 = parsep2(&p2[1], "pt", 2, &pollmod);
-					if (res4 == 0) {
-						printf("Server -> Poll interval modifier %d\n", (int) pollmod);
-						if (!(pollmod < 1) || (pollmod > 900)) {
-							polltime = pollmod;
-						}
-					}
-
-//						printf("returnpage: filename=%s, srv=%s, build=%d, crc1=0x%08x, crc2=0x%08x, n1=0x%x, n2=0x%x, s1='%s', res=%d\n",	filename, host, newbuild, crc1, crc2, n1, n2, s1, res);
-
+					static const char *const fwkeys[] = { "fw", "bld", "crc1", "crc2", NULL };
+					const uint32_t found = remote_settings_apply(&p2[1]);
+					res = rs_all_found(found, fwkeys) ? 0 : -1;
+					crc1 = rs_crc1;
+					crc2 = rs_crc2;
 				} // else ignore it
 				  // fall through
 

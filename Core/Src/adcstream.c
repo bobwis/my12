@@ -56,6 +56,12 @@ static uint32_t sl_lta_q8 = 0;		// noise floor: mean |x - dc| per sample, Q8 (0 
 
 unsigned int sigprev = 0;	// number of streams let after adc thresh exceeded
 volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
+// Local-strike alert (LCD overlay + tone): only when a triggered buffer's peak deviation from the baseline
+// reaches alert_counts (ADC counts, set by the LP task from alert_mv and the current PGA gain).
+volatile uint32_t alert_mv = ALERT_MV_DEFAULT;	// alert level in mV at the PGA input; remote setting "al"
+volatile uint16_t alert_counts = 1900;		// same level in ADC counts at the current gain (LP task keeps it updated)
+volatile uint8_t alertreq = 0;				// set by the ISR, cleared by the LP task when it shows the alert
+volatile uint16_t alertpeak = 0;			// peak deviation (counts) of the last alerting buffer
 uint32_t globaladcavg = 0;		// adc average over milli-secs
 uint32_t globaladcnoise = 0;	// adc noise peaks average over milli-secs
 uint16_t pretrigthresh = TRIG_THRES;		// pretrigger threshold
@@ -570,6 +576,24 @@ void ADC_Conv_complete(void) {
 		}
 		sigprev = 1;	// remember this trigger for next packet
 		enqueue_sample_isr(buf, bufseq, &xHigherPriorityTaskWoken);	// queue this buffer now, before the DMA can refill it
+		{	// alert check, triggered buffers only (~2k cycles): peak deviation from the long-term baseline
+			const uint16_t *s = &(*adcbuf16)[0];
+			uint16_t lo = 4095, hi = 0;
+			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+				const uint16_t v = s[i] & 0x0fff;
+				if (v < lo)
+					lo = v;
+				if (v > hi)
+					hi = v;
+			}
+			const int32_t base = (int32_t) globaladcavg;
+			const int32_t up = hi - base, dn = base - lo;
+			const uint16_t pk = (uint16_t) ((up > dn) ? up : dn);
+			if (pk >= alert_counts) {
+				alertpeak = pk;
+				alertreq = 1;
+			}
+		}
 		ledhang = 15;		// 15 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
 
