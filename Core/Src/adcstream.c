@@ -39,7 +39,7 @@ volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
 volatile uint8_t detector = DETECTOR_EDGE;
-volatile uint8_t despike = 0;				// 0 off, 1 = 3-sample median, 2 = median + blanking (console Ctrl-F cycles)
+volatile uint8_t despike = 0;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
 volatile uint16_t despike_k = 60;			// mode 2: |raw - median| above this marks a spike (ADC counts)
 volatile uint8_t despike_n = 3;				// mode 2: samples held after a spike (covers its ringing)
 static uint16_t despike_hv = 2048;			// mode 2: last good output, held while blanking
@@ -454,6 +454,32 @@ void ADC_Conv_complete(void) {
 						a = b;
 						b = r;
 					}
+				} else if (despike == 3) {
+					// Mode 3 (cheap compromise): a jump of more than despike_k from the last accepted value starts a hold of
+					// despike_n samples at that value. At the end of the hold the current sample is accepted, so a single-sample
+					// spike and most of its ringing disappear, while a real step (stroke) comes through n samples late.
+					const int32_t k = despike_k;
+					const uint32_t n = despike_n;
+					int32_t hv = despike_hv;
+					uint32_t hold = despike_hold;
+					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+						const int32_t r = src[i];
+						if (hold) {
+							despike_buf[i] = hv;
+							if (--hold == 0)
+								hv = r;				// accept the level the signal has settled to
+						} else if ((uint32_t) (r - hv + k) > (uint32_t) (2 * k)) {	// |r - hv| > k, one compare
+							despike_buf[i] = hv;
+							hold = n;
+						} else {
+							despike_buf[i] = r;
+							hv = r;
+						}
+					}
+					despike_hv = hv;
+					despike_hold = hold;
+					a = src[(ADCBUFSIZE >> 1) - 2];
+					b = src[(ADCBUFSIZE >> 1) - 1];
 				} else {
 					// Mode 2: as mode 1, and when a sample stands out from its median by more than despike_k, hold the
 					// last good value for despike_n more samples so the spike's ringing doesn't reach the edge detector.

@@ -2638,8 +2638,8 @@ void StarLPTask(void const * argument)
 			}
 
 			if (inch == 0x06) {  // control F: toggle the 3-sample median impulse filter (experiment)
-				despike = (despike + 1) % 3;
-				printf("Despike filter mode %u (0 off, 1 median, 2 median+blank)\n", (unsigned) despike);
+				despike = (despike + 1) % 4;
+				printf("Despike filter mode %u (0 off, 1 median, 2 median+blank, 3 jump-hold)\n", (unsigned) despike);
 			}
 
 			if (inch == 0x14) {  // control T: toggle trigger detector (experiment)
