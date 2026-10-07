@@ -444,6 +444,8 @@ static void netsendtask(void const *argument) {
 				printf("udpstall: slot %u released after %lums (slow release, not a leak)\n", item.slot, (unsigned long) waited);
 			}
 		}
+		if (((uint8_t*) sendqueuebuf[item.slot])[3] == 4)	// sample packet: local-strike alert check (moved out of the ADC ISR)
+			alert_check(&((uint16_t*) sendqueuebuf[item.slot])[ADCBUFHEAD / 2]);
 		sendqueuepbuf[item.slot]->payload = sendqueuebuf[item.slot];
 		sendqueuepbuf[item.slot]->len = item.len;
 		sendqueuepbuf[item.slot]->tot_len = item.len;

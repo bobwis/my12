@@ -54,6 +54,7 @@ extern volatile uint16_t despike_k;
 extern volatile uint8_t despike_n;
 extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
 
+void alert_check(const uint16_t *s);	// local-strike alert on a triggered buffer's samples (send task, not the ISR)
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR
 extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles (sum in 16-cycle units)
 

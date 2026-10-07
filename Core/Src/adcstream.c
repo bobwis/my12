@@ -60,9 +60,32 @@ volatile uint16_t sigsend = 0;	// flag to tell udp to send sample packet
 // reaches alert_counts (ADC counts, set by the LP task from alert_mv and the current PGA gain).
 volatile uint32_t alert_mv = ALERT_MV_DEFAULT;	// alert level in mV at the PGA input; remote setting "al"
 volatile uint16_t alert_counts = 1900;		// same level in ADC counts at the current gain (LP task keeps it updated)
-volatile uint8_t alertreq = 0;				// set by the ISR, cleared by the LP task when it shows the alert
+volatile uint8_t alertreq = 0;				// set by alert_check() (send task), cleared by the LP task when it shows the alert
 volatile uint16_t alertpeak = 0;			// peak deviation (counts) of the last alerting buffer
 uint32_t globaladcavg = 0;		// adc average over milli-secs
+
+// Local-strike alert check on a triggered sample buffer (ADCBUFSIZE/2 samples). Called by the UDP send task on the
+// queued copy, not in the ADC ISR: there it cost ~10-15% of the per-buffer budget on every triggered buffer.
+// Peak deviation from the long-term baseline; sets alertreq at alert_counts.
+void alert_check(const uint16_t *s) {
+	const int32_t base = (int32_t) globaladcavg;
+	uint16_t lo = 4095, hi = 0;
+	int i;
+
+	for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+		const uint16_t v = s[i] & 0x0fff;
+		if (v < lo)
+			lo = v;
+		if (v > hi)
+			hi = v;
+	}
+	const int32_t up = hi - base, dn = base - lo;
+	const uint16_t pk = (uint16_t) ((up > dn) ? up : dn);
+	if (pk >= alert_counts) {
+		alertpeak = pk;
+		alertreq = 1;
+	}
+}
 uint32_t globaladcnoise = 0;	// adc noise peaks average over milli-secs
 uint16_t pretrigthresh = TRIG_THRES;		// pretrigger threshold
 uint16_t trigthresh = TRIG_THRES;		// dynamic trigger offset
@@ -576,24 +599,7 @@ void ADC_Conv_complete(void) {
 		}
 		sigprev = 1;	// remember this trigger for next packet
 		enqueue_sample_isr(buf, bufseq, &xHigherPriorityTaskWoken);	// queue this buffer now, before the DMA can refill it
-		{	// alert check, triggered buffers only (~2k cycles): peak deviation from the long-term baseline
-			const uint16_t *s = &(*adcbuf16)[0];
-			uint16_t lo = 4095, hi = 0;
-			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-				const uint16_t v = s[i] & 0x0fff;
-				if (v < lo)
-					lo = v;
-				if (v > hi)
-					hi = v;
-			}
-			const int32_t base = (int32_t) globaladcavg;
-			const int32_t up = hi - base, dn = base - lo;
-			const uint16_t pk = (uint16_t) ((up > dn) ? up : dn);
-			if (pk >= alert_counts) {
-				alertpeak = pk;
-				alertreq = 1;
-			}
-		}
+		// (the local-strike alert check runs on that queued copy in the send task: alert_check())
 		ledhang = 15;		// 15 x 10ms in Idle proc
 		statuspkt.trigcount++;	//  no of triggered packets detected
 
