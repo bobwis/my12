@@ -46,6 +46,11 @@ and lcdupneeded() asks for sys0 again (and skips the update) when it's still unk
 Images: A CRC 0xb0d7ebce, I CRC 0xd05dd52b (305056 bytes each).
 Stopgap on the server for units still on 10051: lbl:0 turns off the LCD build check.
 
+## 10053 (same day, deployed): alert check out of the ADC ISR
+The local-strike min/max pass now runs in the UDP send task on the queued sample copy, so alerts need GPS lock.
+Images: A CRC 0x8546c64f, I CRC 0xb98c4c0c (305136 bytes). Includes the 10052 LCD fix. Bench: detection and
+filter unchanged, alert verified. Open: occasional mode-3 ISR peak of 75% and late dropped trigger buffers (`lt`).
+
 ## Known open items
 lwIP raw API calls without the core lock (`sendudp()`, `www.c` client) are still to be fixed, and so is the heap-check
 latency (see `TRIGGER_EXPERIMENTS.md`).
