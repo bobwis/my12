@@ -35,6 +35,10 @@ volatile uint32_t adcbufseq = 0;	// count of DMA buffer completions (buffer N is
 // isrcyc_sum is in units of 16 cycles so a status interval of up to ~300 s can't wrap it even at 100% load.
 // Budget per buffer is ADCBUF_CYCLES (adcstream.h). The early-return overrun path is not counted.
 volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
+// Entry latency of ADC_Conv_complete() after the DMA completion that scheduled it (DWT cycles, peak per status
+// line), and buffers never scanned because one run covered two completions (latency over a whole buffer).
+static volatile uint32_t dmacyc = 0;
+volatile uint32_t isrlat_max = 0, isrskip = 0;
 
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
@@ -384,6 +388,15 @@ void ADC_Conv_complete(void) {
 	const uint8_t bufno = dmabufno;		// the buffer this call scans (DMA callbacks may advance dmabufno later)
 	const uint32_t bufseq = adcbufseq;
 	const uint32_t cyc0 = DWT->CYCCNT;	// ISR cost measurement, see isrcyc_*
+	{
+		static uint32_t lastseq = 0;
+		const uint32_t lat = cyc0 - dmacyc;
+		if (lat > isrlat_max)
+			isrlat_max = lat;
+		if ((bufseq - lastseq) > 1)
+			isrskip += bufseq - lastseq - 1;
+		lastseq = bufseq;
+	}
 	uint8_t endnow = 0;					// a batch ended in this buffer: wake the sender for ENDSEQ
 
 //	timestamp = TIM2->CNT;			// real time
@@ -704,6 +717,7 @@ void ADC_MultiModeDMAConvM0Cplt(DMA_HandleTypeDef *hdma) {
 	ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef*) hdma->Parent;
 	dmabufno = 0;
 	adcbufseq++;
+	dmacyc = DWT->CYCCNT;
 	ADC_ConvCpltCallback(hadc);
 }
 
@@ -712,6 +726,7 @@ void ADC_MultiModeDMAConvM1Cplt(DMA_HandleTypeDef *hdma) {
 
 	dmabufno = 1;
 	adcbufseq++;
+	dmacyc = DWT->CYCCNT;
 	ADC_ConvCpltCallback(hadc);
 }
 

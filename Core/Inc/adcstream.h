@@ -56,6 +56,7 @@ extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
 
 void alert_check(const uint16_t *s);	// local-strike alert on a triggered buffer's samples (send task, not the ISR)
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR
+extern volatile uint32_t isrlat_max, isrskip;	// ADC_Conv_complete() entry latency (cycles) and skipped buffers
 extern volatile uint32_t isrcyc_max, isrcyc_sum, isrcyc_n;	// ADC_Conv_complete() cost, DWT cycles (sum in 16-cycle units)
 
 // CPU cycles available per ADC buffer: 216 MHz * 728 samples / 2.7 MSps (measured: 3708 buffers/s)
