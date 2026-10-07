@@ -64,7 +64,8 @@
 /*----- Default Value for MEM_SIZE: 1600 ---*/
 #define MEM_SIZE 10000
 /*----- Default Value for MEMP_OVERFLOW_CHECK: 0 ---*/
-#define MEMP_OVERFLOW_CHECK 2
+#define MEMP_OVERFLOW_CHECK 1	// not 2: memp_overflow_check_all() walks every pool element under SYS_ARCH_PROTECT on each alloc/free,
+								// masking the ADC scan IRQ (TIM5, prio 5) for a whole buffer - ~1.8% of buffers went unscanned (10054)
 /*----- Default Value for MEMP_SANITY_CHECK: 0 ---*/
 #define MEMP_SANITY_CHECK 1
 /*----- Default Value for MEM_OVERFLOW_CHECK: 0 ---*/
