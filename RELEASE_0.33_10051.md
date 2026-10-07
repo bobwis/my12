@@ -51,6 +51,22 @@ The local-strike min/max pass now runs in the UDP send task on the queued sample
 Images: A CRC 0x8546c64f, I CRC 0xb98c4c0c (305136 bytes). Includes the 10052 LCD fix. Bench: detection and
 filter unchanged, alert verified. Open: occasional mode-3 ISR peak of 75% and late dropped trigger buffers (`lt`).
 
+## 10054: unscanned ADC buffers fixed
+lwIP's MEMP_OVERFLOW_CHECK 2 walked every pool element under SYS_ARCH_PROTECT on each alloc/free, masking the
+TIM5 scan IRQ for a whole buffer: ~1.8% of buffers were never scanned and triggered copies were dropped (lt).
+Now 1 (the other checks stay on). Bench: unscanned 6208/min -> 0, scan-IRQ entry latency 269 -> 15 us. Status line
+adds lat= and sk=.
+
+## 10055: lwIP core lock, MTU 1500, quieter console
+- Raw lwIP calls made outside tcpip_thread now take the core lock (Core/Inc/netcore.h): netsendtask's UDP sends,
+  the HTTP client (polls, firmware/LCD downloads), DNS lookups, httpd_init(), the netif callbacks and the Ethernet
+  link thread. A test build with LWIP_ASSERT_CORE_LOCKED wired up (netfix.h F) found no unlocked calls after the fix.
+  Under load, sk/lt/ov stayed 0 and latency 11-15 us.
+- MTU back to 1500: sample packets are no longer fragmented. 1000 had been set because some path hops dropped
+  full-size packets, so trial it on one field unit first and confirm the server receives its data.
+- The S... console status line is off at boot. Ctrl-E cycles it off / every 60 s / every 1 s.
+- lwipopts.h redefinition warnings fixed (no value changes).
+
 ## Known open items
 lwIP raw API calls without the core lock (`sendudp()`, `www.c` client) are still to be fixed, and so is the heap-check
 latency (see `TRIGGER_EXPERIMENTS.md`).

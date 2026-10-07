@@ -242,7 +242,11 @@ void net_lwip_assert(const char *msg, int line, const char *file);
  * redefine it here over a stale 24 there. */
 #define ETH_RX_BUFFER_SIZE 1536
 
-/* Netif MTU override: our ~1500-byte UDP status/data packets (see UDPBUFSIZE
+/* Netif MTU. Was 1000 until build 10055 - the old rationale follows. Back to the
+ * Ethernet 1500 (Bob, 2026-10-07): every 1480-byte sample datagram was being
+ * fragmented in two, doubling frames and making the server reassemble each one.
+ * If a path to the server drops full-size frames again, lower it here.
+ * Old note: our ~1500-byte UDP status/data packets (see UDPBUFSIZE
  * in Core/Inc/adcstream.h) were being dropped by some hops on the path to the
  * server. Lowering the netif's MTU below that packet size makes lwIP's
  * IP_FRAG (enabled by default - see opt.h) split each one into two smaller
@@ -252,7 +256,11 @@ void net_lwip_assert(const char *msg, int line, const char *file);
  * 524 bytes on the wire). Applied in LWIP/Target/ethernetif.c, in
  * low_level_init(): netif->mtu = NETIF_MTU_OVERRIDE; - change the value here,
  * not there. */
-#define NETIF_MTU_OVERRIDE 1000
+#define NETIF_MTU_OVERRIDE 1500
+
+#if NETFIX_CORE_CHECK	/* test builds: report raw API calls made without the core lock (netfix.h F) */
+#define LWIP_ASSERT_CORE_LOCKED()	netcore_check(__FILE__, __LINE__)
+#endif
 
 #ifdef TESTING
 #define LWIP_DEBUG

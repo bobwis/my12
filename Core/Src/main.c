@@ -43,6 +43,7 @@
 #include "udpstream.h"
 #include "version.h"
 #include "netfix.h"
+#include "netcore.h"
 #include "www.h"
 #include "dhcp.h"
 #include "splat1.h"
@@ -2209,6 +2210,7 @@ void StartDefaultTask(void const * argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
+	netcore_armed = 1;		// lwIP is up: from here on raw API calls must hold the core lock (netfix.h E, F)
 
 	HAL_StatusTypeDef err;
 	struct dhcp *dhcp;
@@ -2266,8 +2268,12 @@ void StartDefaultTask(void const * argument)
 	globalfreeze = 0;		// Allow UDP streaming
 
 	netif = netif_default;
-	netif_set_link_callback(netif, netif_link_callbk_fn);
-	netif_set_status_callback(netif, netif_status_callbk_fn);
+	{
+		const int took = netcore_lock();	// raw API (netcore.h) - found by the NETFIX_CORE_CHECK test build
+		netif_set_link_callback(netif, netif_link_callbk_fn);
+		netif_set_status_callback(netif, netif_status_callbk_fn);
+		netcore_unlock(took);
+	}
 
 	t2cap[0] = 44444444;
 
@@ -2416,7 +2422,11 @@ printf("*** TESTING BUILD USED ***\n");
 	vTaskResume(LPTaskHandle);		// allow it to start
 
 	printf("Starting httpd web server\n");
-	httpd_init();		// start the www server
+	{
+		const int took = netcore_lock();
+		httpd_init();		// start the www server
+		netcore_unlock(took);
+	}
 	init_httpd_ssi();	// set up the embedded tag handler
 
 // tim7 drives DAC

@@ -34,6 +34,7 @@
 /* Within 'USER CODE' section, code will be kept by default at each generation */
 /* USER CODE BEGIN 0 */
 #include "netfix.h"		/* build 10049: TX serialisation + diagnostics, see Core/Inc/netfix.h */
+#include "netcore.h"		/* build 10055: lwIP core lock helpers */
 #include "semphr.h"
 #include <stdio.h>
 /* USER CODE END 0 */
@@ -1093,8 +1094,12 @@ void ethernet_link_thread(void const * argument)
     TX_LOCK();		/* build 10049: don't stop the MAC/DMA under a transmit in progress */
     HAL_ETH_Stop_IT(&heth);
     TX_UNLOCK();
-    netif_set_down(netif);
-    netif_set_link_down(netif);
+    {
+      const int took = netcore_lock();	/* build 10055: netif_set_* is raw API (netcore.h) */
+      netif_set_down(netif);
+      netif_set_link_down(netif);
+      netcore_unlock(took);
+    }
   }
   else if(!netif_is_link_up(netif) && (PHYLinkState > LAN8742_STATUS_LINK_DOWN))
   {
@@ -1134,8 +1139,12 @@ void ethernet_link_thread(void const * argument)
       HAL_ETH_SetMACConfig(&heth, &MACConf);
       HAL_ETH_Start_IT(&heth);
       TX_UNLOCK();
-      netif_set_up(netif);
-      netif_set_link_up(netif);
+      {
+        const int took = netcore_lock();	/* build 10055: after TX_UNLOCK - core lock first, never inside TX */
+        netif_set_up(netif);
+        netif_set_link_up(netif);
+        netcore_unlock(took);
+      }
     }
   }
 
@@ -1260,4 +1269,26 @@ void RMII_Thread( void const * argument )
       osDelay(200);
     }
   }
+}
+
+/* build 10055, netfix.h F: LWIP_ASSERT_CORE_LOCKED() in test builds. Reports each call site
+ * that reaches the raw API without the core lock once, and counts every such call. */
+volatile uint8_t netcore_armed = 0;
+volatile uint32_t netcore_violations = 0;
+
+void netcore_check(const char *file, int line) {
+	static const char *lastfile = NULL;
+	static int lastline = 0;
+
+	if ((!netcore_armed) || (lock_tcpip_core == NULL))
+		return;
+	if (xSemaphoreGetMutexHolder((SemaphoreHandle_t) lock_tcpip_core) == xTaskGetCurrentTaskHandle())
+		return;
+	netcore_violations++;
+	if ((file != lastfile) || (line != lastline)) {
+		lastfile = file;
+		lastline = line;
+		printf("netcore: lwIP call without the core lock at %s:%d (task %s), %lu so far\n", file, line,
+				pcTaskGetName(NULL), (unsigned long) netcore_violations);
+	}
 }

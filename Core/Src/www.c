@@ -12,6 +12,7 @@
 #include "main.h"
 #include "stm32f7xx_hal.h"
 #include "lwip.h"
+#include "netcore.h"
 #include "httpd_structs.h"
 #include "httpclient.h"
 #include "www.h"
@@ -457,7 +458,11 @@ void returnpage(char *content, u16_t charcount, int errorm) {
 //					newip = locateip(udp_target);
 // 			try altrnate method below. The above fails and times out (occasionally even triggering watchdog....)
 				newip.addr = 0;
-				err = dns_gethostbyname(udp_target, &newip, NULL, 0);
+				{
+					const int took = netcore_lock();	// a no-op when called back from tcpip_thread
+					err = dns_gethostbyname(udp_target, &newip, NULL, 0);
+					netcore_unlock(took);
+				}
 				if (err == ERR_OK) {
 					if ((newip.addr > 0) && (newip.addr != udpdestip.addr)) {
 						printf("******* Target UDP host just changed ********\n ");

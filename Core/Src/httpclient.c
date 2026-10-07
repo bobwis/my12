@@ -45,6 +45,7 @@
  * - IPv6 support
  */
 
+#include "netcore.h"
 #include "lwip/apps/http_client.h"
 
 #include "lwip/altcp_tcp.h"
@@ -1109,8 +1110,12 @@ void http_dlclient(char *filename, char *host, void *flash_memptr) {
 
 	down_total = 0;
 	expectedapage = 0;
-	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
-			HttpClientFileResultCallback, &connection1);
+	{
+		const int took = netcore_lock();	// default task, or tcpip_thread via returnpage() (then a no-op)
+		error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings1, HttpClientFileReceiveCallback,
+				HttpClientFileResultCallback, &connection1);
+		netcore_unlock(took);
+	}
 	if (error != HTTPC_RESULT_OK) {
 		printf("httpc_get_file_dns: returned, err=%d\n", error);
 	}
@@ -1162,8 +1167,12 @@ int hc_open(char *fileservername, char *page, char Postvars, void *returpage) {
 		osDelay(5000);
 		rebootme(7);	// closest existing code: "server lookup failed"
 	}
-	error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
-			HttpClientPageResultCallback, &connection2);
+	{
+		const int took = netcore_lock();	// LP task (server poll)
+		error = httpc_get_file_dns(fs_domainname, DOWNLOAD_PORT, rxbuffer, settings2, HttpClientPageReceiveCallback,
+				HttpClientPageResultCallback, &connection2);
+		netcore_unlock(took);
+	}
 	return ((error == ERR_OK) ? 0 : -1);
 }
 

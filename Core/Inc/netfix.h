@@ -29,6 +29,16 @@
  *       transmit path, TxConfig is per call, the busy wait no longer holds the mutex and
  *       is bounded, and the sticky HAL BUSY error bit is cleared each attempt.
  *
+ *  E  NETFIX_CORE_LOCK        (build 10055) raw lwIP calls made outside tcpip_thread take the
+ *       core lock (Core/Inc/netcore.h): netsendtask's udp_sendto(), startudp() setup, DNS
+ *       lookups, the HTTP client, httpd_init() and the Ethernet link thread's netif_set_*.
+ *       0 = unlocked as before.
+ *
+ *  F  NETFIX_CORE_CHECK       test builds only: LWIP_ASSERT_CORE_LOCKED() (called by every raw API
+ *       entry) prints a netcore: line for a call made without the core lock, once per call site,
+ *       and counts them (netcore_violations). Armed after MX_LWIP_Init(), whose netif_add()/
+ *       dhcp_start() run unlocked at boot (generated code, before any traffic).
+ *
  *  D  NETFIX_DIAG              Console-only diagnostics: a small flight recorder of TX
  *       calls/frees (task, pbuf, length), TX mutex contention counters, a richer lwIP
  *       assertion handler, a boot check, and a nettx: block added to the udpstall: report.
@@ -45,6 +55,8 @@
 #define NETFIX_LWIP_PROTECT			1
 #define NETFIX_TX_MUTEX				1
 #define NETFIX_DIAG					1
+#define NETFIX_CORE_LOCK			1
+#define NETFIX_CORE_CHECK			0
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,6 +73,9 @@ void netfix_banner(void);							/* boot check: prints a netfix: line only if a f
 void nettx_diag_print(const char *tag, int trace_lines);	/* TX-path state + last events, console only */
 void nettx_diag_periodic(void);						/* disabled: used to print a line when the TX mutex was contended */
 void net_lwip_assert(const char *msg, int line, const char *file);	/* LWIP_PLATFORM_ASSERT */
+void netcore_check(const char *file, int line);		/* LWIP_ASSERT_CORE_LOCKED when NETFIX_CORE_CHECK */
+extern volatile uint8_t netcore_armed;				/* set once lwIP init is done */
+extern volatile uint32_t netcore_violations;		/* raw API calls seen without the core lock */
 
 #ifdef __cplusplus
 }

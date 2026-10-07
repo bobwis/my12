@@ -7,6 +7,7 @@
 #include "lwip.h"
 #include "udpstream.h"
 #include "netfix.h"
+#include "netcore.h"
 #include "adcstream.h"
 #include "mydebug.h"
 #include "FreeRTOS.h"
@@ -450,7 +451,11 @@ static void netsendtask(void const *argument) {
 		sendqueuepbuf[item.slot]->len = item.len;
 		sendqueuepbuf[item.slot]->tot_len = item.len;
 
-		sendudp(pcb, sendqueuepbuf[item.slot], &udpdestip, UDP_PORT_NO);
+		{
+			const int took = netcore_lock();	// raw API from this task: take lwIP's core lock (netcore.h)
+			sendudp(pcb, sendqueuepbuf[item.slot], &udpdestip, UDP_PORT_NO);
+			netcore_unlock(took);
+		}
 		xSemaphoreGive(freeslots);	// data handed to lwIP; producer may reuse this slot now
 
 		sq_sent_total++;
@@ -499,7 +504,11 @@ int dnslookup(char *name, struct ip4_addr *ip) {
 
 //	printf("dnslookup: DNS Resolving %s\n", name);
 	ip_ready = 0;
-	err = dns_gethostbyname(name, ip, dnsfound, 0);
+	{
+		const int took = netcore_lock();	// the wait for the answer below is outside the lock
+		err = dns_gethostbyname(name, ip, dnsfound, 0);
+		netcore_unlock(took);
+	}
 
 	xSemaphoreGive(dnssemHandle);
 
@@ -573,7 +582,9 @@ void startudp() {		// destination UDP target IP address
 	osDelay(1000);
 
 	/* get new pcbs */
+	int took = netcore_lock();
 	pcb = udp_new();
+	netcore_unlock(took);
 	if (pcb == NULL) {
 		printf("startudp: udp_new failed!\n");
 		for (;;)
@@ -582,7 +593,10 @@ void startudp() {		// destination UDP target IP address
 	}
 
 	/* bind to any IP address on port UDP_PORT_NO */
-	if (udp_bind(pcb, IP_ADDR_ANY, UDP_PORT_NO) != ERR_OK) {
+	took = netcore_lock();
+	err_t berr = udp_bind(pcb, IP_ADDR_ANY, UDP_PORT_NO);
+	netcore_unlock(took);
+	if (berr != ERR_OK) {
 		printf("startudp: udp_bind failed!\n");
 		for (;;)
 			;
