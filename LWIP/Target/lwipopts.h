@@ -86,7 +86,7 @@
  * mem.c:378-380) which can never overlap anything else, no matter how much
  * static RAM the firmware uses in the future. */
 /*----- Default Value for MEMP_NUM_PBUF: 16 ---*/
-#define MEMP_NUM_PBUF 24
+#define MEMP_NUM_PBUF 128
 /*----- Default Value for MEMP_NUM_RAW_PCB: 4 ---*/
 #define MEMP_NUM_RAW_PCB 8
 /*----- Default Value for MEMP_NUM_TCP_PCB_LISTEN: 8 ---*/
@@ -225,7 +225,9 @@ void net_lwip_assert(const char *msg, int line, const char *file);
 #define MEMP_NUM_SYS_TIMEOUT 	(LWIP_NUM_SYS_TIMEOUT_INTERNAL)+1
 #define MEMP_NUM_UDP_PCB        8
 #define IP_REASS_MAX_PBUFS     20
+#undef TCPIP_MBOX_SIZE				// deliberate overrides of the CubeMX values (6) above
 #define TCPIP_MBOX_SIZE 64
+#undef DEFAULT_TCP_RECVMBOX_SIZE
 #define DEFAULT_TCP_RECVMBOX_SIZE 64
 #define DEFAULT_RAW_RECVMBOX_SIZE 64
 /* MEMP_NUM_PBUF sizes the pool backing PBUF_REF/PBUF_ROM header-only pbuf
@@ -235,10 +237,9 @@ void net_lwip_assert(const char *msg, int line, const char *file);
  * shared send queue) plus one dedicated pbuf per SEND_QUEUE_DEPTH send queue
  * slot (udpstream.c, 96) = 98; sized to 128 for margin - this pool is shared
  * with lwIP's own internal pbuf use (RX, ARP, DNS, DHCP, httpd), which gets
- * none of that margin if this is sized right at the udpstream.c minimum. */
-#define MEMP_NUM_PBUF 128
-#define LWIP_TCPIP_TIMEOUT 100
-#define LWIP_SO_RCVTIMEO 100
+ * none of that margin if this is sized right at the udpstream.c minimum.
+ * Set in my12.ioc (LWIP.MEMP_NUM_PBUF=128), i.e. the CubeMX section above; this used to
+ * redefine it here over a stale 24 there. */
 #define ETH_RX_BUFFER_SIZE 1536
 
 /* Netif MTU override: our ~1500-byte UDP status/data packets (see UDPBUFSIZE

@@ -149,6 +149,7 @@ const unsigned char phaser_wav[] = /* { 128, 0, 255, 0, 255, 0, 255, 0, 255, 0, 
 const unsigned int phaser_wav_len = 1792;
 unsigned int circuitboardpcb;
 unsigned int newbuild;	// the (later) firmware build number on the server
+uint32_t console_status_secs = CONSOLE_STATUS_SECS;	// console S... status line interval, 0 = off (Ctrl-E)
 unsigned int srvlcdbld = 0;	// the (later) LCD firmware build number on the server
 
 /* USER CODE END PD */
@@ -2586,12 +2587,11 @@ void StarLPTask(void const * argument)
 			HAL_UART_Receive_IT(&huart2, &con_ch, 1);
 		}
 
-#if CONSOLE_STATUS_SECS > 0
 		{	// compact status line: t1sec, triggers, thresh, pretrig thresh, gain, noise, near-misses since last line,
 			// adc->udp overruns, late (overwritten) trigger buffers, jabber count, trigger suppression countdown
 			// plus ADC ISR load: average and peak % of the per-buffer cycle budget over the interval
 			static uint32_t laststatsec = 0, lastnearmiss = 0, lastisrsum = 0, lastisrn = 0;
-			if ((t1sec - laststatsec) >= CONSOLE_STATUS_SECS) {
+			if (console_status_secs && ((t1sec - laststatsec) >= console_status_secs)) {
 				uint32_t isrsum = isrcyc_sum, isrn = isrcyc_n, isrmax = isrcyc_max;
 				uint32_t dn = isrn - lastisrn;
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
@@ -2610,7 +2610,6 @@ void StarLPTask(void const * argument)
 				lastisrn = isrn;
 			}
 		}
-#endif
 
 		while (xQueueReceive(consolerxq, &inch, 0)) {
 			if (inch == 0x07) {  // control G
@@ -2639,7 +2638,15 @@ void StarLPTask(void const * argument)
 				printstatus(2);
 			}
 
-			if (inch == 0x06) {  // control F: toggle the 3-sample median impulse filter (experiment)
+			if (inch == 0x05) {  // control E: status line off -> every 60 s -> every 1 s
+				console_status_secs = (console_status_secs == 0) ? 60 : (console_status_secs == 60) ? 1 : 0;
+				if (console_status_secs)
+					printf("Status line every %lu s\n", (unsigned long) console_status_secs);
+				else
+					printf("Status line off\n");
+			}
+
+			if (inch == 0x06) {  // control F: cycle the impulse filter mode
 				despike = (despike + 1) % 4;
 				printf("Despike filter mode %u (0 off, 1 median, 2 median+blank, 3 jump-hold)\n", (unsigned) despike);
 			}

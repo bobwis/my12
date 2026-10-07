@@ -44,9 +44,9 @@ volatile uint32_t isrlat_max = 0, isrskip = 0;
 // changed live over SWD during bench sweeps.
 volatile uint8_t detector = DETECTOR_EDGE;
 volatile uint8_t despike = 3;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
-volatile uint16_t despike_k = 60;			// mode 2: |raw - median| above this marks a spike (ADC counts)
-volatile uint8_t despike_n = 3;				// mode 2: samples held after a spike (covers its ringing)
-static uint16_t despike_hv = 2048;			// mode 2: last good output, held while blanking
+volatile uint16_t despike_k = 60;			// modes 2, 3: a jump above this (ADC counts) marks a spike
+volatile uint8_t despike_n = 3;				// modes 2, 3: samples held after a spike (covers its ringing)
+static uint16_t despike_hv = 2048;			// modes 2, 3: last good value, held while blanking
 static uint8_t despike_hold = 0;
 static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of the previous buffer
 static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
