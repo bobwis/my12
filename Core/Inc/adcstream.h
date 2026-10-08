@@ -54,7 +54,7 @@ extern volatile uint8_t despike;	// impulse filter: 0 off, 1 median, 2 median+bl
 extern volatile uint16_t despike_k;
 extern volatile uint8_t despike_n;
 extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
-extern volatile uint32_t stalta_margin_q4, stalta_eff_q4, trig_sl_only, trig_edge_only;
+extern volatile uint32_t stalta_margin_q4, stalta_eff_q4, stalta_trigstep, trig_sl_only, trig_edge_only;
 
 void alert_check(const uint16_t *s);	// local-strike alert on a triggered buffer's samples (send task, not the ISR)
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR

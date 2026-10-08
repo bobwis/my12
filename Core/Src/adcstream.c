@@ -60,7 +60,10 @@ volatile uint32_t stalta_ks = 5;		// STA time constant 2^ks samples (5 = 32 samp
 #define STALTA_MAX_Q4 96			// 6.0x
 volatile uint32_t stalta_margin_q4 = 24;	// ratio = idle track * 24/16 (1.5x)
 volatile uint32_t stalta_eff_q4 = 42;	// ratio in use (status ra=)
-static uint32_t sl_idle_q12 = 32 << 8;	// idle peak STA/LTA * 16, Q8 (starts at 2.0)
+static uint32_t sl_idle_q16 = 32 << 16;	// idle track: peak STA/LTA * 16, Q16 (starts at 2.0). 10056 kept it in Q8,
+										// which rounded the ~9 s fall to zero: the ratio could rise but never fall
+volatile uint32_t stalta_trigstep = 4;	// each STA/LTA trigger raises the idle track by this (x16 ratio units): rate
+										// feedback, so impulsive noise that always triggers still lifts the threshold
 static uint16_t sl_learnhold = 0;		// buffers left before idle learning resumes after a trigger
 volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// DUAL: buffers only one detector triggered (status so= eo=)
 volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
@@ -550,17 +553,24 @@ void ADC_Conv_complete(void) {
 				else
 					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (stalta_kl + 2) : stalta_kl);
 				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
+				if (trig && (lta_q8 != 0)) {		// rate feedback, like the edge detector's threshold bump
+					sl_idle_q16 += stalta_trigstep << 16;
+					if (sl_idle_q16 > (STALTA_MAX_Q4 << 16))
+						sl_idle_q16 = STALTA_MAX_Q4 << 16;	// no wind-up far above the clamp
+				}
 				if (trig || sigsend)
 					sl_learnhold = 64;						// a stroke and its tail are not idle
 				else if (sl_learnhold)
 					sl_learnhold--;
 				else if (lta_q8 != 0) {	// adaptive ratio from the untriggered buffers' peak STA/LTA
-					const uint32_t p_q12 = stalta_peak16 << 8;
-					if (p_q12 > sl_idle_q12)
-						sl_idle_q12 += (p_q12 - sl_idle_q12) >> 6;	// rise 1/64 of the gap per buffer (~17 ms)
+					const uint32_t p_q16 = stalta_peak16 << 16;
+					if (p_q16 > sl_idle_q16)
+						sl_idle_q16 += (p_q16 - sl_idle_q16) >> 6;	// rise 1/64 of the gap per buffer (~17 ms)
 					else
-						sl_idle_q12 -= (sl_idle_q12 - p_q12) >> 15;	// fall over 2^15 buffers (~9 s)
-					uint32_t r = ((sl_idle_q12 >> 8) * stalta_margin_q4) >> 4;
+						sl_idle_q16 -= (sl_idle_q16 - p_q16) >> 15;	// fall over 2^15 buffers (~9 s)
+				}
+				{
+					const uint32_t r = ((sl_idle_q16 >> 16) * stalta_margin_q4) >> 4;
 					stalta_eff_q4 = (r < STALTA_MIN_Q4) ? STALTA_MIN_Q4 : ((r > STALTA_MAX_Q4) ? STALTA_MAX_Q4 : r);
 				}
 			}

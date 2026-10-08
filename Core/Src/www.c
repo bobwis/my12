@@ -289,6 +289,7 @@ static const remote_setting_t remote_settings[] = {
 	{ "slk",  RS_U32,   (void*) &stalta_ks,  3, 8,          1, "STA window 2^n samples" },
 	{ "slr",  RS_U32,   (void*) &stalta_ratio_q4, 0, 160,   1, "STA/LTA ratio x16 (0 adaptive)" },
 	{ "slm",  RS_U32,   (void*) &stalta_margin_q4, 16, 96,  1, "STA/LTA adaptive margin x16" },
+	{ "sls",  RS_U32,   (void*) &stalta_trigstep, 0, 32,    1, "STA/LTA trigger rate feedback step" },
 };
 #define RS_COUNT (sizeof(remote_settings) / sizeof(remote_settings[0]))
 
