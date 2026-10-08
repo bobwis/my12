@@ -2607,12 +2607,13 @@ void StarLPTask(void const * argument)
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
-				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu f=%u lat=%lu sk=%lu\n", (unsigned long) t1sec,
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu ra=%lu so=%lu eo=%lu f=%u lat=%lu sk=%lu\n", (unsigned long) t1sec,
 						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
 						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
 						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
 						(unsigned) sigsuppress, (unsigned long) avgpct, (unsigned long) (isrmax * 100U / ADCBUF_CYCLES),
-						(unsigned) detector, (unsigned long) stalta_peak16, (unsigned) despike,
+						(unsigned) detector, (unsigned long) stalta_peak16, (unsigned long) (stalta_ratio_q4 ? stalta_ratio_q4 : stalta_eff_q4),
+						(unsigned long) trig_sl_only, (unsigned long) trig_edge_only, (unsigned) despike,
 						(unsigned long) (isrlat_max / 216U), (unsigned long) isrskip);
 				isrlat_max = 0;
 				lastnearmiss = pretrigcnt;
@@ -2661,9 +2662,9 @@ void StarLPTask(void const * argument)
 				printf("Despike filter mode %u (0 off, 1 median, 2 median+blank, 3 jump-hold)\n", (unsigned) despike);
 			}
 
-			if (inch == 0x14) {  // control T: toggle trigger detector (experiment)
-				detector = (detector == DETECTOR_STALTA) ? DETECTOR_EDGE : DETECTOR_STALTA;
-				printf("Detector is %s\n", (detector == DETECTOR_STALTA) ? "STA/LTA" : "EDGE");
+			if (inch == 0x14) {  // control T: trigger detector EDGE -> STA/LTA -> DUAL (experiment)
+				detector = (detector + 1) % 3;
+				printf("Detector is %s\n", (detector == DETECTOR_STALTA) ? "STA/LTA" : ((detector == DETECTOR_DUAL) ? "DUAL" : "EDGE"));
 			}
 
 			if (inch == 0x03) {		// control C,  AGC man/auto

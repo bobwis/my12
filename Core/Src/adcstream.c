@@ -50,8 +50,17 @@ static uint16_t despike_hv = 2048;			// modes 2, 3: last good value, held while 
 static uint8_t despike_hold = 0;
 static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of the previous buffer
 static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
-volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64 = 4.0x)
-volatile uint32_t stalta_ks = 6;		// STA time constant 2^ks samples (6 = 64 samples = 24 us at 2.7 MSps)
+volatile uint32_t stalta_ratio_q4 = 0;	// fixed trigger ratio STA/LTA * 16 (64 = 4.0x); 0 = adaptive (below)
+volatile uint32_t stalta_ks = 5;		// STA time constant 2^ks samples (5 = 32 samples = 12 us at 2.7 MSps)
+// Adaptive ratio: the peak STA/LTA of recent untriggered buffers (jumps up at once, decays over ~9 s) times
+// stalta_margin_q4/16, clamped to STALTA_MIN_Q4..STALTA_MAX_Q4. Bench: idle peaks ~1.4 clean, 1.6-1.9 in broadband
+// noise, ~2.9 with detector-13 spikes, so each site gets the lowest ratio that doesn't false-trigger.
+#define STALTA_MIN_Q4 32			// 2.0x
+#define STALTA_MAX_Q4 96			// 6.0x
+volatile uint32_t stalta_margin_q4 = 21;	// ratio = idle peak * 21/16 (1.31x)
+volatile uint32_t stalta_eff_q4 = 42;	// ratio in use (status ra=)
+static uint32_t sl_idle_q12 = 32 << 8;	// idle peak STA/LTA * 16, Q8 (starts at 2.0)
+volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// DUAL: buffers only one detector triggered (status so= eo=)
 volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
 static int32_t sl_dc_q8 = 2048 << 8;	// baseline, Q8
@@ -496,7 +505,8 @@ void ADC_Conv_complete(void) {
 			despike_a = src[(ADCBUFSIZE >> 1) - 2];
 			despike_b = src[(ADCBUFSIZE >> 1) - 1];
 		}
-		if (detector == DETECTOR_STALTA) {
+		uint8_t sltrig = 0;					// STA/LTA fired on this buffer (DUAL bookkeeping)
+		if (detector != DETECTOR_EDGE) {		// STA/LTA alone, or first half of DUAL
 			// STA/LTA energy detector (experiment). dc = slow baseline (EMA of buffer means), e = |x - dc|,
 			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl buffers of the
 			// buffer-mean of e. Trigger when STA > LTA * stalta_ratio_q4 / 16. Unlike the edge detector (32-sample
@@ -506,7 +516,8 @@ void ADC_Conv_complete(void) {
 			const uint32_t ks = stalta_ks;
 			const int32_t dc = sl_dc_q8 >> 8;
 			const uint32_t lta_q8 = sl_lta_q8;
-			const uint32_t thr_acc = ((lta_q8 * stalta_ratio_q4) >> 12) << ks;	// compare against STA accumulator
+			const uint32_t ratio = stalta_ratio_q4 ? stalta_ratio_q4 : stalta_eff_q4;	// fixed, or adaptive
+			const uint32_t thr_acc = ((lta_q8 * ratio) >> 12) << ks;	// compare against STA accumulator
 			uint32_t sta = sl_sta_acc, peak = 0, esum = 0;
 			uint32_t bgacc = adcbgbaseacc;
 			const uint32_t bg0 = bgacc;
@@ -537,13 +548,27 @@ void ADC_Conv_complete(void) {
 				else
 					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (stalta_kl + 2) : stalta_kl);
 				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
+				if ((lta_q8 != 0) && !trig) {	// adaptive ratio from the untriggered buffers' peak STA/LTA
+					const uint32_t p_q12 = stalta_peak16 << 8;
+					if (p_q12 > sl_idle_q12)
+						sl_idle_q12 = p_q12;					// rise at once
+					else
+						sl_idle_q12 -= (sl_idle_q12 - p_q12) >> 15;	// fall over 2^15 buffers (~9 s)
+					uint32_t r = ((sl_idle_q12 >> 8) * stalta_margin_q4) >> 4;
+					stalta_eff_q4 = (r < STALTA_MIN_Q4) ? STALTA_MIN_Q4 : ((r > STALTA_MAX_Q4) ? STALTA_MAX_Q4 : r);
+				}
 			}
 			sl_sta_acc = sta;
-			adcbgbaseacc = bgacc;
-			meanwindiff = lastmeanwindiff = sl_lta_q8 >> 8;	// noise floor for globaladcnoise / gain AGC / status
-			if (trig)
+			if (detector == DETECTOR_STALTA) {	// alone: it also owns the baseline and noise figures
+				adcbgbaseacc = bgacc;
+				meanwindiff = lastmeanwindiff = sl_lta_q8 >> 8;	// noise floor for globaladcnoise / gain AGC / status
+			}
+			if (trig) {
 				sigsend = 1;
-		} else {
+				sltrig = 1;
+			}
+		}
+		if (detector != DETECTOR_STALTA) {	// edge detector alone, or second half of DUAL
 			// Original edge detector.
 			// Hot-loop state in locals so it stays in registers; the globals are read once and written back
 			// once per buffer. Same arithmetic and integer types as before. trigcomp is volatile (set by the
@@ -597,7 +622,13 @@ void ADC_Conv_complete(void) {
 			pretrigcnt += nearmiss;
 			if (trig)
 				sigsend = 1;
-			if (sigsend) {
+			if (detector == DETECTOR_DUAL) {
+				if (sltrig && !trig)
+					trig_sl_only++;
+				else if (trig && !sltrig)
+					trig_edge_only++;
+			}
+			if (sigsend) {	// any trigger (either detector in DUAL) raises the edge threshold: rate limiting
 				trigthresh += 2;
 				pretrigcnt += 201;
 			}
