@@ -42,7 +42,7 @@ volatile uint32_t isrlat_max = 0, isrskip = 0;
 
 // Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
 // changed live over SWD during bench sweeps.
-volatile uint8_t detector = DETECTOR_EDGE;
+volatile uint8_t detector = DETECTOR_DUAL;	// 10056 soak build (detector 18 only): dual at boot. Releases: DETECTOR_EDGE
 volatile uint8_t despike = 3;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
 volatile uint16_t despike_k = 60;			// modes 2, 3: a jump above this (ADC counts) marks a spike
 volatile uint8_t despike_n = 3;				// modes 2, 3: samples held after a spike (covers its ringing)
