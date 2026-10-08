@@ -52,14 +52,16 @@ static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of t
 static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
 volatile uint32_t stalta_ratio_q4 = 0;	// fixed trigger ratio STA/LTA * 16 (64 = 4.0x); 0 = adaptive (below)
 volatile uint32_t stalta_ks = 5;		// STA time constant 2^ks samples (5 = 32 samples = 12 us at 2.7 MSps)
-// Adaptive ratio: the peak STA/LTA of recent untriggered buffers (jumps up at once, decays over ~9 s) times
+// Adaptive ratio: a high-percentile track of the peak STA/LTA of untriggered buffers (rises 1/64 of the gap per buffer,
+// falls over ~9 s; no learning for 64 buffers after any trigger, so a stroke and its tail don't count as idle) times
 // stalta_margin_q4/16, clamped to STALTA_MIN_Q4..STALTA_MAX_Q4. Bench: idle peaks ~1.4 clean, 1.6-1.9 in broadband
 // noise, ~2.9 with detector-13 spikes, so each site gets the lowest ratio that doesn't false-trigger.
 #define STALTA_MIN_Q4 32			// 2.0x
 #define STALTA_MAX_Q4 96			// 6.0x
-volatile uint32_t stalta_margin_q4 = 21;	// ratio = idle peak * 21/16 (1.31x)
+volatile uint32_t stalta_margin_q4 = 24;	// ratio = idle track * 24/16 (1.5x)
 volatile uint32_t stalta_eff_q4 = 42;	// ratio in use (status ra=)
 static uint32_t sl_idle_q12 = 32 << 8;	// idle peak STA/LTA * 16, Q8 (starts at 2.0)
+static uint16_t sl_learnhold = 0;		// buffers left before idle learning resumes after a trigger
 volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// DUAL: buffers only one detector triggered (status so= eo=)
 volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
@@ -548,10 +550,14 @@ void ADC_Conv_complete(void) {
 				else
 					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (stalta_kl + 2) : stalta_kl);
 				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
-				if ((lta_q8 != 0) && !trig) {	// adaptive ratio from the untriggered buffers' peak STA/LTA
+				if (trig || sigsend)
+					sl_learnhold = 64;						// a stroke and its tail are not idle
+				else if (sl_learnhold)
+					sl_learnhold--;
+				else if (lta_q8 != 0) {	// adaptive ratio from the untriggered buffers' peak STA/LTA
 					const uint32_t p_q12 = stalta_peak16 << 8;
 					if (p_q12 > sl_idle_q12)
-						sl_idle_q12 = p_q12;					// rise at once
+						sl_idle_q12 += (p_q12 - sl_idle_q12) >> 6;	// rise 1/64 of the gap per buffer (~17 ms)
 					else
 						sl_idle_q12 -= (sl_idle_q12 - p_q12) >> 15;	// fall over 2^15 buffers (~9 s)
 					uint32_t r = ((sl_idle_q12 >> 8) * stalta_margin_q4) >> 4;
