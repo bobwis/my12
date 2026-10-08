@@ -422,12 +422,87 @@ void ADC_Conv_complete(void) {
 			statuspkt.adcudpover++;		// debug adc overruning the udp railgun
 			return;						// skip detecting another trigger
 		}
+		// Impulse filter: a separate pre-pass into despike_buf, shared by both detectors (src). Kept out of the
+		// detectors' hot loops so they keep their register allocation.
+		// 3-sample median = each sample clamped between the previous two: removes single-sample spikes
+		// (switching-converter interference, detector 13) and barely changes a stroke, which rises over many samples.
+		const uint16_t *src = &(*adcbuf16)[0];
+		if (despike) {
+			uint16_t a = despike_a, b = despike_b;
+			if (despike == 1) {
+				for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+					const uint16_t r = src[i];
+					const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
+					despike_buf[i] = (r < lo) ? lo : ((r > hi) ? hi : r);
+					a = b;
+					b = r;
+				}
+			} else if (despike == 3) {
+				// Mode 3 (cheap compromise): a jump of more than despike_k from the last accepted value starts a hold of
+				// despike_n samples at that value. At the end of the hold the current sample is accepted, so a single-sample
+				// spike and most of its ringing disappear, while a real step (stroke) comes through n samples late.
+				const int32_t k = despike_k;
+				const uint32_t n = despike_n;
+				int32_t hv = despike_hv;
+				uint32_t hold = despike_hold;
+				for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+					const int32_t r = src[i];
+					if (hold) {
+						despike_buf[i] = hv;
+						if (--hold == 0)
+							hv = r;				// accept the level the signal has settled to
+					} else if ((uint32_t) (r - hv + k) > (uint32_t) (2 * k)) {	// |r - hv| > k, one compare
+						despike_buf[i] = hv;
+						hold = n;
+					} else {
+						despike_buf[i] = r;
+						hv = r;
+					}
+				}
+				despike_hv = hv;
+				despike_hold = hold;
+				a = src[(ADCBUFSIZE >> 1) - 2];
+				b = src[(ADCBUFSIZE >> 1) - 1];
+			} else {
+				// Mode 2: as mode 1, and when a sample stands out from its median by more than despike_k, hold the
+				// last good value for despike_n more samples so the spike's ringing doesn't reach the edge detector.
+				const int32_t k = despike_k;
+				const uint8_t n = despike_n;
+				uint16_t hv = despike_hv;
+				uint8_t hold = despike_hold;
+				for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
+					const uint16_t r = src[i];
+					const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
+					const uint16_t m = (r < lo) ? lo : ((r > hi) ? hi : r);
+					if ((int32_t) r - m > k || (int32_t) m - r > k)
+						hold = n + 1;
+					if (hold) {
+						hold--;
+						despike_buf[i] = hv;
+					} else {
+						despike_buf[i] = m;
+						hv = m;
+					}
+					a = b;
+					b = r;
+				}
+				despike_hv = hv;
+				despike_hold = hold;
+			}
+			despike_a = a;
+			despike_b = b;
+			src = despike_buf;
+		} else {
+			despike_a = src[(ADCBUFSIZE >> 1) - 2];
+			despike_b = src[(ADCBUFSIZE >> 1) - 1];
+		}
 		if (detector == DETECTOR_STALTA) {
 			// STA/LTA energy detector (experiment). dc = slow baseline (EMA of buffer means), e = |x - dc|,
 			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl buffers of the
 			// buffer-mean of e. Trigger when STA > LTA * stalta_ratio_q4 / 16. Unlike the edge detector (32-sample
 			// window high-pass) this responds to energy relative to the noise floor, not to edge sharpness, so
 			// smooth distant waveforms are not penalised. Threshold work is per buffer; per sample is ~15 ops.
+			// Reads src, i.e. the impulse-filtered buffer when despike is on (spike energy no longer inflates the LTA).
 			const uint32_t ks = stalta_ks;
 			const int32_t dc = sl_dc_q8 >> 8;
 			const uint32_t lta_q8 = sl_lta_q8;
@@ -438,7 +513,7 @@ void ADC_Conv_complete(void) {
 			uint16_t trig = 0;
 
 			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-				const int32_t x = (*adcbuf16)[i];
+				const int32_t x = src[i];		// impulse-filtered when despike is on
 				const uint32_t e = (uint32_t) abs(x - dc);
 				bgacc += x;
 				esum += e;
@@ -482,79 +557,6 @@ void ADC_Conv_complete(void) {
 			uint32_t nearmiss = 0;
 			uint16_t trig = 0;
 
-			// Impulse filter (experiment): a separate pre-pass so the hot loop below keeps its register allocation.
-			// 3-sample median = each sample clamped between the previous two: removes single-sample spikes
-			// (switching-converter interference, detector 13) and barely changes a stroke, which rises over many samples.
-			const uint16_t *src = &(*adcbuf16)[0];
-			if (despike) {
-				uint16_t a = despike_a, b = despike_b;
-				if (despike == 1) {
-					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-						const uint16_t r = src[i];
-						const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
-						despike_buf[i] = (r < lo) ? lo : ((r > hi) ? hi : r);
-						a = b;
-						b = r;
-					}
-				} else if (despike == 3) {
-					// Mode 3 (cheap compromise): a jump of more than despike_k from the last accepted value starts a hold of
-					// despike_n samples at that value. At the end of the hold the current sample is accepted, so a single-sample
-					// spike and most of its ringing disappear, while a real step (stroke) comes through n samples late.
-					const int32_t k = despike_k;
-					const uint32_t n = despike_n;
-					int32_t hv = despike_hv;
-					uint32_t hold = despike_hold;
-					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-						const int32_t r = src[i];
-						if (hold) {
-							despike_buf[i] = hv;
-							if (--hold == 0)
-								hv = r;				// accept the level the signal has settled to
-						} else if ((uint32_t) (r - hv + k) > (uint32_t) (2 * k)) {	// |r - hv| > k, one compare
-							despike_buf[i] = hv;
-							hold = n;
-						} else {
-							despike_buf[i] = r;
-							hv = r;
-						}
-					}
-					despike_hv = hv;
-					despike_hold = hold;
-					a = src[(ADCBUFSIZE >> 1) - 2];
-					b = src[(ADCBUFSIZE >> 1) - 1];
-				} else {
-					// Mode 2: as mode 1, and when a sample stands out from its median by more than despike_k, hold the
-					// last good value for despike_n more samples so the spike's ringing doesn't reach the edge detector.
-					const int32_t k = despike_k;
-					const uint8_t n = despike_n;
-					uint16_t hv = despike_hv;
-					uint8_t hold = despike_hold;
-					for (i = 0; i < (ADCBUFSIZE >> 1); i++) {
-						const uint16_t r = src[i];
-						const uint16_t lo = (a < b) ? a : b, hi = (a < b) ? b : a;
-						const uint16_t m = (r < lo) ? lo : ((r > hi) ? hi : r);
-						if ((int32_t) r - m > k || (int32_t) m - r > k)
-							hold = n + 1;
-						if (hold) {
-							hold--;
-							despike_buf[i] = hv;
-						} else {
-							despike_buf[i] = m;
-							hv = m;
-						}
-						a = b;
-						b = r;
-					}
-					despike_hv = hv;
-					despike_hold = hold;
-				}
-				despike_a = a;
-				despike_b = b;
-				src = despike_buf;
-			} else {
-				despike_a = src[(ADCBUFSIZE >> 1) - 2];
-				despike_b = src[(ADCBUFSIZE >> 1) - 1];
-			}
 
 			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
 				j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
