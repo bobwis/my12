@@ -57,7 +57,7 @@ volatile uint32_t stalta_ks = 5;		// STA time constant 2^ks samples (5 = 32 samp
 // stalta_margin_q4/16, clamped to STALTA_MIN_Q4..STALTA_MAX_Q4. Bench: idle peaks ~1.4 clean, 1.6-1.9 in broadband
 // noise, ~2.9 with detector-13 spikes, so each site gets the lowest ratio that doesn't false-trigger.
 #define STALTA_MIN_Q4 32			// 2.0x
-#define STALTA_MAX_Q4 96			// 6.0x
+#define STALTA_MAX_Q4 160			// 10.0x (10057: 6.0 - detector 18's mains-locked house noise exceeded it)
 volatile uint32_t stalta_margin_q4 = 24;	// ratio = idle track * 24/16 (1.5x)
 volatile uint32_t stalta_eff_q4 = 42;	// ratio in use (status ra=)
 static uint32_t sl_idle_q16 = 32 << 16;	// idle track: peak STA/LTA * 16, Q16 (starts at 2.0). 10056 kept it in Q8,
@@ -644,7 +644,9 @@ void ADC_Conv_complete(void) {
 				else if (trig && !sltrig)
 					trig_edge_only++;
 			}
-			if (sigsend) {	// any trigger (either detector in DUAL) raises the edge threshold: rate limiting
+			if (trig) {	// the edge detector's own triggers raise its threshold and feed its near-miss AGC. Not STA/LTA's
+						// (10057 used sigsend here: in DUAL, STA/LTA false triggers drove the AGC to cut detector 18's gain
+						// to 0-2 overnight). STA/LTA has its own rate feedback (stalta_trigstep).
 				trigthresh += 2;
 				pretrigcnt += 201;
 			}

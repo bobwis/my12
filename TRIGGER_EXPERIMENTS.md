@@ -102,3 +102,10 @@ CONSOLE_STATUS_SECS 1 here, 60 in the release). Details: ADC_TRIGGER_FIXES.md. S
   concatenated (parser `tools/bench/capfile.py`); README per storm. Some samples carry bit 12/13 flags (mask
   0x0FFF; meaning to confirm with Bob). Plan: load real distant-stroke waveforms into spare generator
   memories at real-time rate (~1.32 kHz for 2048 pts) and/or replay buffers offline through both detectors.
+
+## Investigation to-do list
+- **Mains-synchronous trigger rejection** (added 2026-10-10). The detector-18 soak and b2 capture showed local false triggers
+  locked to the 50 Hz mains: detector 18 at 20 ms (Rayleigh R up to 0.97), detector 4 at 10 ms (R ~0.7, a steady 2/s).
+  Packet times are GPS-accurate, so the firmware could learn the phase(s) within the mains cycle where triggers recur and
+  suppress or down-weight triggers there (tracking the grid frequency drift). It would help edge mode too. Analysis
+  tool: instrumentation `analysis/packet_analyzer.py mains --uid N`.
