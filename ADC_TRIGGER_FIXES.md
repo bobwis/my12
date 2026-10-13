@@ -122,7 +122,45 @@ task has finished booting.
   `trigthresh` by 2 and adds 201 to the AGC count, and the buffer after a
   trigger is skipped (`ov`) whenever `startudp()` - same priority as lwIP's
   tcpip_thread - hasn't run within 270 us. A gentler first step (+1) was
-  tried in the soak (branch `experiment/backoff-tweak`): 2-3 packet batches
-  rose from 0.1% to 2%, but dropped batches went 1% -> 5%, ov/lt per trigger
-  roughly doubled and the AGC started stepping the gain 8<->9. Not shipped;
-  revisit with startudp() priority / the sigsend gate on the experiment branch.
+  tried in the 10050 soak (branch `experiment/backoff-tweak`): 2-3 packet
+  batches rose from 0.1% to 2%, but dropped batches went 1% -> 5%, ov/lt per
+  trigger roughly doubled and the AGC started stepping the gain 8<->9. Not
+  shipped then. The drops were the lwIP pool-check latency fixed in 10054;
+  retested after that, see "Gentler back-off after a trigger" below.
+
+## Gentler back-off after a trigger (after build 10055, tested 2026-10-13)
+
+Every triggered buffer used to raise `trigthresh` by 2 and add 201 to the AGC
+near-miss count (>768 per 100 ms steps the PGA gain down). Now (`backoff_mode`
+1, the default; Ctrl-B toggles back to stock 0):
+
+- the first buffer of a batch raises the threshold by 1 (AGC count still 201,
+  so isolated noise triggers drive the AGC as before);
+- follow-on buffers raise it by 2 as before but add 100, so a 4-6 buffer batch
+  raises the threshold instead of costing a gain step.
+
+The status line gains `bo=` (mode) and `bl=a/b/c/d` (batches of 1/2/3/4+
+consecutive triggered buffers since boot). The ISR cost is one `sigprev`
+branch in the existing back-off block.
+
+Bench retest on detector 15 (build 10055 + this change, `tests/backoff_variants.py`
+in the instrumentation repo: real strokes 04-11 at 300 and 100 mV, 44 per run,
+AGC on; modes run 0, 1, 2, 0, where 2 = first buffer +1 only, dropped again):
+
+| mode | triggered buffers per stroke | multi-packet strokes | spike replay alone, impulse filter off |
+|---|---|---|---|
+| 0 stock (run 1 / run 4) | 1.66 / 1.66 | 61% / 59% | 1.42 / 1.32 trigger packets/s |
+| 1 gentle | 1.89 | 70% | 1.97 trigger packets/s |
+| 2 first buffer only | 1.73 | 66% | 2.15 trigger packets/s |
+
+- `ov`, `lt`, `sk` stayed 0 in every phase, `lat` 11-15 us: the 10050 drops and
+  the 8<->9 gain stepping do not come back. (Gain 8-9 stepping appeared once,
+  in a *stock* run, so it is not caused by the change.)
+- Gentle gives about 14% more triggered buffers per real stroke. Some strokes
+  now split into two batches (a non-triggered buffer between pulses), so the
+  server sees an extra batch id for those.
+- Cost: about 45% more trigger packets under a spike storm (detector 13 type
+  interference, impulse filter off), and more spike-induced triggers when the
+  filter is on. `ov`/`lt` were still 0 at 2 packets/s.
+- Strokes plus spike replay: detection at 100 mV (17-20 of 22) and gain steps
+  (16-22) varied between the two stock runs as much as between modes.

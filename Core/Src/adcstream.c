@@ -54,6 +54,9 @@ volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64
 volatile uint32_t stalta_ks = 6;		// STA time constant 2^ks samples (6 = 64 samples = 24 us at 2.7 MSps)
 volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
+volatile uint8_t backoff_mode = BACKOFF_GENTLE;	// trigger back-off variant - console Ctrl-B toggles stock/gentle
+volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (status line bl=)
+static uint32_t batchrun = 0;		// triggered buffers in the batch in progress
 static int32_t sl_dc_q8 = 2048 << 8;	// baseline, Q8
 static uint32_t sl_sta_acc = 0;		// STA accumulator (= STA << ks)
 static uint32_t sl_lta_q8 = 0;		// noise floor: mean |x - dc| per sample, Q8 (0 = not yet seeded)
@@ -595,9 +598,16 @@ void ADC_Conv_complete(void) {
 			pretrigcnt += nearmiss;
 			if (trig)
 				sigsend = 1;
-			if (sigsend) {
-				trigthresh += 2;
-				pretrigcnt += 201;
+			if (sigsend) {	// back off after a trigger (sigprev: the previous buffer triggered too)
+				uint16_t step = 2, cnt = 201;		// BACKOFF_STOCK
+				if (backoff_mode == BACKOFF_GENTLE) {
+					if (sigprev == 0)
+						step = 1;		// first buffer of a batch: gentler, so the next buffer can continue it
+					else
+						cnt = 100;		// follow-on: a 4-6 buffer batch raises the threshold, not a gain step
+				}
+				trigthresh += step;
+				pretrigcnt += cnt;
 			}
 		}
 	}
@@ -611,6 +621,7 @@ void ADC_Conv_complete(void) {
 //			(*buf)[1] = (*buf)[1] & 0xffff00ff | (adcbatchid << 8);	//update batch number in sample pkt (redundant see 331)
 		}
 		sigprev = 1;	// remember this trigger for next packet
+		batchrun++;		// batch length statistics (status line bl=)
 		enqueue_sample_isr(buf, bufseq, &xHigherPriorityTaskWoken);	// queue this buffer now, before the DMA can refill it
 		// (the local-strike alert check runs on that queued copy in the send task: alert_check())
 		ledhang = 15;		// 15 x 10ms in Idle proc
@@ -618,6 +629,9 @@ void ADC_Conv_complete(void) {
 
 	} else {			// no trigger
 		if (sigprev) {		// but there was a trigger the last packet
+			if (batchrun)
+				batchlen_hist[((batchrun > 4) ? 4 : batchrun) - 1]++;	// the batch just ended
+			batchrun = 0;
 			sendendstatus = 1;		// so tell udpstream to send the end of sequence status packet
 			endnow = 1;				// and wake it now: it used to wait for the NEXT batch's first trigger,
 									// so ENDSEQ arrived late and carried the next batch's id

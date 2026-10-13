@@ -2615,13 +2615,15 @@ void StarLPTask(void const * argument)
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
-				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu f=%u lat=%lu sk=%lu\n", (unsigned long) t1sec,
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu f=%u lat=%lu sk=%lu bo=%u bl=%lu/%lu/%lu/%lu\n", (unsigned long) t1sec,
 						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
 						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
 						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
 						(unsigned) sigsuppress, (unsigned long) avgpct, (unsigned long) (isrmax * 100U / ADCBUF_CYCLES),
 						(unsigned) detector, (unsigned long) stalta_peak16, (unsigned) despike,
-						(unsigned long) (isrlat_max / 216U), (unsigned long) isrskip);
+						(unsigned long) (isrlat_max / 216U), (unsigned long) isrskip,
+						(unsigned) backoff_mode, (unsigned long) batchlen_hist[0], (unsigned long) batchlen_hist[1],
+						(unsigned long) batchlen_hist[2], (unsigned long) batchlen_hist[3]);
 				isrlat_max = 0;
 				lastnearmiss = pretrigcnt;
 				lastisrsum = isrsum;
@@ -2667,6 +2669,12 @@ void StarLPTask(void const * argument)
 			if (inch == 0x06) {  // control F: cycle the impulse filter mode
 				despike = (despike + 1) % 4;
 				printf("Despike filter mode %u (0 off, 1 median, 2 median+blank, 3 jump-hold)\n", (unsigned) despike);
+			}
+
+			if (inch == 0x02) {  // control B: toggle the trigger back-off variant (gentle default / stock)
+				backoff_mode = (backoff_mode == BACKOFF_GENTLE) ? BACKOFF_STOCK : BACKOFF_GENTLE;
+				printf("Back-off mode %u (%s)\n", (unsigned) backoff_mode,
+						(backoff_mode == BACKOFF_GENTLE) ? "gentle: first +1, follow-on AGC +100" : "stock +2/+201");
 			}
 
 			if (inch == 0x14) {  // control T: toggle trigger detector (experiment)

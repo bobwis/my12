@@ -7,6 +7,7 @@ Commands are single control keys, with no Enter. Each key prints a one-line conf
 
 | Key | Action | Confirmation |
 |---|---|---|
+| Ctrl-B | Trigger back-off variant: 1 gentle (default) ↔ 0 stock (the pre-10056 step). See ADC_TRIGGER_FIXES.md. | `Back-off mode N (...)` |
 | Ctrl-C | AGC on/off toggle. Off holds the current gain until a digit sets a new one. | `AGC is ON` / `AGC is OFF` |
 | 0-9 | With AGC off: set the PGA gain step (0 lowest, 9 highest). With AGC on they're only echoed. | `Manually setting PGA gain to N` |
 | Ctrl-D | Status dump: an `ID:` line, 12 trigger-threshold lines, and the firmware/build/PCB line. | |
@@ -42,6 +43,8 @@ They can be overridden from the server (below). The `ID:` line still prints ever
 | `f` | Impulse filter mode |
 | `lat` | Peak delay from DMA buffer complete to the scan interrupt, µs, since the last line (normally ~15) |
 | `sk` | ADC buffers never scanned since boot (should stay 0) |
+| `bo` | Back-off variant: 1 gentle (default), 0 stock (Ctrl-B) |
+| `bl` | Batches since boot of 1/2/3/4+ consecutive triggered buffers (`a/b/c/d`) |
 
 In normal running `ov`, `lt` and `sk` should stay at 0. Rising values mean triggers are being lost.
 
