@@ -2172,11 +2172,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) { // every second 1 pps
 
 // try to figure out what PCB is connected to the STM
 // PC0 and PF5
-// Change ths to LIGHTNINGBOARD1 for Colin's detector
+// Both lightningboards pull PC0 low; which revision is a compile time choice (LIGHTNINGBOARD1_BUILD in version.h,
+// for Colin's detector 1). The image is not interchangeable between them (GPS UART, ESP).
 void getboardpcb() {
 	if ((HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0) == GPIO_PIN_RESET)) {// floats high on SPLAT1, so this must be a lightningboard
-//		circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1
-		circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B		// compile time!
+#ifdef LIGHTNINGBOARD1_BUILD
+		circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1
+#else
+		circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev 1B
+#endif
 	} else {
 		circuitboardpcb = SPLATBOARD1;		// assumed
 
@@ -2227,6 +2231,10 @@ void StartDefaultTask(void const * argument)
 	getboardpcb();		// find our daughterboard
 	printaline("\n");
 	printf("Lightning detector firmware %d.%d build %d  PCB=%d\n", MAJORVERSION, MINORVERSION, BUILDNO, circuitboardpcb);
+#ifdef LIGHTNINGBOARD1_BUILD
+	printf("*** LIGHTNINGBOARD1 BUILD (PCB 21)%s ***\n",
+			(circuitboardpcb == LIGHTNINGBOARD1) ? "" : " - PC0 reads high, so this is running as a Splat1 (11)!");
+#endif
 	printf("STM_UUID=%lx %lx %lx\n", STM32_UUID[0], STM32_UUID[1], STM32_UUID[2]);
 
 	{	// why did we just (re)start? The RCC reset flags stay set until cleared, so this tells a

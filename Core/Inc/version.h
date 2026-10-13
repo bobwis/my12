@@ -28,6 +28,16 @@
 #define SPLAT1
 #endif
 
+// Which daughterboard PCB this image is built for (picked in getboardpcb(), main.c):
+//   #if 0  - normal build: PC0 low = LIGHTNINGBOARD2 (published as my12-{A,I}22-<build>.bin, and the same
+//            image as my12-{A,I}11-<build>.bin for Splat1, which floats PC0 high)
+//   #if 1  - LIGHTNINGBOARD1 prototype (detector 1, Colin's): PC0 low = LIGHTNINGBOARD1, published as
+//            my12-{A,I}21-<build>.bin. Not interchangeable with the 22/11 image (GPS is on USART6, no ESP).
+// Switch back to 0 before building the normal release images.
+#if 0
+#define LIGHTNINGBOARD1_BUILD
+#endif
+
 // 21 May 2023 - updated IDE
 #define BUILD 10055	// 10055 (fw 0.33, Oct 7): raw lwIP calls outside tcpip_thread take the core lock (netcore.h, netfix.h E/F - UDP sends, HTTP client, DNS, httpd_init, link thread), MTU back to 1500 (no more fragmenting every sample packet), console S... status line off at boot (Ctrl-E: off/60 s/1 s), lwipopts redefinition tidy-ups. 10054 (fw 0.33, Oct 7): MEMP_OVERFLOW_CHECK 2 -> 1 - the lwIP pool check masked the ADC scan IRQ, so ~1.8% of buffers were never scanned and triggered ones dropped (lt); status line adds lat= (scan IRQ entry latency, us) and sk= (unscanned buffers). 10053 (fw 0.33, Oct 7): local-strike alert check moved from the ADC ISR to the UDP send task (ISR peak back down). 10052 (fw 0.33, Oct 7): fix the 10051 LCD reload loop (a late "get sys0" reply was lost, so the LCD looked out of date). 10051 (fw 0.33, Oct 7): impulse filter (jump-hold, on by default) against switching-converter spikes, LCD TRIGGER overlay/tone only for local strikes (alert_mv 100), backlight idle/bright rework with the level stored in the LCD, remote settings table (keys al, dsp, dsk, dsn added), STA/LTA detector available (Ctrl-T, off). 10050 (fw 0.32, Oct 6): AGC lockout fix (near-miss test tracks the threshold), triggering buffer copied in the ADC ISR (no wrong/torn buffers), ADC ISR load 83% -> ~40% (DMA buffer in DTCM, scan loop in registers), prompt ENDSEQ with the right batch id, console input re-arm, console status line (ISR load). 10049 (fw 0.31, Sep 27): UDP send-path stall guard (10048) plus the Ethernet/lwIP thread-safety fixes in netfix.h. 10048 = stall guard only. 10047 = Sep 23 send-queue redesign, same number as the Sep 18 release. The detector self-updates whenever the server advertises a different build, so only change this when publishing.
 #ifndef TESTING
@@ -36,8 +46,8 @@
 #define BUILDNO BUILD+1000	// 16 bits  "S/W build number" of the lightning detector
 #endif
 /*
- * see 	circuitboardpcb = LIGHTNINGBOARD1;		// prototype 1	line 2063 in main.c
- *  circuitboardpcb = LIGHTNINGBOARD2;		// Rev 1A and Rev
+ * The LIGHTNINGBOARD1/2 and SPLATBOARD1 PCB numbers are defined below; getboardpcb() in main.c
+ * chooses between them (LIGHTNINGBOARD1_BUILD above selects the prototype 1 board).
  */
 #ifdef SPLAT1
 // Pressures sensor type fitted
@@ -46,7 +56,6 @@
 #define PNONE 0
 
 #endif	/* SPLAT1 */
-#endif
 
 // If we want localtime (+10H) not UTC, define LOCALTIME
 #if 1
@@ -68,15 +77,18 @@
 // CPU half clock speed
 #define  CCLK  108000000
 
+// The hardware watchdog is the only thing a TESTING build switches off here
 #ifndef TESTING
 #if 1
 #define HARDWARE_WATCHDOG 1
 #endif
+#endif	/* !TESTING */
 
-
+// PCB numbers: tens digit = board family (1 Splat, 2 Lightningboard), units digit = revision.
+// These are also the numbers in the firmware file names (see httploader.c) and in the status packet bconf.
 #define SPLATBOARD1	11
 #define SPLATBOARD2 12
-// see 2136 in main.c - needs manual substitution of LIGHTNINGBOARD version
+// getboardpcb() in main.c assigns LIGHTNINGBOARD1 when LIGHTNINGBOARD1_BUILD is defined
 #define LIGHTNINGBOARD1	21
 #define LIGHTNINGBOARD2	22
 #define UNKNOWNPCB 0
