@@ -2615,12 +2615,13 @@ void StarLPTask(void const * argument)
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
-				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu f=%u lat=%lu sk=%lu bo=%u bl=%lu/%lu/%lu/%lu\n", (unsigned long) t1sec,
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu ra=%lu so=%lu eo=%lu f=%u lat=%lu sk=%lu bo=%u bl=%lu/%lu/%lu/%lu\n", (unsigned long) t1sec,
 						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
 						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
 						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
 						(unsigned) sigsuppress, (unsigned long) avgpct, (unsigned long) (isrmax * 100U / ADCBUF_CYCLES),
-						(unsigned) detector, (unsigned long) stalta_peak16, (unsigned) despike,
+						(unsigned) trigmask, (unsigned long) stalta_peak16, (unsigned long) stalta_eff_q4,
+						(unsigned long) trig_sl_only, (unsigned long) trig_edge_only, (unsigned) despike,
 						(unsigned long) (isrlat_max / 216U), (unsigned long) isrskip,
 						(unsigned) backoff_mode, (unsigned long) batchlen_hist[0], (unsigned long) batchlen_hist[1],
 						(unsigned long) batchlen_hist[2], (unsigned long) batchlen_hist[3]);
@@ -2677,9 +2678,9 @@ void StarLPTask(void const * argument)
 						(backoff_mode == BACKOFF_GENTLE) ? "gentle: first +1, follow-on AGC +100" : "stock +2/+201");
 			}
 
-			if (inch == 0x14) {  // control T: toggle trigger detector (experiment)
-				detector = (detector == DETECTOR_STALTA) ? DETECTOR_EDGE : DETECTOR_STALTA;
-				printf("Detector is %s\n", (detector == DETECTOR_STALTA) ? "STA/LTA" : "EDGE");
+			if (inch == 0x14) {  // control T: enabled trigger detectors edge -> energy -> edge + energy -> edge
+				trigmask = (trigmask % TRIG_BOTH) + 1;	// 1 -> 2 -> 3 -> 1 (never none)
+				printf("Triggers enabled: %s\n", trigmask_name(trigmask));
 			}
 
 			if (inch == 0x03) {		// control C,  AGC man/auto

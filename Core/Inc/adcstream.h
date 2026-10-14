@@ -46,18 +46,23 @@ void startadc(void);
 
 extern unsigned int dmabufno;
 extern volatile uint32_t adcbufseq;
-#define DETECTOR_EDGE 0		// original 32-sample-window edge detector
-#define DETECTOR_STALTA 1	// STA/LTA energy detector (experiment)
-extern volatile uint8_t detector;
+// Trigger detectors, independently enabled (bitmask); a buffer triggers if any enabled detector fires.
+// Console Ctrl-T cycles edge -> energy -> both; server key tr:<m>[<nn>] (www.c). Status line d=.
+#define TRIG_EDGE 1			// 32-sample-window edge detector (the original)
+#define TRIG_ENERGY 2		// STA/LTA energy detector, adaptive ratio
+#define TRIG_BOTH 3
+extern volatile uint8_t trigmask;	// default TRIG_EDGE
+const char* trigmask_name(uint8_t m);	// "edge", "energy", "edge + energy"
 extern volatile uint8_t despike;	// impulse filter: 0 off, 1 median, 2 median+blank (experiment)
 extern volatile uint16_t despike_k;
 extern volatile uint8_t despike_n;
-extern volatile uint32_t stalta_ratio_q4, stalta_ks, stalta_kl, stalta_peak16;
+extern volatile uint32_t stalta_peak16;
 // Trigger back-off after a triggered buffer (adcstream.c); console Ctrl-B toggles for bench comparison
 #define BACKOFF_STOCK 0		// every triggered buffer: threshold +2, AGC near-miss count +201 (builds up to 10055)
 #define BACKOFF_GENTLE 1	// first buffer of a batch: +1 / +201; follow-on buffers: +2 / +100 (default)
 extern volatile uint8_t backoff_mode;
 extern volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (counted when the batch ends)
+extern volatile uint32_t stalta_margin_q4, stalta_eff_q4, trig_sl_only, trig_edge_only;
 
 void alert_check(const uint16_t *s);	// local-strike alert on a triggered buffer's samples (send task, not the ISR)
 void enqueue_sample_isr(void *payload, uint32_t bufseq, BaseType_t *woken);	// udpstream.c, called from the ADC ISR

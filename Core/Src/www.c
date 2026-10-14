@@ -265,6 +265,7 @@ typedef struct {
 
 static uint32_t rs_crc1, rs_crc2, rs_n2;	// firmware image checksums etc. from the last reply
 static char rs_s1[16];
+static uint32_t rs_tr = 0;				// raw tr value from the last reply (0 = never sent)
 
 static const remote_setting_t remote_settings[] = {
 	// firmware and LCD updates (the server advertises a build)
@@ -285,6 +286,7 @@ static const remote_setting_t remote_settings[] = {
 	{ "dsp",  RS_U8,    (void*) &despike,    0, 3,          1, "Impulse filter mode" },
 	{ "dsk",  RS_U16,   (void*) &despike_k,  1, 4095,       1, "Impulse filter threshold" },
 	{ "dsn",  RS_U8,    (void*) &despike_n,  0, 20,         1, "Impulse filter hold" },
+	{ "tr",   RS_U32,   &rs_tr,              1, 340,        0, "Triggers" },	// decoded by rs_apply_tr()
 };
 #define RS_COUNT (sizeof(remote_settings) / sizeof(remote_settings[0]))
 
@@ -367,6 +369,34 @@ static uint32_t remote_settings_apply(const char *list) {
 	return (found);
 }
 
+// tr:<m>[<nn>] - trigger detectors: m = 1 edge, 2 energy, 3 both; optional nn = energy adaptive margin x10 (10-40,
+// default 15 = 1.5x). E.g. tr:3 both, tr:325 both with margin 2.5. Applied when the value changes; an invalid value
+// is logged and ignored. Absent: unchanged (edge only at boot).
+static void rs_apply_tr(void) {
+	static uint32_t applied = 0;
+	uint32_t m, nn;
+
+	if ((rs_tr == 0) || (rs_tr == applied))
+		return;
+	if (rs_tr <= TRIG_BOTH) {
+		m = rs_tr;
+		nn = 15;
+	} else {
+		m = rs_tr / 100;
+		nn = rs_tr % 100;
+		if ((rs_tr < 100) || (m < TRIG_EDGE) || (m > TRIG_BOTH) || (nn < 10) || (nn > 40)) {
+			printf("Server -> tr %lu invalid (1-3, or 1-3 then a 2-digit margin 10-40), ignored\n", (unsigned long) rs_tr);
+			applied = rs_tr;			// don't repeat the message every poll
+			return;
+		}
+	}
+	applied = rs_tr;
+	stalta_margin_q4 = (nn * 16 + 5) / 10;	// tenths -> x16 (15 -> 24)
+	trigmask = (uint8_t) m;
+	printf("Server -> Triggers: %s (energy margin %lu.%lu)\n", trigmask_name(trigmask), (unsigned long) (nn / 10),
+			(unsigned long) (nn % 10));
+}
+
 // 1 if every key in keys[] (NULL terminated) was found by the last remote_settings_apply()
 static int rs_all_found(uint32_t found, const char *const keys[]) {
 	unsigned int i;
@@ -428,6 +458,7 @@ void returnpage(char *content, u16_t charcount, int errorm) {
 				if (p2[0] == '{') {		// its the start of enclosed params
 					static const char *const fwkeys[] = { "fw", "bld", "crc1", "crc2", NULL };
 					const uint32_t found = remote_settings_apply(&p2[1]);
+					rs_apply_tr();
 					res = rs_all_found(found, fwkeys) ? 0 : -1;
 					crc1 = rs_crc1;
 					crc2 = rs_crc2;

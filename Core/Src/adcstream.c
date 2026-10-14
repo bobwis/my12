@@ -40,9 +40,11 @@ volatile uint32_t isrcyc_max = 0, isrcyc_sum = 0, isrcyc_n = 0;
 static volatile uint32_t dmacyc = 0;
 volatile uint32_t isrlat_max = 0, isrskip = 0;
 
-// Detector selection (experiment): console Ctrl-T toggles; tuning variables are plain globals so they can be
-// changed live over SWD during bench sweeps.
-volatile uint8_t detector = DETECTOR_EDGE;
+const char* trigmask_name(uint8_t m) {
+	return ((m == TRIG_EDGE) ? "edge" : ((m == TRIG_ENERGY) ? "energy" : "edge + energy"));
+}
+
+volatile uint8_t trigmask = TRIG_EDGE;	// enabled trigger detectors (TRIG_EDGE / TRIG_ENERGY bits): console Ctrl-T, server tr
 volatile uint8_t despike = 3;				// 0 off, 1 median, 2 median+blank, 3 jump-hold (cheap) - console Ctrl-F cycles
 volatile uint16_t despike_k = 60;			// modes 2, 3: a jump above this (ADC counts) marks a spike
 volatile uint8_t despike_n = 3;				// modes 2, 3: samples held after a spike (covers its ringing)
@@ -50,9 +52,24 @@ static uint16_t despike_hv = 2048;			// modes 2, 3: last good value, held while 
 static uint8_t despike_hold = 0;
 static uint16_t despike_a = 2048, despike_b = 2048;	// last two raw samples of the previous buffer
 static uint16_t despike_buf[ADCBUFSIZE >> 1];		// median-filtered copy the edge loop scans when despike is on
-volatile uint32_t stalta_ratio_q4 = 64;	// trigger when STA > LTA * ratio/16 (64 = 4.0x)
-volatile uint32_t stalta_ks = 6;		// STA time constant 2^ks samples (6 = 64 samples = 24 us at 2.7 MSps)
-volatile uint32_t stalta_kl = 7;		// LTA time constant 2^kl quiet buffers (7 = 128 buffers = 35 ms)
+// Energy (STA/LTA) detector. Fixed parameters, chosen on the bench (instrumentation FINDINGS_2026-10-08.md); only the
+// adaptive margin can be changed (server tr suffix). The ISR reads nothing else variable.
+#define STALTA_KS 5				// STA time constant 2^5 = 32 samples = 12 us at 2.7 MSps
+#define STALTA_KL 7				// LTA time constant 2^7 = 128 buffers = 35 ms
+#define STALTA_TRIGSTEP 4		// each energy trigger raises the idle track by this (x16 ratio units): rate feedback,
+								// so impulsive noise that always triggers still lifts the threshold
+// Adaptive ratio: a high-percentile track of the peak STA/LTA of untriggered buffers (rises 1/64 of the gap per buffer,
+// falls over ~9 s; no learning for 64 buffers after any trigger, so a stroke and its tail don't count as idle) times
+// stalta_margin_q4/16, clamped to STALTA_MIN_Q4..STALTA_MAX_Q4. Bench: idle peaks ~1.4 clean, 1.6-1.9 in broadband
+// noise, ~2.9 with detector-13 spikes, so each site gets the lowest ratio that doesn't false-trigger.
+#define STALTA_MIN_Q4 32			// 2.0x
+#define STALTA_MAX_Q4 160			// 10.0x (10057: 6.0 - detector 18's mains-locked house noise exceeded it)
+volatile uint32_t stalta_margin_q4 = 24;	// ratio = idle track * margin/16 (24 = 1.5x); server tr suffix nn = margin x10
+volatile uint32_t stalta_eff_q4 = 42;	// ratio in use (status ra=)
+static uint32_t sl_idle_q16 = 32 << 16;	// idle track: peak STA/LTA * 16, Q16 (starts at 2.0). 10056 kept it in Q8,
+										// which rounded the ~9 s fall to zero: the ratio could rise but never fall
+static uint16_t sl_learnhold = 0;		// buffers left before idle learning resumes after a trigger
+volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// both enabled: buffers only one detector triggered (so= eo=)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
 volatile uint8_t backoff_mode = BACKOFF_GENTLE;	// trigger back-off variant - console Ctrl-B toggles stock/gentle
 volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (status line bl=)
@@ -499,17 +516,19 @@ void ADC_Conv_complete(void) {
 			despike_a = src[(ADCBUFSIZE >> 1) - 2];
 			despike_b = src[(ADCBUFSIZE >> 1) - 1];
 		}
-		if (detector == DETECTOR_STALTA) {
-			// STA/LTA energy detector (experiment). dc = slow baseline (EMA of buffer means), e = |x - dc|,
-			// STA = per-sample EMA of e over 2^stalta_ks samples, LTA = EMA over 2^stalta_kl buffers of the
-			// buffer-mean of e. Trigger when STA > LTA * stalta_ratio_q4 / 16. Unlike the edge detector (32-sample
+		uint8_t sltrig = 0;					// STA/LTA fired on this buffer (DUAL bookkeeping)
+		if (trigmask & TRIG_ENERGY) {		// energy detector (alone, or first of the two)
+			// Energy (STA/LTA) detector. dc = slow baseline (EMA of buffer means), e = |x - dc|,
+			// STA = per-sample EMA of e over 2^STALTA_KS samples, LTA = EMA over 2^STALTA_KL buffers of the
+			// buffer-mean of e. Trigger when STA > LTA * stalta_eff_q4 / 16 (adaptive ratio). Unlike the edge detector (32-sample
 			// window high-pass) this responds to energy relative to the noise floor, not to edge sharpness, so
 			// smooth distant waveforms are not penalised. Threshold work is per buffer; per sample is ~15 ops.
 			// Reads src, i.e. the impulse-filtered buffer when despike is on (spike energy no longer inflates the LTA).
-			const uint32_t ks = stalta_ks;
+			const uint32_t ks = STALTA_KS;
 			const int32_t dc = sl_dc_q8 >> 8;
 			const uint32_t lta_q8 = sl_lta_q8;
-			const uint32_t thr_acc = ((lta_q8 * stalta_ratio_q4) >> 12) << ks;	// compare against STA accumulator
+			const uint32_t ratio = stalta_eff_q4;	// adaptive
+			const uint32_t thr_acc = ((lta_q8 * ratio) >> 12) << ks;	// compare against STA accumulator
 			uint32_t sta = sl_sta_acc, peak = 0, esum = 0;
 			uint32_t bgacc = adcbgbaseacc;
 			const uint32_t bg0 = bgacc;
@@ -538,15 +557,40 @@ void ADC_Conv_complete(void) {
 				if (lta_q8 == 0)
 					sl_lta_q8 = emean_q8;
 				else
-					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (stalta_kl + 2) : stalta_kl);
+					sl_lta_q8 += ((int32_t) emean_q8 - (int32_t) lta_q8) >> (trig ? (STALTA_KL + 2) : STALTA_KL);
 				stalta_peak16 = (lta_q8 != 0) ? (uint32_t) (((uint64_t) peak << 12) / ((uint64_t) lta_q8 << ks)) : 0;	// peak STA/LTA * 16
+				if (trig && (lta_q8 != 0)) {		// rate feedback, like the edge detector's threshold bump
+					sl_idle_q16 += STALTA_TRIGSTEP << 16;
+					if (sl_idle_q16 > (STALTA_MAX_Q4 << 16))
+						sl_idle_q16 = STALTA_MAX_Q4 << 16;	// no wind-up far above the clamp
+				}
+				if (trig || sigsend)
+					sl_learnhold = 64;						// a stroke and its tail are not idle
+				else if (sl_learnhold)
+					sl_learnhold--;
+				else if (lta_q8 != 0) {	// adaptive ratio from the untriggered buffers' peak STA/LTA
+					const uint32_t p_q16 = stalta_peak16 << 16;
+					if (p_q16 > sl_idle_q16)
+						sl_idle_q16 += (p_q16 - sl_idle_q16) >> 6;	// rise 1/64 of the gap per buffer (~17 ms)
+					else
+						sl_idle_q16 -= (sl_idle_q16 - p_q16) >> 15;	// fall over 2^15 buffers (~9 s)
+				}
+				{
+					const uint32_t r = ((sl_idle_q16 >> 16) * stalta_margin_q4) >> 4;
+					stalta_eff_q4 = (r < STALTA_MIN_Q4) ? STALTA_MIN_Q4 : ((r > STALTA_MAX_Q4) ? STALTA_MAX_Q4 : r);
+				}
 			}
 			sl_sta_acc = sta;
-			adcbgbaseacc = bgacc;
-			meanwindiff = lastmeanwindiff = sl_lta_q8 >> 8;	// noise floor for globaladcnoise / gain AGC / status
-			if (trig)
+			if (trigmask == TRIG_ENERGY) {	// alone: it also owns the baseline and noise figures
+				adcbgbaseacc = bgacc;
+				meanwindiff = lastmeanwindiff = sl_lta_q8 >> 8;	// noise floor for globaladcnoise / gain AGC / status
+			}
+			if (trig) {
 				sigsend = 1;
-		} else {
+				sltrig = 1;
+			}
+		}
+		if (trigmask & TRIG_EDGE) {		// edge detector (alone, or second of the two)
 			// Original edge detector.
 			// Hot-loop state in locals so it stays in registers; the globals are read once and written back
 			// once per buffer. Same arithmetic and integer types as before. trigcomp is volatile (set by the
@@ -600,7 +644,15 @@ void ADC_Conv_complete(void) {
 			pretrigcnt += nearmiss;
 			if (trig)
 				sigsend = 1;
-			if (sigsend) {	// back off after a trigger (sigprev: the previous buffer triggered too)
+			if (trigmask == TRIG_BOTH) {		// which detector added the trigger (status so= eo=)
+				if (sltrig && !trig)
+					trig_sl_only++;
+				else if (trig && !sltrig)
+					trig_edge_only++;
+			}
+			if (trig) {	// back off after the edge detector's OWN trigger (sigprev: the previous buffer triggered too). Energy
+						// triggers don't raise the edge threshold or feed its near-miss AGC: in 10057 they cut detector 18's gain
+						// to 0-2 overnight. The energy detector has its own rate feedback (STALTA_TRIGSTEP).
 				uint16_t step = 2, cnt = 201;		// BACKOFF_STOCK
 				if (backoff_mode == BACKOFF_GENTLE) {
 					if (sigprev == 0)
