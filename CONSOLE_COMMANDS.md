@@ -1,4 +1,4 @@
-# Detector console commands (my12, from build 10055)
+# Detector console commands (my12, from build 10060)
 
 The console is USART2 at 115200 8N1. On a bench unit that's the ST-Link virtual COM port (COM7 on Bob's PC).
 Commands are single control keys, with no Enter. Each key prints a one-line confirmation. Any other key is echoed back.
@@ -15,7 +15,7 @@ Commands are single control keys, with no Enter. Each key prints a one-line conf
 | Ctrl-F | Impulse (spike) filter mode: 0 off → 1 median → 2 median+blank → 3 jump-hold → 0. Boots in **3**. **Also clears any UDP freeze**, including Ctrl-G's. | `UDP freeze is off`, then `Despike filter mode N (...)` |
 | Ctrl-G | Fake GPS lock + UDP freeze on/off (bench use). | `Fake GPS lock and UDP freeze is ON/OFF` |
 | Ctrl-R | Reboot. | `Reboot` |
-| Ctrl-T | Trigger detector: edge (default) ↔ STA/LTA (experimental). | `Detector is EDGE` / `Detector is STA/LTA` |
+| Ctrl-T | Trigger detectors enabled: edge (default) → energy → edge + energy → edge. See DETECTION_MODES.md. | `Triggers enabled: edge` / `energy` / `edge + energy` |
 
 Avoid Ctrl-S/Ctrl-Q in terminal programs that use XON/XOFF; the firmware doesn't use them.
 
@@ -24,7 +24,7 @@ They can be overridden from the server (below). The `ID:` line still prints ever
 
 ## Status line (Ctrl-E)
 
-`S 307 tr=368 th=2 pt=1 g=9 nz=12 nm=3186 ov=0 lt=0 jb=0 ss=0 isr=35/45% d=0 r=0 f=3 lat=13 sk=0`
+`S 307 tr=368 th=2 pt=1 g=9 nz=12 nm=3186 ov=0 lt=0 jb=0 ss=0 isr=35/45% d=1 r=0 ra=48 so=0 eo=0 f=3 lat=13 sk=0 bo=1 bl=120/30/8/2`
 
 | Field | Meaning |
 |---|---|
@@ -39,7 +39,9 @@ They can be overridden from the server (below). The `ID:` line still prints ever
 | `jb` | Jabber (trigger-storm) count |
 | `ss` | Trigger-suppression countdown |
 | `isr` | ADC scan interrupt load since the last line, average/peak % of one buffer's time (270 µs) |
-| `d` / `r` | Detector (0 edge, 1 STA/LTA) / STA/LTA peak ratio ×16 |
+| `d` | Trigger detectors enabled: 1 edge, 2 energy, 3 both |
+| `r` / `ra` | Energy detector: last buffer's peak STA/LTA ×16 / adaptive ratio in use ×16 |
+| `so` / `eo` | With both enabled: triggered buffers only the energy / only the edge detector fired on, since boot |
 | `f` | Impulse filter mode |
 | `lat` | Peak delay from DMA buffer complete to the scan interrupt, µs, since the last line (normally ~15) |
 | `sk` | ADC buffers never scanned since boot (should stay 0) |
@@ -61,8 +63,9 @@ ignored.
 | `dsp` | Impulse filter mode (as Ctrl-F) | 0-3 | 3 |
 | `dsk` | Impulse filter jump threshold, ADC counts | 1-4095 | 60 |
 | `dsn` | Impulse filter hold, samples after a spike | 0-20 | 3 |
+| `tr` | Trigger detectors `m` (1 edge, 2 energy, 3 both) with an optional 2-digit energy margin `nn` in tenths (10-40), e.g. `tr:3`, `tr:325` | 1-3, 110-340 | 1 (margin 15) |
 | `bld`, `fw`, `crc1`, `crc2`, `srv` | Advertised firmware build, file prefix, A/I image CRCs, loader host | | |
 | `lbl`, `lcd`, `siz` | Advertised LCD build (0 = don't check), LCD file, size | | |
 
-`tt`, `pt`, `al`, `dsp`, `dsk`, `dsn` and `srv` print `Server -> ...` on the console when they change. If the advertised build differs from the running one, the unit downloads
+`tt`, `pt`, `al`, `dsp`, `dsk`, `dsn`, `srv` and `tr` print `Server -> ...` on the console when they change. If the advertised build differs from the running one, the unit downloads
 the image for its other bank and reboots into it, so never flash a build the server isn't advertising.

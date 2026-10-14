@@ -1,11 +1,28 @@
-# Trigger detection modes (my12, build 10055)
+# Trigger detectors (my12, from build 10060)
 
 The ADC samples at 2.7 MSps into 728-sample buffers (270 µs each). The TIM5 interrupt scans each buffer as it
-completes. If the detector triggers, that buffer is copied to the UDP send queue as a sample packet; consecutive
-triggered buffers form one batch. Two detectors are built in. Console **Ctrl-T** switches between them, and the
-status line shows the active one as `d=` (0 edge, 1 STA/LTA). Every boot starts with the edge detector.
+completes. If a detector triggers, that buffer is copied to the UDP send queue as a sample packet; consecutive
+triggered buffers form one batch.
 
-## 1. Edge detector (default, `d=0`)
+There are two trigger detectors, **independently enabled**. When both are on, both scan every buffer and either one
+triggers it. The impulse filter (Ctrl-F, `f=`, server `dsp`; default mode 3) runs first and feeds both, so
+single-sample spikes reach neither. The samples sent to the server are always raw.
+
+| Enabled (status `d=`) | Console Ctrl-T prints | Server |
+|---|---|---|
+| 1: edge only (**default**) | `Triggers enabled: edge` | `tr:1` |
+| 2: energy only | `Triggers enabled: energy` | `tr:2` |
+| 3: both | `Triggers enabled: edge + energy` | `tr:3` |
+
+Ctrl-T cycles edge → energy → both → edge. A server value applies at the next poll. Neither is stored: every boot
+starts edge-only until the server's `tr` arrives (or Ctrl-T is pressed). "Neither" is not possible.
+
+Server key `tr:<m>[<nn>]`: `m` as above; the optional two digits `nn` set the energy detector's adaptive margin in
+tenths (10-40, default 15 = 1.5×). Examples: `tr:3` both, default margin; `tr:325` both, margin 2.5 (fewer false
+energy triggers, less sensitive); `tr:212` energy only, margin 1.2. Anything else is logged
+(`Server -> tr N invalid ...`) and ignored. A change prints `Server -> Triggers: edge + energy (energy margin 1.5)`.
+
+## 1. Edge detector
 
 Looks for a sudden rise in short-term activity, i.e. the sharp leading edge of a stroke.
 
@@ -13,47 +30,44 @@ Looks for a sudden rise in short-term activity, i.e. the sharp leading edge of a
   distance from that mean. The running average of that distance over the window is the "mean window difference"
   (`mwd`), a high-pass measure of how busy the signal is right now.
 - **Trigger:** when `mwd` jumps above its previous value by more than `trigthresh + tt`. `tt` is the server's
-  trigger offset. A smaller rise above `pretrigthresh + tt` counts as a near miss (`nm` on the status line).
-- **Self-adjusting threshold:** every 100 ms the LP task looks at the near-miss count. Too many raises `trigthresh`
-  (by 1, 2 or 4, or by 20 / a gain step down when far too many). Few lets it fall back towards the minimum. Each
-  trigger also adds 2, so a burst limits itself. Above 100 the threshold is clamped and, with AGC on, the gain is
-  reduced. The AGC sets the PGA gain from the noise level (`g`, `nz`).
-- **Impulse filter:** before the scan, the buffer can pass through the spike filter (Ctrl-F, `f=`, server `dsp`).
-  The default, mode 3 jump-hold, ignores single-sample spikes such as detector 13's switching-converter
-  interference while letting a real edge through about 1 µs later. It only affects detection: the samples sent to
-  the server are raw.
-- **Strengths/limits:** sensitive to fast edges and cheap (~40% of the interrupt budget with the filter). Without
-  the filter it is fooled by one-sample spikes, and it is less sensitive to slow-rising signals.
+  trigger offset. A smaller rise above `pretrigthresh + tt` counts as a near miss (`nm`).
+- **Self-adjusting threshold:** every 100 ms the LP task looks at the near-miss count. Too many raises `trigthresh`,
+  few lets it fall. After its own trigger the threshold steps up (gentle back-off by default: first buffer of a batch
+  +1, follow-on buffers +2 with a smaller near-miss charge; Ctrl-B selects the stock +2/+201). The AGC sets the PGA
+  gain from the noise level (`g`, `nz`).
+- **Only the edge detector's own triggers** feed its threshold and AGC. Energy triggers don't (in the 10057 soak they
+  drove detector 18's gain down to 0-2).
 
-This mode, with filter mode 3, is the release configuration.
+## 2. Energy detector (STA/LTA)
 
-## 2. STA/LTA energy detector (experimental, `d=1`)
+Responds to energy relative to the site's background rather than to edge sharpness, so it catches smaller and
+smoother strokes where the background is quiet.
 
-A classic short-term/long-term average ratio, as used in seismic triggering. It responds to energy relative to the
-background, not to edge sharpness.
+- **Measure:** `e = |sample - baseline|` (baseline: slow average of buffer means).
+  - **STA:** running average of `e` over 32 samples (12 µs).
+  - **LTA:** running average of the buffer-mean `e` over 128 buffers (35 ms), learning 4× slower on triggered buffers.
+- **Trigger:** when STA exceeds LTA × the **adaptive ratio** (status `ra=` is the ratio ×16).
+- **Adaptive ratio:** the energy detector tracks the peak STA/LTA of untriggered buffers (rising 1/64 of the gap per
+  buffer, falling over ~9 s, not learning for 64 buffers after any trigger) and multiplies it by the margin (default
+  1.5), clamped to 2.0-10.0. Each energy trigger also raises the track a little (rate feedback), so persistent
+  impulsive noise lifts its own threshold. A quiet site settles near 2-3, a noisy one at 4-6 or more, without tuning.
+- **Fixed in the firmware:** STA and LTA lengths, the rate feedback step and the clamp limits. Only the margin can be
+  changed (the `tr` suffix). The per-sample work is the same whatever the margin.
+- **ISR cost:** about 22% of the buffer time (filter included), against about 44% for the edge detector; both together
+  about 60% average, 70-74% peak.
 
-- **Measure:** `e = |sample - baseline|`, where the baseline is a slow average of buffer means.
-  - **STA** is a running average of `e` over about 64 samples (24 µs).
-  - **LTA** is a running average of the buffer-mean `e` over about 128 buffers (35 ms). It still learns on
-    triggered buffers, but 4× slower, so a burst can't freeze it.
-- **Trigger:** when STA exceeds LTA × 4.0. The status line's `r=` is the peak STA/LTA ratio ×16 since the last line.
-- **Self-scaling:** because the threshold is a ratio to the noise floor, it doesn't use `trigthresh`, the near-miss
-  loop or the server's `tt`. The AGC still sets the gain from the LTA level.
-- **Not applied:** the impulse filter (this detector scans the raw buffer).
-- **Tuning:** only over SWD, via `stalta_ratio_q4` (16 = 1.0×, default 64), `stalta_ks` (STA 2^ks samples, default 6)
-  and `stalta_kl` (LTA 2^kl buffers, default 7).
-- **Status:** bench experiment only, not validated. Early sweeps showed it reacting to noise steps. It is not
-  recommended for field use.
+## When to use which (bench and field results to 2026-10-14)
 
-## Quick comparison
+| Background | Edge | Energy | Both |
+|---|---|---|---|
+| Clean / quiet site | baseline | 2.5-10× more sensitive on real strokes | best |
+| Detector-13 style spikes (filtered) | good | about level | about edge or better |
+| Broadband noise | good | worse | about edge |
+| Mains-locked house noise (detector 18) | false triggers | false triggers at up to ~0.5/s (ratio pinned at 6 in 10057) | sum of both |
 
-| | Edge (default) | STA/LTA (experimental) |
-|---|---|---|
-| Responds to | sharp rise in short-term activity | energy above the background |
-| Threshold | adaptive `trigthresh` + server `tt` | fixed ratio (4.0×) to the long-term average |
-| Server `tt` offset | yes | no |
-| Impulse filter | yes (default mode 3) | no |
-| Console / status | Ctrl-T, `d=0` | Ctrl-T, `d=1`, `r=` |
-| Use | field and release | bench experiments |
+The site survey (instrumentation `analysis/SITE_SURVEY.md`) predicts "both" at about 3.4× the edge detector's
+sensitivity at quiet sites (Mt Cotton 11, detector 18) and little gain at noisy ones (Capalaba 17). It has not yet
+been proven on located strikes. Status counters `so=` / `eo=` (energy-only / edge-only triggered buffers since boot)
+show what each detector adds when both are on.
 
-See also `CONSOLE_COMMANDS.md` (keys and status line) and `TRIGGER_EXPERIMENTS.md` (bench history).
+See also `CONSOLE_COMMANDS.md`, `TRIGGER_EXPERIMENTS.md` and instrumentation `analysis/FINDINGS_2026-10-08.md`.
