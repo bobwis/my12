@@ -135,7 +135,6 @@ volatile ADC_HandleTypeDef *globalhadc;	// dummy
 
 static uint32_t adcbgbaseacc = 0;		// avg adc level per buffer
 static uint32_t samplecnt = 0;
-static uint8_t adcbufnum = 0;		// adc sequence number
 static int32_t windiff[WINSIZE] = { 0 };		// past window differences from the window mean
 static uint16_t lastsamp[WINSIZE] = { 0 };		// last sample saved to calc global mean
 
@@ -418,6 +417,7 @@ void ADC_Conv_complete(void) {
 		lastseq = bufseq;
 	}
 	uint8_t endnow = 0;					// a batch ended in this buffer: wake the sender for ENDSEQ
+	uint8_t trigsrc = 0;				// detectors that fired on this buffer (TRIG_EDGE / TRIG_ENERGY bits)
 
 //	timestamp = TIM2->CNT;			// real time
 //	HAL_GPIO_WritePin(GPIOE, GPIO_PIN_0, GPIO_PIN_SET /*PE0*/);	// debug pin
@@ -431,7 +431,7 @@ void ADC_Conv_complete(void) {
 
 	adcbuf16 = (adc16buffer*) &((uint16_t*) *buf)[8];
 	(*buf)[3] = timestamp;		// this may not get set until now
-	(*buf)[1] = (statuspkt.uid << 16) | (adcbatchid << 8) | (rtseconds << 2) | (adcbufnum++ & 3);// ADC completed packet counter (24 bits)
+	(*buf)[1] = (statuspkt.uid << 16) | (adcbatchid << 8) | (rtseconds << 2);	// bits 1..0 = trigger source, set when sent
 	(*buf)[2] = statuspkt.epochsecs; // statuspkt.NavPvt.iTOW;
 
 	if (sigsuppress) {
@@ -516,7 +516,6 @@ void ADC_Conv_complete(void) {
 			despike_a = src[(ADCBUFSIZE >> 1) - 2];
 			despike_b = src[(ADCBUFSIZE >> 1) - 1];
 		}
-		uint8_t sltrig = 0;					// STA/LTA fired on this buffer (DUAL bookkeeping)
 		if (trigmask & TRIG_ENERGY) {		// energy detector (alone, or first of the two)
 			// Energy (STA/LTA) detector. dc = slow baseline (EMA of buffer means), e = |x - dc|,
 			// STA = per-sample EMA of e over 2^STALTA_KS samples, LTA = EMA over 2^STALTA_KL buffers of the
@@ -587,7 +586,7 @@ void ADC_Conv_complete(void) {
 			}
 			if (trig) {
 				sigsend = 1;
-				sltrig = 1;
+				trigsrc = TRIG_ENERGY;
 			}
 		}
 		if (trigmask & TRIG_EDGE) {		// edge detector (alone, or second of the two)
@@ -642,12 +641,14 @@ void ADC_Conv_complete(void) {
 			winmean = wmean;
 			meanwindiff = mwd;
 			pretrigcnt += nearmiss;
-			if (trig)
+			if (trig) {
 				sigsend = 1;
+				trigsrc |= TRIG_EDGE;
+			}
 			if (trigmask == TRIG_BOTH) {		// which detector added the trigger (status so= eo=)
-				if (sltrig && !trig)
+				if (trigsrc == TRIG_ENERGY)
 					trig_sl_only++;
-				else if (trig && !sltrig)
+				else if (trigsrc == TRIG_EDGE)
 					trig_edge_only++;
 			}
 			if (trig) {	// back off after the edge detector's OWN trigger (sigprev: the previous buffer triggered too). Energy
@@ -676,6 +677,7 @@ void ADC_Conv_complete(void) {
 		}
 		sigprev = 1;	// remember this trigger for next packet
 		batchrun++;		// batch length statistics (status line bl=)
+		((uint8_t*) *buf)[4] |= trigsrc;	// sample packet byte 4 bits 1..0: which detector fired (PACKET_TRIGGER_FIELDS.md)
 		enqueue_sample_isr(buf, bufseq, &xHigherPriorityTaskWoken);	// queue this buffer now, before the DMA can refill it
 		// (the local-strike alert check runs on that queued copy in the send task: alert_check())
 		ledhang = 15;		// 15 x 10ms in Idle proc

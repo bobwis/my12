@@ -20,6 +20,7 @@
 #include "lwip/dns.h"
 #include "lwip/prot/dns.h"
 #include <string.h>
+#include <stddef.h>
 
 #define pbuf_free pbuf_free_callback
 
@@ -344,6 +345,12 @@ static void enqueue_status(int stype) {
 	slot = reserve_queue_slot();
 	memcpy(sendqueuebuf[slot], (const void*) &statuspkt, sizeof(statuspkt));
 	((uint8_t*) sendqueuebuf[slot])[3] = stype;	// status pkt type (ENDSEQ or TIMED)
+	{	// reserved2 in this copy only (the live bits 0-1 GPS/PPS stay as they are), see PACKET_TRIGGER_FIELDS.md:
+		// bits 3..2 enabled trigger detectors, 15..8 energy ratio in use x16, 23..16 energy margin x10
+		const uint32_t r2 = (statuspkt.reserved2 & 3) | ((trigmask & 3) << 2) | ((stalta_eff_q4 & 0xff) << 8)
+				| ((((stalta_margin_q4 * 10 + 8) >> 4) & 0xff) << 16);
+		memcpy((uint8_t*) sendqueuebuf[slot] + offsetof(struct statpkt, reserved2), &r2, sizeof(r2));
+	}
 	item.slot = slot;
 	item.len = sizeof(statuspkt);
 
