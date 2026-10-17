@@ -75,6 +75,9 @@ mode, the energy ratio in use, or the energy-only / edge-only trigger counts. Th
 (`d=` mode bitmask, `ra=` ratio ×16, `so=` / `eo=`). If the controller needs them, a later firmware change could put
 them into spare status-packet fields. Ask Bob before relying on it.
 
+**Update: build 10061 adds them.** Each sample packet says which detector fired it, and every status packet carries
+the enabled set, the energy ratio in use and the margin. See `DETECTORSRV10_BRIEF_10061.md` and `PACKET_TRIGGER_FIELDS.md`.
+
 ## Status
 10060 is on branch `feature/dual-trigger`. Bench test passed on detector 15 (detail in `my12/RELEASE_0.34_10060.md`).
 Images in the my12 root: A22/A11 crc1 `0xa61c082b`, I22/I11 crc2 `0xbae29194`, A21 crc1 `0xfd8bcc08`, I21 crc2

@@ -22,6 +22,9 @@ tenths (10-40, default 15 = 1.5×). Examples: `tr:3` both, default margin; `tr:3
 energy triggers, less sensitive); `tr:212` energy only, margin 1.2. Anything else is logged
 (`Server -> tr N invalid ...`) and ignored. A change prints `Server -> Triggers: edge + energy (energy margin 1.5)`.
 
+From build 10061 the packets say which detector fired each sample packet (sample byte 4 bits 1..0) and carry the
+enabled set, the energy ratio in use and the margin in the status packet (`reserved2`). See `PACKET_TRIGGER_FIELDS.md`.
+
 ## 1. Edge detector
 
 Looks for a sudden rise in short-term activity, i.e. the sharp leading edge of a stroke.
