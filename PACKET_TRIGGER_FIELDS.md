@@ -44,3 +44,8 @@ See `DETECTORSRV10_BRIEF_10060.md` for the rate-control guidance.
 ## Decoding examples
 - Sample byte 4 = `0x2B` → rtseconds 10, source 3 (both fired).
 - `reserved2` = `0x000F350C` → lock and PPS OK, enabled 3 (both), ratio 0x35 = 53 → 3.31×, margin 0x0F = 15 → 1.5×.
+
+## Consumers
+- lightsrv5 0.7-12/0.7-13 (on b2 from 2026-10-18): per-hit `trigsrc` in strike.log and candidates.log; with `-gx 1`
+  the detector status JSON adds `trigmode`, `energyratio`, `energymargin` and `edgepkts` / `energypkts` / `bothpkts`.
+- detectorsrv10: pending (see `DETECTORSRV10_BRIEF_10061.md`).

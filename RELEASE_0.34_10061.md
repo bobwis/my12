@@ -45,3 +45,7 @@ which trigger detector fired and how the energy detector is set.
 Publish through detectorsrv10 and set `target_build` per detector. Without changes to lightsrv5 and detectorsrv10 the
 new fields are simply ignored. lightsrv5 passes `reserved2` through to its JSON status unchanged, so that value is
 normally non-zero from 10061 on.
+
+Published 2026-10-18 and rolled out to most detectors. lightsrv5 0.7-13 (deployed on b2 the same day, `-gx 1`) records
+`trigsrc` per strike in strike.log and reports `trigmode`, `energyratio`, `energymargin` and per-detector
+`edgepkts` / `energypkts` / `bothpkts` counts in its detector status JSON. detectorsrv10 changes are pending.
