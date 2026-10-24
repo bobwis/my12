@@ -15,6 +15,7 @@ Commands are single control keys, with no Enter. Each key prints a one-line conf
 | Ctrl-F | Impulse (spike) filter mode: 0 off → 1 median → 2 median+blank → 3 jump-hold → 0. Boots in **3**. **Also clears any UDP freeze**, including Ctrl-G's. | `UDP freeze is off`, then `Despike filter mode N (...)` |
 | Ctrl-G | Fake GPS lock + UDP freeze on/off (bench use). | `Fake GPS lock and UDP freeze is ON/OFF` |
 | Ctrl-R | Reboot. | `Reboot` |
+| Ctrl-N | AGC near-miss band (build 10062): 1 fixed, independent of the server's tt (default in 10062) / 0 stock, band moves with tt. Switches back and forth. See PACKET_TRIGGER_FIELDS.md and the bench write-up in the instrumentation repo (docs/2026-10-24_*). | `Near-miss mode N (...)` |
 | Ctrl-T | Trigger detectors enabled: edge (default) → energy → edge + energy → edge. See DETECTION_MODES.md. | `Triggers enabled: edge` / `energy` / `edge + energy` |
 
 Avoid Ctrl-S/Ctrl-Q in terminal programs that use XON/XOFF; the firmware doesn't use them.
@@ -46,6 +47,7 @@ They can be overridden from the server (below). The `ID:` line still prints ever
 | `lat` | Peak delay from DMA buffer complete to the scan interrupt, µs, since the last line (normally ~15) |
 | `sk` | ADC buffers never scanned since boot (should stay 0) |
 | `bo` | Back-off variant: 1 gentle (default), 0 stock (Ctrl-B) |
+| `nmm` | Near-miss mode (build 10062): 1 fixed band (default), 0 stock (Ctrl-N) |
 | `bl` | Batches since boot of 1/2/3/4+ consecutive triggered buffers (`a/b/c/d`) |
 
 In normal running `ov`, `lt` and `sk` should stay at 0. Rising values mean triggers are being lost.
@@ -63,6 +65,7 @@ ignored.
 | `dsp` | Impulse filter mode (as Ctrl-F) | 0-3 | 3 |
 | `dsk` | Impulse filter jump threshold, ADC counts | 1-4095 | 60 |
 | `dsn` | Impulse filter hold, samples after a spike | 0-20 | 3 |
+| `nmm` | AGC near-miss mode (build 10062): 1 fixed band, 0 stock band | 0-1 | 1 |
 | `tr` | Trigger detectors `m` (1 edge, 2 energy, 3 both) with an optional 2-digit energy margin `nn` in tenths (10-40), e.g. `tr:3`, `tr:325` | 1-3, 110-340 | 1 (margin 15) |
 | `bld`, `fw`, `crc1`, `crc2`, `srv` | Advertised firmware build, file prefix, A/I image CRCs, loader host | | |
 | `lbl`, `lcd`, `siz` | Advertised LCD build (0 = don't check), LCD file, size | | |

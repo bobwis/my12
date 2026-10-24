@@ -71,7 +71,7 @@ static uint32_t sl_idle_q16 = 32 << 16;	// idle track: peak STA/LTA * 16, Q16 (s
 static uint16_t sl_learnhold = 0;		// buffers left before idle learning resumes after a trigger
 volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// both enabled: buffers only one detector triggered (so= eo=)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
-volatile uint8_t nm_mode = NM_STOCK;	// near-miss band: stock (moves with tt) or fixed (independent of tt) - console Ctrl-N
+volatile uint8_t nm_mode = NM_FIXED;	// near-miss band: stock (moves with tt) or fixed (independent of tt) - console Ctrl-N
 volatile uint8_t agc_gmin = 9, agc_gmax = 0, agc_gsteps = 0;	// gain range and steps since the last status packet
 volatile uint8_t backoff_mode = BACKOFF_GENTLE;	// trigger back-off variant - console Ctrl-B toggles stock/gentle
 volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (status line bl=)
@@ -600,9 +600,11 @@ void ADC_Conv_complete(void) {
 			// near miss: rise in (pthr, nmhi]. Stock: (pretrigthresh + trigcomp, trigthresh + trigcomp] - the band moves with the
 			// server's tt, so a raised tt blinds the AGC. NM_FIXED: (pretrigthresh, trigthresh] whatever tt is (nmhi only matters
 			// here: a rise above thr is a trigger and never reaches the near-miss test).
-			const uint8_t nmfix = nm_mode;
-			const int32_t pthr = pretrigthresh + (nmfix ? 0 : trigcomp);
-			const int32_t nmhi = nmfix ? (int32_t) trigthresh : (int32_t) thr;
+			// The loop is written twice (EDGE_LOOP with a constant) so the stock copy compiles exactly as before: an extra live
+			// variable in the one shared loop pushed the ISR from 47/52 % to 66/71 % (registers spilled).
+			const int32_t pthr = pretrigthresh + trigcomp;	// stock near-miss floor
+			const int32_t pthrf = pretrigthresh;				// NM_FIXED near-miss band (pretrigthresh, trigthresh]
+			const int32_t nmhi = trigthresh;
 			int32_t wma = wmeanacc, wda = wdacc;
 			uint32_t bgacc = adcbgbaseacc;
 			uint16_t lastmwd = lastmeanwindiff;
@@ -611,35 +613,37 @@ void ADC_Conv_complete(void) {
 			uint16_t trig = 0;
 
 
-			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	// 2 // scan the buffer content
-				j = i & (WINSIZE - 1);			// j = the index of oldest saved sample
-				thissamp = src[i];
+#define EDGE_LOOP(NMFIX) \
+			for (i = 0; i < (ADCBUFSIZE >> 1); i++) {	/* scan the buffer content */ \
+				j = i & (WINSIZE - 1);			/* j = the index of oldest saved sample */ \
+				thissamp = src[i]; \
+				bgacc += thissamp; /* accumulator used to find avg level of signal over long time (for base) */ \
+				wma = wma + thissamp - lastsamp[j];		/* window mean acc */ \
+				wmean = wma >> (WINSHIFT);		/* divide to find the new window mean */ \
+				lastsamp[j] = thissamp;			/* save last samples */ \
+				thiswindiff = abs(thissamp - wmean);			/* find difference from window mean */ \
+				wda = wda - windiff[j] + thiswindiff; /* difference accumulator for WINSIZE samples */ \
+				mwd = wda >> (WINSHIFT); /* sliding mean of window differences (used for globalnoise) */ \
+				windiff[j] = mwd;	/* store latest window mean of differences */ \
+				lastthresh = lastmwd + thr;		/* trigger threshold compensation provided by the server */ \
+				if (abs(mwd) > (lastthresh)) { /* if new mean diff > last mean diff + trig offset */ \
+					trig = 1; /* the real trigger */ \
+				} else if ((NMFIX) ? ((abs(mwd) > (lastmwd + pthrf)) && (abs(mwd) <= (lastmwd + nmhi))) : (abs(mwd) > (lastmwd + pthr))) { \
+					/* near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task) but not the \
+					   trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a fixed "rise > 2" independent \
+					   of trigthresh, so raising the threshold could never reduce the near-miss count and the AGC pinned trigthresh \
+					   at its clamp. */ \
+					nearmiss++; \
+				} \
+				lastmwd = abs(mwd); \
+			} /* end for i */
 
-				bgacc += thissamp; // accumulator used to find avg level of signal over long time (for base)
-
-				wma = wma + thissamp - lastsamp[j];		// window mean acc
-				wmean = wma >> (WINSHIFT);		// divide to find the new window mean
-				lastsamp[j] = thissamp;			// save last samples
-
-				thiswindiff = abs(thissamp - wmean);			// find difference from window mean
-				wda = wda - windiff[j] + thiswindiff; // difference accumulator for WINSIZE samples
-
-				mwd = wda >> (WINSHIFT); // sliding mean of window differences (used for globalnoise)
-				windiff[j] = mwd;	// store latest window mean of differences
-
-				lastthresh = lastmwd + thr;		// trigger threshold compensation provided by the server
-
-				if (abs(mwd) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
-					trig = 1; // the real trigger
-				} else if ((abs(mwd) > (lastmwd + pthr)) && (abs(mwd) <= (lastmwd + nmhi))) {
-					// near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task)
-					// but not the trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a
-					// fixed "rise > 2" independent of trigthresh, so raising the threshold could never reduce
-					// the near-miss count and the AGC pinned trigthresh at its clamp.
-					nearmiss++;
-				}
-				lastmwd = abs(mwd);
-			} // end for i
+			if (nm_mode == NM_FIXED) {
+				EDGE_LOOP(1)
+			} else {
+				EDGE_LOOP(0)
+			}
+#undef EDGE_LOOP
 
 			wmeanacc = wma;
 			wdacc = wda;
