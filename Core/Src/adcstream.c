@@ -71,6 +71,8 @@ static uint32_t sl_idle_q16 = 32 << 16;	// idle track: peak STA/LTA * 16, Q16 (s
 static uint16_t sl_learnhold = 0;		// buffers left before idle learning resumes after a trigger
 volatile uint32_t trig_sl_only = 0, trig_edge_only = 0;	// both enabled: buffers only one detector triggered (so= eo=)
 volatile uint32_t stalta_peak16 = 0;	// last buffer's peak STA/LTA ratio * 16 (for status / analysis)
+volatile uint8_t nm_mode = NM_STOCK;	// near-miss band: stock (moves with tt) or fixed (independent of tt) - console Ctrl-N
+volatile uint8_t agc_gmin = 9, agc_gmax = 0, agc_gsteps = 0;	// gain range and steps since the last status packet
 volatile uint8_t backoff_mode = BACKOFF_GENTLE;	// trigger back-off variant - console Ctrl-B toggles stock/gentle
 volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (status line bl=)
 static uint32_t batchrun = 0;		// triggered buffers in the batch in progress
@@ -595,7 +597,12 @@ void ADC_Conv_complete(void) {
 			// once per buffer. Same arithmetic and integer types as before. trigcomp is volatile (set by the
 			// server) and in SRAM1, and was being re-read twice per sample.
 			const uint16_t thr = trigthresh + trigcomp;		// trigger: rise > trigthresh + trigcomp
-			const int32_t pthr = pretrigthresh + trigcomp;	// near miss: rise > pretrigthresh + trigcomp
+			// near miss: rise in (pthr, nmhi]. Stock: (pretrigthresh + trigcomp, trigthresh + trigcomp] - the band moves with the
+			// server's tt, so a raised tt blinds the AGC. NM_FIXED: (pretrigthresh, trigthresh] whatever tt is (nmhi only matters
+			// here: a rise above thr is a trigger and never reaches the near-miss test).
+			const uint8_t nmfix = nm_mode;
+			const int32_t pthr = pretrigthresh + (nmfix ? 0 : trigcomp);
+			const int32_t nmhi = nmfix ? (int32_t) trigthresh : (int32_t) thr;
 			int32_t wma = wmeanacc, wda = wdacc;
 			uint32_t bgacc = adcbgbaseacc;
 			uint16_t lastmwd = lastmeanwindiff;
@@ -624,7 +631,7 @@ void ADC_Conv_complete(void) {
 
 				if (abs(mwd) > (lastthresh)) { // if new mean diff > last mean diff + trig offset
 					trig = 1; // the real trigger
-				} else if (abs(mwd) > (lastmwd + pthr)) {
+				} else if ((abs(mwd) > (lastmwd + pthr)) && (abs(mwd) <= (lastmwd + nmhi))) {
 					// near miss: above the pre-trigger level (pretrigthresh = trigthresh - 2, set in the LP task)
 					// but not the trigger. Was "|m| + pretrigthresh + trigcomp > lastthresh", which reduces to a
 					// fixed "rise > 2" independent of trigthresh, so raising the threshold could never reduce

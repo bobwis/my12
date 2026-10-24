@@ -2615,7 +2615,7 @@ void StarLPTask(void const * argument)
 				uint32_t avgpct = dn ? (uint32_t) (((uint64_t) (isrsum - lastisrsum) * 16U * 100U) / ((uint64_t) dn * ADCBUF_CYCLES)) : 0;
 				isrcyc_max = 0;		// peak is per interval (a racing ISR update is harmless)
 				laststatsec = t1sec;
-				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu ra=%lu so=%lu eo=%lu f=%u lat=%lu sk=%lu bo=%u bl=%lu/%lu/%lu/%lu\n", (unsigned long) t1sec,
+				printf("S %lu tr=%lu th=%u pt=%u g=%d nz=%lu nm=%lu ov=%lu lt=%lu jb=%u ss=%u isr=%lu/%lu%% d=%u r=%lu ra=%lu so=%lu eo=%lu f=%u lat=%lu sk=%lu bo=%u bl=%lu/%lu/%lu/%lu nmm=%u\n", (unsigned long) t1sec,
 						(unsigned long) statuspkt.trigcount, (unsigned) trigthresh, (unsigned) pretrigthresh, (int) pgagain,
 						(unsigned long) globaladcnoise, (unsigned long) (pretrigcnt - lastnearmiss),
 						(unsigned long) statuspkt.adcudpover, (unsigned long) trigbuflate, (unsigned) statuspkt.jabcnt,
@@ -2624,7 +2624,7 @@ void StarLPTask(void const * argument)
 						(unsigned long) trig_sl_only, (unsigned long) trig_edge_only, (unsigned) despike,
 						(unsigned long) (isrlat_max / 216U), (unsigned long) isrskip,
 						(unsigned) backoff_mode, (unsigned long) batchlen_hist[0], (unsigned long) batchlen_hist[1],
-						(unsigned long) batchlen_hist[2], (unsigned long) batchlen_hist[3]);
+						(unsigned long) batchlen_hist[2], (unsigned long) batchlen_hist[3], (unsigned) nm_mode);
 				isrlat_max = 0;
 				lastnearmiss = pretrigcnt;
 				lastisrsum = isrsum;
@@ -2676,6 +2676,12 @@ void StarLPTask(void const * argument)
 				backoff_mode = (backoff_mode == BACKOFF_GENTLE) ? BACKOFF_STOCK : BACKOFF_GENTLE;
 				printf("Back-off mode %u (%s)\n", (unsigned) backoff_mode,
 						(backoff_mode == BACKOFF_GENTLE) ? "gentle: first +1, follow-on AGC +100" : "stock +2/+201");
+			}
+
+			if (inch == 0x0E) {  // control N: AGC near-miss band follows tt (stock) / independent of tt
+				nm_mode = (nm_mode == NM_FIXED) ? NM_STOCK : NM_FIXED;
+				printf("Near-miss mode %u (%s)\n", (unsigned) nm_mode,
+						(nm_mode == NM_FIXED) ? "fixed: pretrigthresh..trigthresh, independent of tt" : "stock: band moves with tt");
 			}
 
 			if (inch == 0x14) {  // control T: enabled trigger detectors edge -> energy -> edge + energy -> edge

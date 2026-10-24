@@ -284,6 +284,7 @@ static const remote_setting_t remote_settings[] = {
 	{ "pt",   RS_U32,   &polltime,           1, 900,        1, "Poll interval modifier" },
 	{ "al",   RS_U32,   (void*) &alert_mv,   1, 10000,      1, "Alert level mV" },
 	{ "dsp",  RS_U8,    (void*) &despike,    0, 3,          1, "Impulse filter mode" },
+	{ "nmm",  RS_U8,    (void*) &nm_mode,    0, 1,          1, "Near-miss mode" },
 	{ "dsk",  RS_U16,   (void*) &despike_k,  1, 4095,       1, "Impulse filter threshold" },
 	{ "dsn",  RS_U8,    (void*) &despike_n,  0, 20,         1, "Impulse filter hold" },
 	{ "tr",   RS_U32,   &rs_tr,              1, 340,        0, "Triggers" },	// decoded by rs_apply_tr()

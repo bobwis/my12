@@ -31,6 +31,7 @@ uint8_t gpslocked = 0;
 uint8_t epochvalid = 0;
 unsigned int globalfreeze;		// freeze udp streaming
 extern volatile uint32_t trigcomp;
+static uint32_t agc_nm_prev = 0;		// pretrigcnt at the previous status packet
 
 struct ip4_addr udpdestip;		// udp dst ipv4 address
 char ips[16]; // string version of IP address
@@ -339,7 +340,26 @@ static void enqueue_status(int stype) {
 	}
 	statuspkt.adcnoise = abs(meanwindiff) & 0xfff;	// agc
 	statuspkt.adcbase = (globaladcavg & 0xfff) | (((pgagain > 7) ? (1 << 12) : 0));	// agc + boost gain
-	statuspkt.auxstatus1 = (statuspkt.auxstatus1 & 0xffff0000) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
+	// AGC state for the server (PACKET_TRIGGER_FIELDS.md): near-miss/back-off pressure counted since the previous status packet as a
+	// log-scale byte, the gain range and number of gain steps over the same interval
+	uint32_t agc_nmq = 0, agc_th = 0, agc_gst = 0, agc_lo = 0, agc_hi = 0;
+	{
+		const uint32_t pc = pretrigcnt, n1 = (pc - agc_nm_prev) + 1;		// n1 >= 1
+		const int lg = 31 - __builtin_clz(n1);		// floor(log2(n1)), 0..31
+		agc_nm_prev = pc;
+		agc_nmq = (n1 == 1) ? 0 : ((uint32_t) lg * 8U + ((lg >= 3) ? ((n1 >> (lg - 3)) & 7U) : ((n1 << (3 - lg)) & 7U)));	// 8 x log2(n+1)
+		if (agc_nmq > 255)
+			agc_nmq = 255;
+		const uint32_t g = (uint32_t) (pgagain & 0xF);
+		agc_lo = (agc_gmin < agc_gmax + 1U) ? (agc_gmin & 0xFU) : g;		// no change in the interval: min = max = current
+		agc_hi = (agc_gmin < agc_gmax + 1U) ? (agc_gmax & 0xFU) : g;
+		agc_gst = agc_gsteps & 7U;
+		agc_gmin = (uint8_t) g;		// restart the interval at the current gain
+		agc_gmax = (uint8_t) g;
+		agc_gsteps = 0;
+		agc_th = (trigthresh > 255) ? 255U : (uint32_t) trigthresh;
+	}
+	statuspkt.auxstatus1 = (agc_nmq << 24) | (agc_lo << 20) | (agc_hi << 16) | (((jabbertimeout & 0xff) << 8) | adcbatchid);
 	statuspkt.adctrigoff = ((trigthresh + trigcomp) & 0xFFF) | ((pgagain & 0xF) << 12);
 
 	slot = reserve_queue_slot();
@@ -348,7 +368,8 @@ static void enqueue_status(int stype) {
 	{	// reserved2 in this copy only (the live bits 0-1 GPS/PPS stay as they are), see PACKET_TRIGGER_FIELDS.md:
 		// bits 3..2 enabled trigger detectors, 15..8 energy ratio in use x16, 23..16 energy margin x10
 		const uint32_t r2 = (statuspkt.reserved2 & 3) | ((trigmask & 3) << 2) | ((stalta_eff_q4 & 0xff) << 8)
-				| ((((stalta_margin_q4 * 10 + 8) >> 4) & 0xff) << 16);
+				| ((((stalta_margin_q4 * 10 + 8) >> 4) & 0xff) << 16)
+				| ((uint32_t) (nm_mode ? 1 : 0) << 4) | (agc_gst << 5) | (agc_th << 24);		// near-miss mode, gain steps, trigthresh
 		memcpy((uint8_t*) sendqueuebuf[slot] + offsetof(struct statpkt, reserved2), &r2, sizeof(r2));
 	}
 	item.slot = slot;

@@ -61,6 +61,13 @@ extern volatile uint32_t stalta_peak16;
 #define BACKOFF_STOCK 0		// every triggered buffer: threshold +2, AGC near-miss count +201 (builds up to 10055)
 #define BACKOFF_GENTLE 1	// first buffer of a batch: +1 / +201; follow-on buffers: +2 / +100 (default)
 extern volatile uint8_t backoff_mode;
+// Near-miss band for the AGC (adcstream.c edge loop), console Ctrl-N / server key nm:
+#define NM_STOCK 0		// near miss = rise in (pretrigthresh + tt, trigthresh + tt]: the band moves with the server's tt (builds up to 10061)
+#define NM_FIXED 1		// near miss = rise in (pretrigthresh, trigthresh]: the AGC sees the noise whatever tt is; trigger stays trigthresh + tt
+extern volatile uint8_t nm_mode;
+extern uint32_t pretrigcnt;		// AGC pressure counter (near misses + trigger back-off), cumulative
+// Status-interval AGC tracking (reported in the status packet, see PACKET_TRIGGER_FIELDS.md): gain min/max and step count since the last status
+extern volatile uint8_t agc_gmin, agc_gmax, agc_gsteps;
 extern volatile uint32_t batchlen_hist[4];	// batches of 1, 2, 3, 4+ triggered buffers (counted when the batch ends)
 extern volatile uint32_t stalta_margin_q4, stalta_eff_q4, trig_sl_only, trig_edge_only;
 

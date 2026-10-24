@@ -159,6 +159,14 @@ void setpgagain(int gain) {		// this takes gain 0..9
 	osDelay(5);
 	HAL_GPIO_WritePin(GPIOG, CS_PGA_Pin, GPIO_PIN_SET);	// deselect the PG
 
+	if (gain != pgagain) {		// status-interval tracking: gain range and number of steps
+		if (gain < agc_gmin)
+			agc_gmin = gain;
+		if (gain > agc_gmax)
+			agc_gmax = gain;
+		if (agc_gsteps < 7)
+			agc_gsteps++;
+	}
 	pgagain = gain;		// update global gain
 }
 
