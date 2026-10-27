@@ -66,9 +66,13 @@ ignored.
 | `dsk` | Impulse filter jump threshold, ADC counts | 1-4095 | 60 |
 | `dsn` | Impulse filter hold, samples after a spike | 0-20 | 3 |
 | `nmm` | AGC near-miss mode (build 10062): 1 fixed band, 0 stock band | 0-1 | 1 |
+| `agc` | AGC off/on (build 10063; as Ctrl-C): 0 holds the PGA gain where it is, 1 hands it back to the AGC | 0-1 | 1 |
+| `pga` | PGA gain step held while the AGC is off (build 10063): applied once per reply that carries it, only if `agc` is 0 | 0-9 | - |
 | `tr` | Trigger detectors `m` (1 edge, 2 energy, 3 both) with an optional 2-digit energy margin `nn` in tenths (10-40), e.g. `tr:3`, `tr:325` | 1-3, 110-340 | 1 (margin 15) |
 | `bld`, `fw`, `crc1`, `crc2`, `srv` | Advertised firmware build, file prefix, A/I image CRCs, loader host | | |
 | `lbl`, `lcd`, `siz` | Advertised LCD build (0 = don't check), LCD file, size | | |
 
-`tt`, `pt`, `al`, `dsp`, `dsk`, `dsn`, `srv` and `tr` print `Server -> ...` on the console when they change. If the advertised build differs from the running one, the unit downloads
+A missing key leaves the setting unchanged, so a server that sets `agc:0` must send `agc:1` explicitly to release the AGC: the unit stays held until it reboots otherwise.
+
+`tt`, `pt`, `al`, `dsp`, `dsk`, `dsn`, `srv`, `tr`, `agc` and `pga` print `Server -> ...` on the console when they change. If the advertised build differs from the running one, the unit downloads
 the image for its other bank and reboots into it, so never flash a build the server isn't advertising.

@@ -2567,6 +2567,14 @@ void StarLPTask(void const * argument)
 //		tcp_tmr();
 		static uint32_t jabtrigcnt = 0;
 
+		if (rs_pga_pending) {		// build 10063: the server sets the PGA (pga:N) while it holds the AGC off (agc:0)
+			rs_pga_pending = 0;
+			if ((agc == 0) && (rs_pga <= 9) && (pgagain != (int16_t) rs_pga)) {
+				setpgagain((int) rs_pga);
+				printf("Server -> PGA gain set to %u\n", (unsigned) rs_pga);
+			}
+		}
+
 		if (statuspkt.trigcount > (25 + jabtrigcnt)) { // spamming: > 25 packets sent in about 100mS
 			jabbertimeout = 10;		// 100mS seconds pause
 			if (agc) {

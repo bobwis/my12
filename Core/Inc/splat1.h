@@ -32,6 +32,8 @@ extern uint32_t pressure, pressfrac, temperature, tempfrac;
 extern int16_t pgagain;
 extern uint16_t boosttrys;	// prevent boost mode oscillating inside 3 min timer
 extern uint16_t agc;
+extern volatile uint32_t rs_pga;			// last pga:N from the server (build 10063): the PGA gain step held while the AGC is off
+extern volatile uint8_t rs_pga_pending;	// set by the reply parser when a reply carried pga:, the main loop applies it
 extern int nxt_abort;			// 1 == nextion loader abort
 
 extern int psensor;		// pressure sensor type

@@ -263,6 +263,9 @@ typedef struct {
 	const char *name;		// console label
 } remote_setting_t;
 
+volatile uint32_t rs_pga = 0xFFFF;		// pga:N from the server (0xFFFF = never sent)
+volatile uint8_t rs_pga_pending = 0;
+
 static uint32_t rs_crc1, rs_crc2, rs_n2;	// firmware image checksums etc. from the last reply
 static char rs_s1[16];
 static uint32_t rs_tr = 0;				// raw tr value from the last reply (0 = never sent)
@@ -285,6 +288,8 @@ static const remote_setting_t remote_settings[] = {
 	{ "al",   RS_U32,   (void*) &alert_mv,   1, 10000,      1, "Alert level mV" },
 	{ "dsp",  RS_U8,    (void*) &despike,    0, 3,          1, "Impulse filter mode" },
 	{ "nmm",  RS_U8,    (void*) &nm_mode,    0, 1,          1, "Near-miss mode" },
+	{ "agc",  RS_U16,   (void*) &agc,        0, 1,          1, "AGC" },		// build 10063: 0 holds the PGA gain, 1 hands it back to the AGC (as Ctrl-C)
+	{ "pga",  RS_U32,   (void*) &rs_pga,     0, 9,          1, "PGA gain" },	// build 10063: gain step 0-9, applied while the AGC is off
 	{ "dsk",  RS_U16,   (void*) &despike_k,  1, 4095,       1, "Impulse filter threshold" },
 	{ "dsn",  RS_U8,    (void*) &despike_n,  0, 20,         1, "Impulse filter hold" },
 	{ "tr",   RS_U32,   &rs_tr,              1, 340,        0, "Triggers" },	// decoded by rs_apply_tr()
@@ -398,6 +403,13 @@ static void rs_apply_tr(void) {
 			(unsigned long) (nn % 10));
 }
 
+// pga:N (0-9) - hold the PGA at gain step N while the AGC is off (agc:0). Only a reply that carries the key arms it, so a console change
+// (Ctrl-C and a digit) is not overridden by an old value. The main loop applies it: the PGA's SPI bus then has one user.
+static void rs_apply_pga(const char *list) {
+	if (rs_find(list, "pga") != NULL)
+		rs_pga_pending = 1;
+}
+
 // 1 if every key in keys[] (NULL terminated) was found by the last remote_settings_apply()
 static int rs_all_found(uint32_t found, const char *const keys[]) {
 	unsigned int i;
@@ -460,6 +472,7 @@ void returnpage(char *content, u16_t charcount, int errorm) {
 					static const char *const fwkeys[] = { "fw", "bld", "crc1", "crc2", NULL };
 					const uint32_t found = remote_settings_apply(&p2[1]);
 					rs_apply_tr();
+					rs_apply_pga(&p2[1]);
 					res = rs_all_found(found, fwkeys) ? 0 : -1;
 					crc1 = rs_crc1;
 					crc2 = rs_crc2;
