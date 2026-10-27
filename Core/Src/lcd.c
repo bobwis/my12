@@ -1017,7 +1017,7 @@ void lcd_gps(void) {
 		lat = statuspkt.NavPvt.lat / 10000000.0;
 		lon = statuspkt.NavPvt.lon / 10000000.0;
 		calcLocator(gridsquare, lat, lon);
-		sprintf(str, "Lat: %.06f\\rLon: %.06f\\rGrid: %s", lat, lon, gridsquare);
+		sprintf(str, "Lat: %.06f\\rLon: %.06f\\rGrid:%s", lat, lon, gridsquare);	// 10 character locator, no space: 15 characters like the lat and lon lines
 		setlcdtext("t2.txt", str);
 
 		acc = statuspkt.NavPvt.hAcc / 1000.0;
