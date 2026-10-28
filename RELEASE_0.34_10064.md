@@ -20,5 +20,10 @@ Server side: registry entry `agt` (since build 10064), set per detector on the M
 | `my12-A21-10064.bin` | 308368 | `0xd4085e73` crc1 |
 | `my12-I21-10064.bin` | 308368 | `0x2fdd90d5` crc2 |
 
+## Results so far (28 Oct 2026)
+- Field, detector 18 (live, noisy): `agt` 60 against `agt` 0 over the first hour: gain steps an hour about 73 -> 6 to 42, mean gain 5.8 -> 7.8, threshold median 5 -> 9, max 50 (the threshold takes the hit). Different weather windows, so an alternating A/B is still to do.
+- Bench, detector 15, generator spike train at 300 mV, impulse filter 0, 150 s per trial (instrumentation `tests/agc_e6.py`): `agt` 0 / 60 / 0 / 60 gave gain at end 8 / 9 / 7 / 7, gain changes 7 / 0 / 3 / 7, triggers 291 / 13 / 46 / 326. The two stock runs differ as much as stock differs from `agt` 60: this stimulus sits at the edge of the cascade condition and does not decide. A burstier or stronger stimulus is needed for a clean bench comparison.
+- Detector 13 (remote, the collapse case) has not been given `agt` yet: it is held at gain 6 (10063 keys agc/pga) for 24 h to see whether it contributes to strikes.
+
 ## Test plan
 Bench (detector 15, generator CH1 direct): spike train at the E5 level, gain trace at 1 Hz from the console status line, `agt` 0 against 60 (and 30/100), same stimulus. Field (detector 18): gain steps per hour, mean gain and trigger rate over hours with `agt` 0 against 60.
