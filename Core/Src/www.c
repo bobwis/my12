@@ -290,6 +290,7 @@ static const remote_setting_t remote_settings[] = {
 	{ "nmm",  RS_U8,    (void*) &nm_mode,    0, 1,          1, "Near-miss mode" },
 	{ "agc",  RS_U16,   (void*) &agc,        0, 1,          1, "AGC" },		// build 10063: 0 holds the PGA gain, 1 hands it back to the AGC (as Ctrl-C)
 	{ "pga",  RS_U32,   (void*) &rs_pga,     0, 9,          1, "PGA gain" },	// build 10063: gain step 0-9, applied while the AGC is off
+	{ "agt",  RS_U8,    (void*) &agc_th_gate, 0, 100,       1, "AGC gain-down threshold" },	// build 10064: 0 stock; N = the threshold takes the first hit, the gain steps down once it reaches N
 	{ "dsk",  RS_U16,   (void*) &despike_k,  1, 4095,       1, "Impulse filter threshold" },
 	{ "dsn",  RS_U8,    (void*) &despike_n,  0, 20,         1, "Impulse filter hold" },
 	{ "tr",   RS_U32,   &rs_tr,              1, 340,        0, "Triggers" },	// decoded by rs_apply_tr()
