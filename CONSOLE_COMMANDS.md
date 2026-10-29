@@ -68,7 +68,7 @@ ignored.
 | `nmm` | AGC near-miss mode (build 10062): 1 fixed band, 0 stock band | 0-1 | 1 |
 | `agc` | AGC off/on (build 10063; as Ctrl-C): 0 holds the PGA gain where it is, 1 hands it back to the AGC | 0-1 | 1 |
 | `pga` | PGA gain step held while the AGC is off (build 10063): applied once per reply that carries it, only if `agc` is 0 | 0-9 | - |
-| `agt` | AGC gain-down threshold (build 10064, trial): 0 = stock attack (the gain steps down at once); N = in a near-miss cascade the trigger threshold rises first (+20 per 100 ms) and the gain steps down only once the threshold has reached N | 0-100 | 0 |
+| `agt` | AGC gain-down threshold (build 10064 key, default 60 from 10065): 0 = stock attack (the gain steps down at once); N = in a near-miss cascade the trigger threshold rises first (+5 per 100 ms block from 10065, +20 in 10064) and the gain steps down only once the threshold has reached N counts | 0-100 | 60 |
 | `tr` | Trigger detectors `m` (1 edge, 2 energy, 3 both) with an optional 2-digit energy margin `nn` in tenths (10-40), e.g. `tr:3`, `tr:325` | 1-3, 110-340 | 1 (margin 15) |
 | `bld`, `fw`, `crc1`, `crc2`, `srv` | Advertised firmware build, file prefix, A/I image CRCs, loader host | | |
 | `lbl`, `lcd`, `siz` | Advertised LCD build (0 = don't check), LCD file, size | | |

@@ -228,7 +228,7 @@ char snstr[164] = { "\"No S/N\"" };
 char statstr[264] = { "\"No status\"" };
 char gpsstr[64] = { "\"No GPS data\"" };
 uint16_t agc = 1;	// agc enable > 0
-volatile uint8_t agc_th_gate = 0;	// build 10064 (server key agt): 0 stock attack (gain steps down at once); N = the threshold takes the first hit and the gain steps down only once it has climbed to N
+volatile uint8_t agc_th_gate = 60;	// build 10065 default 60 (server key agt overrides): 0 = stock attack (gain steps down at once); N = the threshold takes the first hit (+5 a 100 ms block) and the gain steps down only once it has climbed to N
 uint16_t gpsfake = 0;	// fake GPS when set
 uint32_t myip;
 QueueHandle_t consolerxq;
@@ -2809,8 +2809,9 @@ void StarLPTask(void const * argument)
 						if (agc_th_gate == 0) {	// stock: the gain steps down at once, and the threshold (held while gainchanged is set) cannot follow
 							trigthresh++;	// far too many triggers in 100mS
 							gainchanged = bumppga(-1);	// decrease gain
-						} else {	// build 10064: the threshold takes the first hit; only one that has climbed to agt says the gain is too high
-							trigthresh += 20;
+						} else {	// build 10064/5: the threshold takes the first hit; only one that has climbed to agt says the gain is too high. +5 (10065; +20 in 10064):
+							// the 1 a block fall-back of the threshold then takes 5 blocks = the 0.5 s dead time (sigsuppress) after a PGA step
+							trigthresh += 5;
 							if (trigthresh >= agc_th_gate)
 								gainchanged = bumppga(-1);	// decrease gain
 						}
